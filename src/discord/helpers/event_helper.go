@@ -164,14 +164,44 @@ func runEventAction(s *discordgo.Session, guildID string, c EventCtx, a CustomEv
 		if a.RoleID == "" || c.User == nil {
 			return nil
 		}
+		markBotRoleChange(guildID, c.User.ID, a.RoleID, true)
 		return s.GuildMemberRoleAdd(guildID, c.User.ID, a.RoleID)
 	case "remove_role":
 		if a.RoleID == "" || c.User == nil {
 			return nil
 		}
+		markBotRoleChange(guildID, c.User.ID, a.RoleID, false)
 		return s.GuildMemberRoleRemove(guildID, c.User.ID, a.RoleID)
 	}
 	return nil
+}
+
+// An event's own role changes must not start events (a "role given" event that gives a role would otherwise run
+// forever, and so would two events that undo each other). The change is noted here before the bot makes it and the
+// member-update handler asks BotChangedRole when it sees the change come back.
+const botRoleChangeTTL = 30 * time.Second
+
+var botRoleChanges sync.Map // "guild|user|role|added" -> time it stops counting
+
+func botRoleKey(guildID, userID, roleID string, added bool) string {
+	return fmt.Sprintf("%s|%s|%s|%t", guildID, userID, roleID, added)
+}
+
+func markBotRoleChange(guildID, userID, roleID string, added bool) {
+	now := time.Now()
+	botRoleChanges.Range(func(k, v any) bool {
+		if now.After(v.(time.Time)) {
+			botRoleChanges.Delete(k)
+		}
+		return true
+	})
+	botRoleChanges.Store(botRoleKey(guildID, userID, roleID, added), now.Add(botRoleChangeTTL))
+}
+
+// BotChangedRole reports whether the bot's own event just made this role change, and forgets it.
+func BotChangedRole(guildID, userID, roleID string, added bool) bool {
+	until, ok := botRoleChanges.LoadAndDelete(botRoleKey(guildID, userID, roleID, added))
+	return ok && time.Now().Before(until.(time.Time))
 }
 
 // ============================================================================

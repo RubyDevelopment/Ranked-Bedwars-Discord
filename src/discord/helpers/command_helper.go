@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -391,7 +392,24 @@ func settingsFromConfig(config *models.GuildConfigsModel) types.GuildSettings {
 		slashDisabled := !cmdConfig.IsSlashEnabled
 		prefixDisabled := !cmdConfig.IsPrefixEnabled
 
+		custom, staffOnly := len(cmdConfig.Builder) > 0, false
+		if custom {
+			var declared struct {
+				Requirements []struct {
+					Type string `json:"type"`
+					Key  string `json:"key"`
+				} `json:"requirements"`
+			}
+			if json.Unmarshal(cmdConfig.Builder, &declared) == nil {
+				for _, q := range declared.Requirements {
+					staffOnly = staffOnly || (q.Type == string(types.ReqRole) && q.Key == types.StaffRoleKey)
+				}
+			}
+		}
+
 		convertedCommands[cmdName] = types.GuildCommandPermission{
+			Custom:             custom,
+			StaffOnly:          staffOnly,
 			Disabled:           &disabled,
 			SlashDisabled:      &slashDisabled,
 			PrefixDisabled:     &prefixDisabled,
@@ -944,7 +962,18 @@ func HandleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if cmd == nil {
 		return
 	}
-	RunSlashCommand(s, i, cmd, cmd.Ephemeral)
+	ephemeral := cmd.Ephemeral
+	if e := entries(i.GuildID)[cmd.Name]; e != nil && e.cmd == cmd {
+		// A custom command is private or public by the called subcommand's own default reply.
+		sub := ""
+		if opts := i.ApplicationCommandData().Options; len(e.b.Subcommands) > 0 && len(opts) > 0 {
+			sub = opts[0].Name
+		}
+		if b := e.b.bodyFor(sub); b != nil {
+			ephemeral = b.Reply.Ephemeral
+		}
+	}
+	RunSlashCommand(s, i, cmd, ephemeral)
 }
 
 // HandleAutocomplete answers an autocomplete request of the command it belongs to.
@@ -1052,6 +1081,9 @@ type runner struct {
 	invoker *discordgo.User
 	vars    map[string]string
 	users   map[string]*discordgo.User // user and player options by option name
+
+	// ephemeral is what the reply was deferred as: the called subcommand's default reply decides it before any step runs.
+	ephemeral bool
 }
 
 func run(s *discordgo.Session, i *discordgo.InteractionCreate, name string) error {
@@ -1063,7 +1095,7 @@ func run(s *discordgo.Session, i *discordgo.InteractionCreate, name string) erro
 	opts, sub := data.Options, ""
 	if len(e.b.Subcommands) > 0 {
 		if len(opts) == 0 {
-			return nil
+			return EditInteractionEmbed(s, i, SimpleErrorEmbed("Pick a subcommand to run."))
 		}
 		sub, opts = opts[0].Name, opts[0].Options
 	}
@@ -1076,7 +1108,7 @@ func run(s *discordgo.Session, i *discordgo.InteractionCreate, name string) erro
 	if i.Member != nil && i.Member.User != nil {
 		invoker = i.Member.User
 	}
-	r := &runner{s: s, i: i, e: e, name: name, invoker: invoker, users: map[string]*discordgo.User{}}
+	r := &runner{s: s, i: i, e: e, name: name, invoker: invoker, users: map[string]*discordgo.User{}, ephemeral: b.Reply.Ephemeral}
 	r.vars = r.baseVars(sub)
 	r.readOptions(b, opts, data)
 
@@ -1289,6 +1321,9 @@ func (r *runner) exec(st step) (string, bool) {
 		if !game.StartedAt.IsZero() {
 			r.vars["game.started_at"] = fmt.Sprintf("<t:%d:R>", game.StartedAt.Unix())
 		}
+		if (game.State == GameCleanup || game.State == GameVoided) && !game.StateAt.IsZero() {
+			r.vars["game.ended_at"] = fmt.Sprintf("<t:%d:R>", game.StateAt.Unix())
+		}
 
 	case "load_recent_games":
 		u := r.who(st.Target)
@@ -1303,6 +1338,10 @@ func (r *runner) exec(st step) (string, bool) {
 		all, err := database.Must().Player.AllGames(guildID, sdk.UintToString(view.Player.ID))
 		if err != nil {
 			return stop("Something went wrong. Please try again later.")
+		}
+		for n := 1; n <= 5; n++ { // rows the player does not have are blank, not left as {{recent.N.*}}
+			k := fmt.Sprintf("recent.%d.", n)
+			r.vars[k+"number"], r.vars[k+"result"], r.vars[k+"map"] = "", "", ""
 		}
 		for n, h := range FilterGameHistoryEntries(all, seasonID, 0, false) {
 			if n >= min(max(st.Limit, 1), 5) {
@@ -1459,8 +1498,78 @@ func (r *runner) buttonRow(rep reply) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: row}}
 }
 
+// embedOf is the embed an "embed" reply describes, with its variables filled in.
+func (r *runner) embedOf(rep reply) *discordgo.MessageEmbed {
+	e := &discordgo.MessageEmbed{Title: r.fill(rep.Title), Description: r.fill(rep.Text)}
+	if len(rep.Color) == 7 && rep.Color[0] == '#' {
+		if n, err := strconv.ParseInt(rep.Color[1:], 16, 32); err == nil {
+			e.Color = int(n)
+		}
+	}
+	if rep.Footer != "" {
+		e.Footer = &discordgo.MessageEmbedFooter{Text: r.fill(rep.Footer)}
+	}
+	if rep.Thumbnail != "" {
+		e.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: r.fill(rep.Thumbnail)}
+	}
+	return e
+}
+
+// sendAs answers with a reply whose privacy differs from the one the response was deferred with (a reply rule that is
+// private while the default is public, or the other way round): Discord cannot change that afterwards, so the deferred
+// message is removed and the reply goes out as a follow-up with the privacy it asked for.
+func (r *runner) sendAs(rep reply) error {
+	s, i := r.s, r.i
+	var flags discordgo.MessageFlags
+	if rep.Ephemeral {
+		flags = discordgo.MessageFlagsEphemeral
+	}
+
+	if rep.Type == "message" {
+		if payload := r.savedMessage(rep.MessageID); payload != nil {
+			bits, _ := payload["flags"].(int)
+			payload["flags"] = bits | int(flags)
+			_ = s.InteractionResponseDelete(i.Interaction)
+			_, err := s.RequestWithBucketID("POST", discordgo.EndpointWebhookToken(i.AppID, i.Token), payload, discordgo.EndpointWebhookToken(i.AppID, ""))
+			return err
+		}
+	}
+
+	params := &discordgo.WebhookParams{Flags: flags, AllowedMentions: &discordgo.MessageAllowedMentions{}}
+	switch {
+	case rep.Type == "message":
+		params.Embeds = []*discordgo.MessageEmbed{SimpleErrorEmbed("The saved message for this reply was deleted.")}
+	case rep.Type == "embed":
+		params.Embeds = []*discordgo.MessageEmbed{r.embedOf(rep)}
+	default:
+		if img := r.bannerIf(rep); img != nil {
+			params.Content = r.fill(rep.Text)
+			params.Files = []*discordgo.File{{Name: r.name + ".png", ContentType: "image/png", Reader: bytes.NewReader(img)}}
+		} else if params.Content = r.fill(rep.Text); strings.TrimSpace(params.Content) == "" {
+			params.Content = "Done."
+		}
+	}
+	if row := r.buttonRow(rep); row != nil && params.Files == nil {
+		params.Components = row
+	}
+	_ = s.InteractionResponseDelete(i.Interaction)
+	_, err := s.FollowupMessageCreate(i.Interaction, true, params)
+	return err
+}
+
+// bannerIf is the banner of a "banner" reply, or nil for any other kind of reply.
+func (r *runner) bannerIf(rep reply) []byte {
+	if rep.Type != "banner" {
+		return nil
+	}
+	return r.banner()
+}
+
 func (r *runner) send(rep reply) error {
 	s, i := r.s, r.i
+	if rep.Ephemeral != r.ephemeral && !IsPrefixInteraction(i) {
+		return r.sendAs(rep)
+	}
 	switch rep.Type {
 	case "message":
 		if payload := r.savedMessage(rep.MessageID); payload != nil {
@@ -1477,19 +1586,7 @@ func (r *runner) send(rep reply) error {
 			return EditInteractionFile(s, i, r.fill(rep.Text), r.name+".png", img)
 		}
 	case "embed":
-		e := &discordgo.MessageEmbed{Title: r.fill(rep.Title), Description: r.fill(rep.Text)}
-		if len(rep.Color) == 7 && rep.Color[0] == '#' {
-			if n, err := strconv.ParseInt(rep.Color[1:], 16, 32); err == nil {
-				e.Color = int(n)
-			}
-		}
-		if rep.Footer != "" {
-			e.Footer = &discordgo.MessageEmbedFooter{Text: r.fill(rep.Footer)}
-		}
-		if rep.Thumbnail != "" {
-			e.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: r.fill(rep.Thumbnail)}
-		}
-		edit := &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{e}}
+		edit := &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{r.embedOf(rep)}}
 		if row := r.buttonRow(rep); row != nil {
 			edit.Components = &row
 		}
@@ -1834,7 +1931,9 @@ func build(name string, c types.CommandConfig, b *builder) *types.Command {
 // Registering with Discord
 // ============================================================================
 
-const syncEvery = 2 * time.Minute
+// syncEvery is how often changes made on the dashboard reach Discord. Nothing is sent when a guild's list is unchanged
+// (see the hash in syncGuild), so a short period only costs a config read per guild.
+const syncEvery = 30 * time.Second
 
 var (
 	syncOnce sync.Once
@@ -2518,7 +2617,17 @@ type roleGate struct {
 func roleGateFor(settings types.GuildSettings, commandName string) roleGate {
 	cmd := FindCommand(commandName)
 	if cmd == nil {
-		return roleGate{}
+		// A command made on the dashboard is open to everyone until allowed roles are set, unless it declares the staff role.
+		perm := settings.Commands[commandName]
+		if !perm.Custom {
+			return roleGate{}
+		}
+		gate := roleGate{openByDefault: true}
+		if perm.StaffOnly {
+			gate.staff = true
+			gate.staffID = perm.RequiredRoles[types.StaffRoleKey].ID
+		}
+		return gate
 	}
 	gate := roleGate{openByDefault: cmd.Category == "general"}
 	if types.HasRequirementKey(cmd.Requirements, types.ReqRole, types.StaffRoleKey) {

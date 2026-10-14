@@ -80,6 +80,11 @@ type GuildCommandPermission struct {
 	DeniedRoles     []string
 	Subcommands     map[string]GuildSubcommandPermission
 
+	// Custom marks a command made on the dashboard's Command Builder; StaffOnly is set when it declares the staff role
+	// requirement, which gates it like a built-in staff command.
+	Custom    bool
+	StaffOnly bool
+
 	// Required* mirror the guild config's own required-resource maps for this
 	// command (see CommandConfig), so LoadCommandRequirements can tell which
 	// keys are missing their snowflake ID from the single GuildSettings load

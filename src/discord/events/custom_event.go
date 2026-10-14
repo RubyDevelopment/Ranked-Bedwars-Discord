@@ -103,6 +103,11 @@ func init() {
 		run(s, m.GuildID, "member_unban", helpers.EventCtx{User: m.User})
 	})
 	on("Member Update", memberUpdate)
+	// Nickname, role, boost and timeout changes are found by comparing with the member as the bot saw them before, so
+	// every member is loaded into the cache when a server becomes available.
+	on("Member Cache", func(s *discordgo.Session, g *discordgo.GuildCreate) {
+		_ = s.RequestGuildMembers(g.ID, "", 0, "", false)
+	})
 
 	// ── Messages ──
 	on("Message Create", func(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -270,14 +275,32 @@ func init() {
 			"scheduled.start": fmt.Sprintf("<t:%d:R>", e.ScheduledStartTime.Unix()),
 		}
 	}
+	// The last status seen of each scheduled event, so an update that only edits the event is not taken for a start.
+	var seenMu sync.Mutex
+	seen := map[string]discordgo.GuildScheduledEventStatus{}
+	remember := func(e *discordgo.GuildScheduledEvent) {
+		seenMu.Lock()
+		seen[e.ID] = e.Status
+		seenMu.Unlock()
+	}
 	on("Scheduled Event Create", func(s *discordgo.Session, m *discordgo.GuildScheduledEventCreate) {
+		remember(m.GuildScheduledEvent)
 		run(s, m.GuildID, "scheduled_event_create", helpers.EventCtx{Extra: scheduled(m.GuildScheduledEvent)})
 	})
 	on("Scheduled Event Delete", func(s *discordgo.Session, m *discordgo.GuildScheduledEventDelete) {
+		seenMu.Lock()
+		delete(seen, m.ID)
+		seenMu.Unlock()
 		run(s, m.GuildID, "scheduled_event_delete", helpers.EventCtx{Extra: scheduled(m.GuildScheduledEvent)})
 	})
-	var seenMu sync.Mutex
-	seen := map[string]discordgo.GuildScheduledEventStatus{}
+	// On startup the events that already exist are noted too, so editing one that is running does not "start" it again.
+	on("Scheduled Event Seed", func(s *discordgo.Session, g *discordgo.GuildCreate) {
+		if list, err := s.GuildScheduledEvents(g.ID, false); err == nil {
+			for _, e := range list {
+				remember(e)
+			}
+		}
+	})
 	on("Scheduled Event Update", func(s *discordgo.Session, m *discordgo.GuildScheduledEventUpdate) {
 		// An update also arrives for plain edits: only a change of status is a start or an end.
 		seenMu.Lock()
@@ -336,12 +359,12 @@ func memberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 		run(s, m.GuildID, "member_nickname", c(extra{"change.old": shown(before.Nick), "change.new": shown(m.Nick)}))
 	}
 	for _, id := range m.Roles {
-		if !slices.Contains(before.Roles, id) {
+		if !slices.Contains(before.Roles, id) && !helpers.BotChangedRole(m.GuildID, m.User.ID, id, true) {
 			run(s, m.GuildID, "member_role_added", c(roleVars(s, m.GuildID, id, nil)))
 		}
 	}
 	for _, id := range before.Roles {
-		if !slices.Contains(m.Roles, id) {
+		if !slices.Contains(m.Roles, id) && !helpers.BotChangedRole(m.GuildID, m.User.ID, id, false) {
 			run(s, m.GuildID, "member_role_removed", c(roleVars(s, m.GuildID, id, nil)))
 		}
 	}
