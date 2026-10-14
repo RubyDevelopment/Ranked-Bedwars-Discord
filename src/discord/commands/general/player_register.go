@@ -79,7 +79,7 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 
 	// Verify Minecraft account existence if required by guild setup
 	if helpers.RequiresRegistrationAPIVerification(verification) {
-		exists, verifyErr := helpers.VerifyMinecraftUsernameExists(username)
+		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(username, verification)
 		if verifyErr != nil {
 			return helpers.EditInteractionEmbed(s, i, playerRegisterAPIOutageEmbed(helpers.RegistrationNetworkLabel(verification)))
 		}

@@ -1066,8 +1066,30 @@ func RequiresRegistrationAPIVerification(cfg *types.RegistrationVerification) bo
 	return cfg.Mode == "network_api" || cfg.Mode == "custom_api"
 }
 
-// VerifyMinecraftUsernameExists checks username existence via Mojang when API verification is enabled.
+// VerifyMinecraftUsernameExists checks username existence via Mojang or custom API when API verification is enabled.
 func VerifyMinecraftUsernameExists(username string) (bool, error) {
+	return VerifyMinecraftUsernameExistsWithConfig(username, nil)
+}
+
+// VerifyMinecraftUsernameExistsWithConfig checks username existence using the provided verification config.
+// If cfg is nil or mode is network_api, it uses Mojang API. If mode is custom_api, it uses the configured external API.
+func VerifyMinecraftUsernameExistsWithConfig(username string, cfg *types.RegistrationVerification) (bool, error) {
+	// Default to Mojang API if no config or network_api mode
+	if cfg == nil || cfg.Mode == "network_api" {
+		return verifyViaMojang(username)
+	}
+
+	// Use custom API if configured
+	if cfg.Mode == "custom_api" && cfg.ExternalAPI != nil {
+		return verifyViaCustomAPI(username, cfg.ExternalAPI)
+	}
+
+	// Fallback to Mojang for unknown modes
+	return verifyViaMojang(username)
+}
+
+// verifyViaMojang checks username existence via Mojang API.
+func verifyViaMojang(username string) (bool, error) {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	endpoint := "https://api.mojang.com/users/profiles/minecraft/" + url.PathEscape(username)
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
@@ -1087,6 +1109,101 @@ func VerifyMinecraftUsernameExists(username string) (bool, error) {
 	default:
 		return false, fmt.Errorf("minecraft profile lookup failed with status %d", resp.StatusCode)
 	}
+}
+
+// verifyViaCustomAPI checks username existence via a configured external API.
+func verifyViaCustomAPI(username string, api *types.ExternalAPI) (bool, error) {
+	if api.EndpointURL == "" || api.APIKey == "" {
+		return false, fmt.Errorf("external API configuration is incomplete")
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+
+	// Build request with authentication
+	headers := make(map[string]string)
+	if api.AuthType == "bearer" {
+		headers["Authorization"] = "Bearer " + api.APIKey
+	} else {
+		headers[api.HeaderName] = api.APIKey
+	}
+
+	// Build URL with query parameter
+	url, err := url.Parse(api.EndpointURL)
+	if err != nil {
+		return false, fmt.Errorf("invalid endpoint URL: %w", err)
+	}
+
+	query := url.Query()
+	query.Set(api.QueryParam, username)
+	url.RawQuery = query.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
+	if err != nil {
+		return false, err
+	}
+
+	// Set headers
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("external API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse JSON response
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return false, fmt.Errorf("failed to parse API response: %w", err)
+	}
+
+	// Extract UUID using the configured field path
+	uuid, err := extractNestedValue(data, api.UUIDFieldPath)
+	if err != nil {
+		return false, fmt.Errorf("could not extract UUID from response: %w", err)
+	}
+
+	return uuid != "", nil
+}
+
+// extractNestedValue extracts a value from a nested map using a dot-notation path.
+func extractNestedValue(data map[string]interface{}, path string) (string, error) {
+	keys := strings.Split(path, ".")
+	var current interface{} = data
+
+	for _, key := range keys {
+		if m, ok := current.(map[string]interface{}); ok {
+			if val, exists := m[key]; exists {
+				current = val
+			} else {
+				return "", fmt.Errorf("key '%s' not found in path", key)
+			}
+		} else {
+			return "", fmt.Errorf("expected map at key '%s', got %T", key, current)
+		}
+	}
+
+	if current == nil {
+		return "", nil
+	}
+
+	if str, ok := current.(string); ok {
+		return str, nil
+	}
+
+	return fmt.Sprintf("%v", current), nil
 }
 
 // RegistrationNetworkLabel returns user-facing copy for the configured verification mode.

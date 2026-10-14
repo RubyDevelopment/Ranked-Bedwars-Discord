@@ -10,9 +10,21 @@ type AppearanceConfig struct {
 
 // RegistrationVerification is the guild config's "registration_verification" section.
 type RegistrationVerification struct {
-	Mode             string `json:"mode"` // database_only, network_api, custom_api, party_code (legacy: manual, disabled)
-	NetworkPresetID  string `json:"network_preset_id"`
-	CustomProfileURL string `json:"custom_profile_url,omitempty"`
+	Mode             string       `json:"mode"` // database_only, network_api, custom_api, party_code (legacy: manual, disabled)
+	NetworkPresetID  string       `json:"network_preset_id"`
+	CustomProfileURL string       `json:"custom_profile_url,omitempty"`
+	ExternalAPI      *ExternalAPI `json:"external_api,omitempty"`
+}
+
+// ExternalAPI configuration for custom_api verification mode.
+type ExternalAPI struct {
+	EndpointURL    string `json:"endpoint_url"`     // Base API endpoint URL
+	APIKey         string `json:"api_key"`          // API key or token
+	AuthType       string `json:"auth_type"`        // bearer or custom_header
+	HeaderName     string `json:"header_name"`      // Custom header name if auth_type is custom_header
+	UUIDFieldPath  string `json:"uuid_field_path"`  // JSON field path to extract UUID (e.g., "player.uuid")
+	QueryParam     string `json:"query_param"`      // Parameter name for username/UUID in request
+	QueryParamType string `json:"query_param_type"` // uuid or username
 }
 
 // DiscordChannel is one entry of the guild state's "channels" map.

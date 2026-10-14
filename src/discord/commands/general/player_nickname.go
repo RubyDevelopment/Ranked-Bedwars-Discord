@@ -112,7 +112,7 @@ func validateNicknameConflicts(guildID string, playerID uint, nickname string) *
 
 	// Verify if the requested nickname is a premium Minecraft account
 	if helpers.RequiresRegistrationAPIVerification(verification) {
-		exists, verifyErr := helpers.VerifyMinecraftUsernameExists(nickname)
+		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(nickname, verification)
 		if verifyErr != nil {
 			return nicknameAPIOutageEmbed(helpers.RegistrationNetworkLabel(verification))
 		}

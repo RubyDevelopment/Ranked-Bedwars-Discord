@@ -107,6 +107,12 @@ func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
 			name += " · disabled"
 		}
 
+		// If bot is "Available", treat it as "Offline" for display
+		// Only show active hosting states (Starting, Busy, Cooldown)
+		if status == "Available" {
+			status = "Offline"
+		}
+
 		if _, ok := statusGroups[status]; ok {
 			statusGroups[status] = append(statusGroups[status], name)
 			continue

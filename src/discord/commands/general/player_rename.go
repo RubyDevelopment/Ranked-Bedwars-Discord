@@ -75,7 +75,7 @@ func executePlayerRenameCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// Verify Minecraft account existence if required by guild setup
 	verification, _ := helpers.LoadRegistrationVerification(i.GuildID)
 	if helpers.RequiresRegistrationAPIVerification(verification) {
-		exists, verifyErr := helpers.VerifyMinecraftUsernameExists(newUsername)
+		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(newUsername, verification)
 		if verifyErr != nil {
 			return helpers.EditInteractionEmbed(s, i, playerRenameAPIOutageEmbed(helpers.RegistrationNetworkLabel(verification)))
 		}
