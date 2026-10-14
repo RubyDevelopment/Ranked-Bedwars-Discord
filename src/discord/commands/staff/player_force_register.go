@@ -156,6 +156,7 @@ func playerForceRegisterConflictEmbed(username string) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Username Taken",
 		Description: fmt.Sprintf("The username **%s** is already linked to another player in this guild.", username),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
 	})
 }
 

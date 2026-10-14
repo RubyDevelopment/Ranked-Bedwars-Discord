@@ -172,6 +172,7 @@ func nicknameAlreadySetEmbed(nickname string) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Nickname Already Set",
 		Description: fmt.Sprintf("Your nickname is already set to **%s**. No further action is needed.", nickname),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(nickname),
 	})
 }
 
@@ -179,6 +180,7 @@ func nicknamePremiumNameEmbed(nickname string) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Premium Username",
 		Description: fmt.Sprintf("**%s** is a premium Minecraft username and cannot be used as a nickname. Choose a different nickname that is not a registered premium name.", nickname),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(nickname),
 	})
 }
 
@@ -186,6 +188,7 @@ func nicknameConflictEmbed(nickname string) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Nickname Taken",
 		Description: fmt.Sprintf("The nickname **%s** is already in use in this guild. Try a different nickname.", nickname),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(nickname),
 	})
 }
 
@@ -210,5 +213,6 @@ func nicknameUpdatedEmbed(nickname string) *discordgo.MessageEmbed {
 			"Your in-game nickname has been updated to **%s**. Please wait a moment for your displayed name to update.",
 			nickname,
 		),
+		Thumbnail: helpers.MinecraftBustAvatarURL(nickname),
 	})
 }

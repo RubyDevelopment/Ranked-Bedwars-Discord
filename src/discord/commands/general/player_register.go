@@ -159,6 +159,7 @@ func playerRegisterAccountNotFoundEmbed(username, network string) *discordgo.Mes
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Account Not Found",
 		Description: fmt.Sprintf("Could not find a Minecraft account named **%s** on **%s**. Double-check the spelling and try again.", username, network),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
 	})
 }
 

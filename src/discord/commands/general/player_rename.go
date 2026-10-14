@@ -147,6 +147,7 @@ func playerRenameAccountNotFoundEmbed(username, network string) *discordgo.Messa
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Account Not Found",
 		Description: fmt.Sprintf("Could not find a Minecraft account named **%s** on **%s**. Double-check the spelling and try again.", username, network),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
 	})
 }
 
@@ -154,6 +155,7 @@ func playerRenameConflictEmbed(username string) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Username Taken",
 		Description: fmt.Sprintf("The username **%s** is already linked to another player in this guild. Try a different username or contact staff if this is your account.", username),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
 	})
 }
 

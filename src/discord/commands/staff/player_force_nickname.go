@@ -181,6 +181,7 @@ func playerForceNicknameAlreadySetEmbed(nickname string) *discordgo.MessageEmbed
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Nickname Already Set",
 		Description: fmt.Sprintf("That player's nickname is already set to **%s**. No further action is needed.", nickname),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(nickname),
 	})
 }
 
@@ -188,6 +189,7 @@ func playerForceNicknameConflictEmbed(nickname string) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Nickname Taken",
 		Description: fmt.Sprintf("The nickname **%s** is already in use in this guild. Try a different nickname.", nickname),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(nickname),
 	})
 }
 
