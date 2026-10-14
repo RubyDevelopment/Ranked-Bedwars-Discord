@@ -23,7 +23,7 @@ func init() {
 
 // QueueBanCommand bans a player from joining queues by recording a ban restriction.
 var QueueBanCommand = &types.Command{
-	Name:         "queue_ban",
+	Name:         "queueban",
 	Description:  "Bans a disruptive player from joining queues.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

@@ -30,7 +30,7 @@ func init() {
 
 // ServerUnbanCommand removes a Discord guild ban by user ID.
 var ServerUnbanCommand = &types.Command{
-	Name:         "server_unban",
+	Name:         "unban",
 	Description:  "Revokes a guild-wide ban by user ID.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

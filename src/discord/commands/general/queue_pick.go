@@ -26,7 +26,7 @@ func init() {
 
 // QueuePickCommand picks a player from the pool during a captain draft.
 var QueuePickCommand = &types.Command{
-	Name:        "queue_pick",
+	Name:        "pick",
 	Description: "Picks a player during the captain draft phase (captains only).",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

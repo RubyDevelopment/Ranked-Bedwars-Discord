@@ -27,7 +27,7 @@ func init() {
 
 // PartyGroupCommand Manages party matching, custom party groups, and team formations.
 var PartyGroupCommand = &types.Command{
-	Name:        "party_group",
+	Name:        "party",
 	Description: "Manages party matching, custom party groups, and team formations.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

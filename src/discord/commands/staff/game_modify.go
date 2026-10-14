@@ -27,7 +27,7 @@ func init() {
 
 // GameModifyCommand manually adjusts one of a player's seasonal stats.
 var GameModifyCommand = &types.Command{
-	Name:        "game_modify",
+	Name:        "modify",
 	Description: "Manually adjusts a player's seasonal statistics.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

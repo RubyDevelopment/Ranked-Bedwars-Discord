@@ -26,7 +26,7 @@ func init() {
 
 // PlayerScreenshareCommand requests a screenshare for a player.
 var PlayerScreenshareCommand = &types.Command{
-	Name:        "player_screenshare",
+	Name:        "screenshare",
 	Description: "Requests a screenshare for a player to keep competitive play fair.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

@@ -27,7 +27,7 @@ func init() {
 
 // GameRanksCommand Outlines the competitive tier system, ELO brackets, and rank requirements.
 var GameRanksCommand = &types.Command{
-	Name:        "game_ranks",
+	Name:        "ranks",
 	Description: "Outlines the competitive tier system, ELO brackets, and rank requirements.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

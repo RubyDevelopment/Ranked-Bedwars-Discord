@@ -27,7 +27,7 @@ func init() {
 
 // PlayerWipeCommand wipes a player's stats for the active season, entirely or from a game onwards.
 var PlayerWipeCommand = &types.Command{
-	Name:        "player_wipe",
+	Name:        "wipe",
 	Description: "Wipes a player's stats for the active season, entirely or from a game onwards.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

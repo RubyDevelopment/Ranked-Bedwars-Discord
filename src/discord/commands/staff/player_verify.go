@@ -27,7 +27,7 @@ func init() {
 
 // PlayerVerifyCommand reports whether a player is currently eligible to queue and why not.
 var PlayerVerifyCommand = &types.Command{
-	Name:        "player_verify",
+	Name:        "verify",
 	Description: "Checks a player's queue eligibility: registration, account age, restrictions, and game state.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

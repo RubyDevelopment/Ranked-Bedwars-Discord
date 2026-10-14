@@ -27,7 +27,7 @@ func init() {
 
 // PlayerForceRegisterCommand force-registers a target user with a Minecraft username without verification.
 var PlayerForceRegisterCommand = &types.Command{
-	Name:        "player_force_register",
+	Name:        "forceregister",
 	Description: "Force-registers a Minecraft account to a Discord account without verification.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

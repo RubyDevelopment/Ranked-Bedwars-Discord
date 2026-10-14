@@ -30,7 +30,7 @@ func init() {
 
 // PlayerClaimEloCommand Claims starting ELO or seasonal reward bonuses based on verified player status.
 var PlayerClaimEloCommand = &types.Command{
-	Name:        "claim_elo",
+	Name:        "claim",
 	Description: "Claims starting ELO or seasonal reward bonuses based on verified player status.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

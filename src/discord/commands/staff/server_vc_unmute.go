@@ -23,7 +23,7 @@ func init() {
 
 // ServerVcUnmuteCommand removes a player's voice server-mute.
 var ServerVcUnmuteCommand = &types.Command{
-	Name:         "server_vc_unmute",
+	Name:         "vcunmute",
 	Description:  "Removes a voice channel server-mute from a player.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

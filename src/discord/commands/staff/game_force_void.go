@@ -24,7 +24,7 @@ func init() {
 
 // GameForceVoidCommand voids any game by number without requiring participation.
 var GameForceVoidCommand = &types.Command{
-	Name:        "game_force_void",
+	Name:        "forcevoid",
 	Description: "Forcefully voids an ongoing or finished game by staff override.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

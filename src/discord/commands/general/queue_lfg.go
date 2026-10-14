@@ -27,7 +27,7 @@ func init() {
 // QueueLfgCommand posts a looking-for-group ping to the guild's configured LFG
 // channel (guild_configs.lfg — see LoadLFGConfig/SaveLFGConfig).
 var QueueLfgCommand = &types.Command{
-	Name:        "queue_lfg",
+	Name:        "lfg",
 	Description: "Posts that you are looking for a ranked game.",
 	Ephemeral:   true,
 	Cooldown:    60 * time.Second,

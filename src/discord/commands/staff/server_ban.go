@@ -23,10 +23,10 @@ func init() {
 
 // ServerBanCommand bans a player from the Discord guild and records the punishment.
 var ServerBanCommand = &types.Command{
-	Name:        "server_ban",
-	Description: "Bans a player from the Discord guild.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "ban",
+	Description:  "Bans a player from the Discord guild.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

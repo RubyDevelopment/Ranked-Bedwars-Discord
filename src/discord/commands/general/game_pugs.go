@@ -23,7 +23,7 @@ func init() {
 
 // GamePugsCommand Manages active pickup games (PUGs), lobby rotations, and queue statuses.
 var GamePugsCommand = &types.Command{
-	Name:        "game_pugs",
+	Name:        "pugs",
 	Description: "Manages active pickup games (PUGs), lobby rotations, and queue statuses.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

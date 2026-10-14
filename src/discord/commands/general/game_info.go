@@ -25,7 +25,7 @@ func init() {
 
 // GameInfoCommand Displays deep metadata, rules, and configuration details for a specific match.
 var GameInfoCommand = &types.Command{
-	Name:        "game_info",
+	Name:        "gameinfo",
 	Description: "Displays deep metadata, rules, and configuration details for a specific match.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

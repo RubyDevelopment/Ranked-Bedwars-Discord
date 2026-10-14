@@ -31,7 +31,7 @@ func init() {
 
 // ServerRoleCommand Configures automated role assignments, permissions, and synchronization rules.
 var ServerRoleCommand = &types.Command{
-	Name:        "server_role",
+	Name:        "role",
 	Description: "Configures automated role assignments, permissions, and synchronization rules.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

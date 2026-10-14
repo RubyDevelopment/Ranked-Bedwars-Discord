@@ -23,7 +23,7 @@ func init() {
 
 // ServerVcMuteCommand server-mutes a player in voice channels.
 var ServerVcMuteCommand = &types.Command{
-	Name:         "server_vc_mute",
+	Name:         "vcmute",
 	Description:  "Server-mutes a player in voice channels.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

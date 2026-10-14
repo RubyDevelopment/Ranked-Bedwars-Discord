@@ -28,7 +28,7 @@ func init() {
 
 // PlayerProfileCommand shows a player's ranked profile, username, nickname, and rank.
 var PlayerProfileCommand = &types.Command{
-	Name:        "player_profile",
+	Name:        "profile",
 	Description: "Displays a player's ranked profile, username, nickname, and rank.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

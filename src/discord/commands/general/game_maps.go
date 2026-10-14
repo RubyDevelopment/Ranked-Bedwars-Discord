@@ -27,7 +27,7 @@ func init() {
 
 // GameMapsCommand Lists active competitive map pools and map rotation info.
 var GameMapsCommand = &types.Command{
-	Name:        "game_maps",
+	Name:        "maps",
 	Description: "Lists active competitive map pools and map rotation info.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

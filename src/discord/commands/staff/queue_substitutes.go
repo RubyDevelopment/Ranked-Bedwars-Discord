@@ -24,7 +24,7 @@ func init() {
 
 // QueueSubstitutesCommand swaps a player in a running hosted game for a substitute on the same team.
 var QueueSubstitutesCommand = &types.Command{
-	Name:        "queue_substitutes",
+	Name:        "substitute",
 	Description: "Swaps a player in a hosted game for a substitute on the same team.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

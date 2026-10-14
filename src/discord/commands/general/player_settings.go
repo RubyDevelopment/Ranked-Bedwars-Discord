@@ -42,7 +42,7 @@ func init() {
 
 // PlayerSettingsCommand shows or updates the caller's ranked profile settings.
 var PlayerSettingsCommand = &types.Command{
-	Name:        "player_settings",
+	Name:        "settings",
 	Description: "Views or updates your ranked profile settings.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

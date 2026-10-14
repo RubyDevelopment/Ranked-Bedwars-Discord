@@ -24,7 +24,7 @@ func init() {
 
 // GameUnvoidCommand restores a voided game.
 var GameUnvoidCommand = &types.Command{
-	Name:        "game_unvoid",
+	Name:        "unvoid",
 	Description: "Restores a previously voided game.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

@@ -26,10 +26,10 @@ func init() {
 
 // StrikeRemoveCommand voids a player's most recent strike, or a specific one by ID.
 var StrikeRemoveCommand = &types.Command{
-	Name:        "strike_remove",
-	Description: "Removes a specific strike entry from a player's record.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "unstrike",
+	Description:  "Removes a specific strike entry from a player's record.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

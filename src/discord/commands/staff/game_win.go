@@ -26,7 +26,7 @@ func init() {
 
 // GameWinCommand grants win-equivalent ELO to a registered player without recording a game.
 var GameWinCommand = &types.Command{
-	Name:        "game_win",
+	Name:        "win",
 	Description: "Grants win-equivalent ELO to a registered player without recording a game.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

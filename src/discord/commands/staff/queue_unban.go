@@ -23,7 +23,7 @@ func init() {
 
 // QueueUnbanCommand removes a player's active queue ban.
 var QueueUnbanCommand = &types.Command{
-	Name:         "queue_unban",
+	Name:         "queueunban",
 	Description:  "Removes a queue ban from a player.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

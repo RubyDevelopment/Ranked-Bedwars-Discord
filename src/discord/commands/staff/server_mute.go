@@ -23,7 +23,7 @@ func init() {
 
 // ServerMuteCommand mutes a player in text chat by recording a mute restriction.
 var ServerMuteCommand = &types.Command{
-	Name:         "server_mute",
+	Name:         "mute",
 	Description:  "Mutes a player in text chat across the guild.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

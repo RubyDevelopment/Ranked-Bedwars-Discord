@@ -29,7 +29,7 @@ func init() {
 
 // GameSubmitCommand Submits match results or proof for verification and ELO calculation.
 var GameSubmitCommand = &types.Command{
-	Name:        "game_submit",
+	Name:        "submit",
 	Description: "Submits match results or proof for verification and ELO calculation (game channel only).",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

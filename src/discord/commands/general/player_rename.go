@@ -27,7 +27,7 @@ func init() {
 
 // PlayerRenameCommand updates the caller's linked Minecraft username.
 var PlayerRenameCommand = &types.Command{
-	Name:        "player_rename",
+	Name:        "rename",
 	Description: "Updates your linked Minecraft username.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

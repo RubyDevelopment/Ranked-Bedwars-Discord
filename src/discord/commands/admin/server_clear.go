@@ -31,7 +31,7 @@ func init() {
 
 // ServerClearCommand Clears and purges messages from a channel based on specified filter criteria.
 var ServerClearCommand = &types.Command{
-	Name:        "server_clear",
+	Name:        "clear",
 	Description: "Clears and purges messages from a channel based on specified filter criteria.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

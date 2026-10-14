@@ -32,7 +32,7 @@ func init() {
 // requirement assignments (stored on that command's own entry in the guild
 // config's "commands" column — see types.CommandConfig), and bot settings.
 var ServerConfigCommand = &types.Command{
-	Name:        "server_config",
+	Name:        "config",
 	Description: "Configures guild settings, command requirements, and bot behavior.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

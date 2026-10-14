@@ -23,7 +23,7 @@ func init() {
 
 // WarnRemoveCommand removes a player's active warning.
 var WarnRemoveCommand = &types.Command{
-	Name:         "warn_remove",
+	Name:         "unwarn",
 	Description:  "Removes an active warning from a player's record.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

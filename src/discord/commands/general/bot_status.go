@@ -41,7 +41,7 @@ func init() {
 
 // BotStatusCommand Displays the bot's current operational status, latency, uptime, and system info.
 var BotStatusCommand = &types.Command{
-	Name:        "bot_status",
+	Name:        "bots",
 	Description: "Displays the bot's current operational status, latency, uptime, and system info.",
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},

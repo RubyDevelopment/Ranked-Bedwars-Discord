@@ -26,7 +26,7 @@ func init() {
 
 // StrikeListCommand lists the strike history of a player.
 var StrikeListCommand = &types.Command{
-	Name:        "strike_list",
+	Name:        "strikes",
 	Description: "Displays the strike history of a player.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

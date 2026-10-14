@@ -27,13 +27,12 @@ func init() {
 
 // PlayerRefreshCommand synchronizes the caller's registered role, rank role, and nickname.
 var PlayerRefreshCommand = &types.Command{
-	Name:          "player_refresh",
-	Description:   "Synchronizes your registered role, rank role, and nickname with the guild.",
-	Ephemeral:     true,
-	Cooldown:      5 * time.Second,
-	PrefixAliases: []string{"sync", "refresh"},
-	Data:          &discordgo.ApplicationCommand{},
-	Execute:       executePlayerRefreshCommand,
+	Name:        "refresh",
+	Description: "Synchronizes your registered role, rank role, and nickname with the guild.",
+	Ephemeral:   true,
+	Cooldown:    5 * time.Second,
+	Data:        &discordgo.ApplicationCommand{},
+	Execute:     executePlayerRefreshCommand,
 }
 
 // ============================================================================

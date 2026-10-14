@@ -27,7 +27,7 @@ func init() {
 
 // StrikeRequestCommand requests a strike review for a player.
 var StrikeRequestCommand = &types.Command{
-	Name:        "strike_request",
+	Name:        "strikerequest",
 	Description: "Requests a strike review for a player who broke the rules.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

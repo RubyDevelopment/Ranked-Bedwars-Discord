@@ -27,7 +27,7 @@ func init() {
 
 // PlayerUnwipeCommand undoes a stat wipe and restores the player's stats.
 var PlayerUnwipeCommand = &types.Command{
-	Name:        "player_unwipe",
+	Name:        "unwipe",
 	Description: "Undoes a wipe and restores the player's stats.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

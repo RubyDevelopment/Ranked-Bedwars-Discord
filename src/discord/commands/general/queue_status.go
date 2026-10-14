@@ -27,7 +27,7 @@ func init() {
 
 // QueueStatusCommand shows the match stats and draft status of a game channel, or the queue status of the voice channel the invoker is in.
 var QueueStatusCommand = &types.Command{
-	Name:        "queue_status",
+	Name:        "queues",
 	Description: "Views game stats, draft status, or the status of the queue you are in.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

@@ -26,7 +26,7 @@ func init() {
 
 // PlayerPunishmentsCommand lists the punishment history of a player.
 var PlayerPunishmentsCommand = &types.Command{
-	Name:        "player_punishments",
+	Name:        "punishments",
 	Description: "Views the active bans, mutes, and disciplinary history of a player.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

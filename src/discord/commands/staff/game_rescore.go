@@ -24,7 +24,7 @@ func init() {
 
 // GameRescoreCommand rescores a game that has already been completed or voided.
 var GameRescoreCommand = &types.Command{
-	Name:        "game_rescore",
+	Name:        "rescore",
 	Description: "Recalculates ELO for a completed or voided game after a dispute or correction.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

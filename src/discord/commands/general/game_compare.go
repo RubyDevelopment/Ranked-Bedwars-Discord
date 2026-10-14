@@ -33,7 +33,7 @@ func init() {
 
 // GameCompareCommand Compares competitive stats, match history, and performance metrics between players.
 var GameCompareCommand = &types.Command{
-	Name:        "game_compare",
+	Name:        "compare",
 	Description: "Compares competitive stats, match history, and performance metrics between players.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

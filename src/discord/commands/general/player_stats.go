@@ -30,7 +30,7 @@ func init() {
 // picked among the styles of the guild's Banner Builder (or the first style they may use), or as an
 // embed when the guild has made none.
 var PlayerStatsCommand = &types.Command{
-	Name:        "player_stats",
+	Name:        "stats",
 	Description: "Displays a player's seasonal statistics, win rates, and performance breakdown.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

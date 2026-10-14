@@ -23,7 +23,7 @@ func init() {
 
 // ServerUnmuteCommand removes a player's active text chat mute.
 var ServerUnmuteCommand = &types.Command{
-	Name:         "server_unmute",
+	Name:         "unmute",
 	Description:  "Removes a player's text chat mute.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

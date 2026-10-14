@@ -24,7 +24,7 @@ func init() {
 
 // GameVoidCommand Requests a match void due to disconnects, bugs, or rule infractions.
 var GameVoidCommand = &types.Command{
-	Name:        "game_void",
+	Name:        "void",
 	Description: "Requests a match void due to disconnects, bugs, or rule infractions.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

@@ -26,7 +26,7 @@ func init() {
 
 // PlayerUnregisterCommand unlinks a player's Minecraft account and clears their guild roles.
 var PlayerUnregisterCommand = &types.Command{
-	Name:        "player_unregister",
+	Name:        "unregister",
 	Description: "Unlinks a player's Minecraft account and clears their guild roles.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

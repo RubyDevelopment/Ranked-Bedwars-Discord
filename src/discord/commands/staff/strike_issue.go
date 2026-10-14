@@ -27,7 +27,7 @@ func init() {
 
 // StrikeIssueCommand issues an official strike to a player.
 var StrikeIssueCommand = &types.Command{
-	Name:         "strike_issue",
+	Name:         "strike",
 	Description:  "Issues an official strike penalty to a player.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

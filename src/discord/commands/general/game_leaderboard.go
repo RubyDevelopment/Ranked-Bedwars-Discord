@@ -32,7 +32,7 @@ func init() {
 
 // GameLeaderboardCommand Displays the top-ranked players and seasonal ELO leaderboards.
 var GameLeaderboardCommand = &types.Command{
-	Name:        "game_leaderboard",
+	Name:        "leaderboard",
 	Description: "Displays the top-ranked players and seasonal ELO leaderboards.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

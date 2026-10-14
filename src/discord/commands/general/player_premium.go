@@ -23,7 +23,7 @@ func init() {
 
 // PlayerPremiumCommand Manages premium status perks, benefits, and subscription features.
 var PlayerPremiumCommand = &types.Command{
-	Name:        "player_premium",
+	Name:        "premium",
 	Description: "Manages premium status perks, benefits, and subscription features.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

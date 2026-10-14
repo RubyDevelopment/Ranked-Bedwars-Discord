@@ -26,7 +26,7 @@ func init() {
 
 // PlayerRegisterCommand links the caller's Minecraft account to their Discord account.
 var PlayerRegisterCommand = &types.Command{
-	Name:        "player_register",
+	Name:        "register",
 	Description: "Links your Minecraft account to your Discord account.",
 	Ephemeral:   true,
 	Cooldown:    5 * time.Second,

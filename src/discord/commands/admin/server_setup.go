@@ -25,7 +25,7 @@ func init() {
 
 // ServerSetupCommand manages Ranked Bedwars guild registration for this guild.
 var ServerSetupCommand = &types.Command{
-	Name:           "server_setup",
+	Name:           "setup",
 	Description:    "Initializes or syncs this guild's Ranked Bedwars data and snapshot.",
 	SkipGuildCheck: true,
 	Ephemeral:      true,

@@ -26,7 +26,7 @@ func init() {
 
 // PunishmentClearCommand deletes a player's most recent active punishment, or a specific one by ID.
 var PunishmentClearCommand = &types.Command{
-	Name:        "punishment_clear",
+	Name:        "clearpunishment",
 	Description: "Clears a punishment from a player's record.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

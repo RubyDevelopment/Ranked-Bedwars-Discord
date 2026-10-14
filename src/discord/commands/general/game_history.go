@@ -26,7 +26,7 @@ func init() {
 
 // GameHistoryCommand Retrieves the detailed match history and past game outcomes for a player.
 var GameHistoryCommand = &types.Command{
-	Name:        "game_history",
+	Name:        "games",
 	Description: "Retrieves the detailed match history and past game outcomes for a player.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

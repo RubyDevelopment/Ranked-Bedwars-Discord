@@ -27,7 +27,7 @@ func init() {
 
 // PlayerForceRenameCommand force-changes a target player's linked Minecraft username.
 var PlayerForceRenameCommand = &types.Command{
-	Name:        "player_force_rename",
+	Name:        "forcerename",
 	Description: "Force-renames a player's linked Minecraft username.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,
