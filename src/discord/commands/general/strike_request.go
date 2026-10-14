@@ -27,10 +27,11 @@ func init() {
 
 // StrikeRequestCommand requests a strike review for a player.
 var StrikeRequestCommand = &types.Command{
-	Name:        "strikerequest",
-	Description: "Requests a strike review for a player who broke the rules.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:          "strikerequest",
+	Description:   "Requests a strike review for a player who broke the rules.",
+	PrefixAliases: []string{"sr"},
+	Ephemeral:     true,
+	Cooldown:      5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

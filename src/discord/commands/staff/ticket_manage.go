@@ -26,7 +26,7 @@ func init() {
 // TicketManageCommand is the support ticket system: a panel builder for administrators
 // and claim, close, leaderboard and log tools for staff.
 var TicketManageCommand = &types.Command{
-	Name:        "ticket_manage",
+	Name:        "ticket",
 	Description: "Manages the support ticket system: panels, claims, members, and logs.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,

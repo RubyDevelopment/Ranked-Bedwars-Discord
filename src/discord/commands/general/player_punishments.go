@@ -26,10 +26,11 @@ func init() {
 
 // PlayerPunishmentsCommand lists the punishment history of a player.
 var PlayerPunishmentsCommand = &types.Command{
-	Name:        "punishments",
-	Description: "Views the active bans, mutes, and disciplinary history of a player.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:          "punishments",
+	Description:   "Views the active bans, mutes, and disciplinary history of a player.",
+	PrefixAliases: []string{"puns", "hist", "history"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

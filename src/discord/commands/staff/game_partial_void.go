@@ -25,10 +25,11 @@ func init() {
 
 // GamePartialVoidCommand reverses only the losing team's stats for a game.
 var GamePartialVoidCommand = &types.Command{
-	Name:        "partialvoid",
-	Description: "Partially voids a game by reversing only the losing team's stats.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:          "partialvoid",
+	Description:   "Partially voids a game by reversing only the losing team's stats.",
+	PrefixAliases: []string{"pvg", "pv"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

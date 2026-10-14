@@ -24,10 +24,11 @@ func init() {
 
 // GameUnvoidCommand restores a voided game.
 var GameUnvoidCommand = &types.Command{
-	Name:        "unvoid",
-	Description: "Restores a previously voided game.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:          "unvoid",
+	Description:   "Restores a previously voided game.",
+	PrefixAliases: []string{"uvg", "uv"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

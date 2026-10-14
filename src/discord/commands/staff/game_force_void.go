@@ -24,10 +24,11 @@ func init() {
 
 // GameForceVoidCommand voids any game by number without requiring participation.
 var GameForceVoidCommand = &types.Command{
-	Name:        "forcevoid",
-	Description: "Forcefully voids an ongoing or finished game by staff override.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:          "forcevoid",
+	Description:   "Forcefully voids an ongoing or finished game by staff override.",
+	PrefixAliases: []string{"fv", "fvg"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

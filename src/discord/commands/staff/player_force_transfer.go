@@ -27,10 +27,11 @@ func init() {
 
 // PlayerForceTransferCommand force-transfers a Minecraft account link between Discord users.
 var PlayerForceTransferCommand = &types.Command{
-	Name:        "forcetransfer",
-	Description: "Force-transfers a Minecraft account link between Discord users.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:          "forcetransfer",
+	Description:   "Force-transfers a Minecraft account link between Discord users.",
+	PrefixAliases: []string{"ftransfer"},
+	Ephemeral:     true,
+	Cooldown:      5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

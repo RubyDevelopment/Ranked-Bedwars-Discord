@@ -23,11 +23,12 @@ func init() {
 
 // QueueBanCommand bans a player from joining queues by recording a ban restriction.
 var QueueBanCommand = &types.Command{
-	Name:         "queueban",
-	Description:  "Bans a disruptive player from joining queues.",
-	Ephemeral:    true,
-	Cooldown:     3 * time.Second,
-	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
+	Name:          "queueban",
+	Description:   "Bans a disruptive player from joining queues.",
+	PrefixAliases: []string{"qban"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
+	Requirements:  append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

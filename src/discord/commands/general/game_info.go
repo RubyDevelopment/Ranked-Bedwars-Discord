@@ -25,10 +25,11 @@ func init() {
 
 // GameInfoCommand Displays deep metadata, rules, and configuration details for a specific match.
 var GameInfoCommand = &types.Command{
-	Name:        "gameinfo",
-	Description: "Displays deep metadata, rules, and configuration details for a specific match.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:          "viewgame",
+	Description:   "Displays deep metadata, rules, and configuration details for a specific match.",
+	PrefixAliases: []string{"gameinfo", "gi", "vg"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

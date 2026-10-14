@@ -26,10 +26,11 @@ func init() {
 
 // PlayerScreenshareCommand requests a screenshare for a player.
 var PlayerScreenshareCommand = &types.Command{
-	Name:        "screenshare",
-	Description: "Requests a screenshare for a player to keep competitive play fair.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:          "screenshare",
+	Description:   "Requests a screenshare for a player to keep competitive play fair.",
+	PrefixAliases: []string{"ss"},
+	Ephemeral:     true,
+	Cooldown:      5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "user", Description: "Player to request a screenshare for", Type: discordgo.ApplicationCommandOptionUser, Required: true},

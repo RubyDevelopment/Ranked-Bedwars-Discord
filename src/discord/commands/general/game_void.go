@@ -24,10 +24,11 @@ func init() {
 
 // GameVoidCommand Requests a match void due to disconnects, bugs, or rule infractions.
 var GameVoidCommand = &types.Command{
-	Name:        "void",
-	Description: "Requests a match void due to disconnects, bugs, or rule infractions.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:          "void",
+	Description:   "Requests a match void due to disconnects, bugs, or rule infractions.",
+	PrefixAliases: []string{"vg", "v"},
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
