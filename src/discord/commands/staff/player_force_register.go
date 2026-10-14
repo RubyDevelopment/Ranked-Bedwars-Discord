@@ -29,6 +29,7 @@ func init() {
 var PlayerForceRegisterCommand = &types.Command{
 	Name:          "forceregister",
 	Description:   "Force-registers a Minecraft account to a Discord account without verification.",
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"fregister"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

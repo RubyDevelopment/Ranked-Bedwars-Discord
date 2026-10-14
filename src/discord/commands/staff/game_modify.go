@@ -27,10 +27,11 @@ func init() {
 
 // GameModifyCommand manually adjusts one of a player's seasonal stats.
 var GameModifyCommand = &types.Command{
-	Name:        "modify",
-	Description: "Manually adjusts a player's seasonal statistics.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "modify",
+	Description:  "Manually adjusts a player's seasonal statistics.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

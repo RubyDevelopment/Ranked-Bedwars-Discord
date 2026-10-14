@@ -28,9 +28,9 @@ func init() {
 var StrikeRemoveCommand = &types.Command{
 	Name:         "unstrike",
 	Description:  "Removes a specific strike entry from a player's record.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
-	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

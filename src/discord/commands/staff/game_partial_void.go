@@ -27,6 +27,7 @@ func init() {
 var GamePartialVoidCommand = &types.Command{
 	Name:          "partialvoid",
 	Description:   "Partially voids a game by reversing only the losing team's stats.",
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"pvg", "pv"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

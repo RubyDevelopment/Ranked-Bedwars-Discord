@@ -29,9 +29,9 @@ func init() {
 var StrikeIssueCommand = &types.Command{
 	Name:         "strike",
 	Description:  "Issues an official strike penalty to a player.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
-	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

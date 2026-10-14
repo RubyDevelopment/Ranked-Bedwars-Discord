@@ -24,10 +24,11 @@ func init() {
 
 // GameRescoreCommand rescores a game that has already been completed or voided.
 var GameRescoreCommand = &types.Command{
-	Name:        "rescore",
-	Description: "Recalculates ELO for a completed or voided game after a dispute or correction.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:         "rescore",
+	Description:  "Recalculates ELO for a completed or voided game after a dispute or correction.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

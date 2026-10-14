@@ -29,6 +29,7 @@ func init() {
 var PlayerForceRenameCommand = &types.Command{
 	Name:          "forcerename",
 	Description:   "Force-renames a player's linked Minecraft username.",
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"frename"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

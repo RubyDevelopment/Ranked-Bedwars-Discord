@@ -26,10 +26,11 @@ func init() {
 // TicketManageCommand is the support ticket system: a panel builder for administrators
 // and claim, close, leaderboard and log tools for staff.
 var TicketManageCommand = &types.Command{
-	Name:        "ticket",
-	Description: "Manages the support ticket system: panels, claims, members, and logs.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "ticket",
+	Description:  "Manages the support ticket system: panels, claims, members, and logs.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "panel", Description: "Create, customise, and send ticket panels", Type: discordgo.ApplicationCommandOptionSubCommand},

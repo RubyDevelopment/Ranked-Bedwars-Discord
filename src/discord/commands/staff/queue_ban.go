@@ -25,10 +25,10 @@ func init() {
 var QueueBanCommand = &types.Command{
 	Name:          "queueban",
 	Description:   "Bans a disruptive player from joining queues.",
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"qban"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
-	Requirements:  append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

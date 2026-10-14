@@ -26,6 +26,7 @@ func init() {
 var GameForceVoidCommand = &types.Command{
 	Name:          "forcevoid",
 	Description:   "Forcefully voids an ongoing or finished game by staff override.",
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"fv", "fvg"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

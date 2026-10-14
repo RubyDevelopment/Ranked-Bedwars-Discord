@@ -25,9 +25,9 @@ func init() {
 var ServerUnmuteCommand = &types.Command{
 	Name:         "unmute",
 	Description:  "Removes a player's text chat mute.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
-	Requirements: append(types.ModerationRequirementsWithRole("chat_muted_role"), types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

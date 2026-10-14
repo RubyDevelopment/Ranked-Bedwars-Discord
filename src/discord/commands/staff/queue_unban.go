@@ -25,10 +25,10 @@ func init() {
 var QueueUnbanCommand = &types.Command{
 	Name:          "queueunban",
 	Description:   "Removes a queue ban from a player.",
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"qunban"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
-	Requirements:  append(types.ModerationRequirementsWithRole("queue_banned_role"), types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

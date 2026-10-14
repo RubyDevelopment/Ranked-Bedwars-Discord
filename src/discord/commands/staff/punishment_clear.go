@@ -26,10 +26,11 @@ func init() {
 
 // PunishmentClearCommand deletes a player's most recent active punishment, or a specific one by ID.
 var PunishmentClearCommand = &types.Command{
-	Name:        "clearpunishment",
-	Description: "Clears a punishment from a player's record.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "clearpunishment",
+	Description:  "Clears a punishment from a player's record.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

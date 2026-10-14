@@ -25,9 +25,9 @@ func init() {
 var WarnIssueCommand = &types.Command{
 	Name:         "warn",
 	Description:  "Issues a formal warning to a player for breaking the rules.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
-	Requirements: types.ModerationRequirements,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

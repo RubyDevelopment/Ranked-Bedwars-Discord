@@ -25,9 +25,9 @@ func init() {
 var WarnRemoveCommand = &types.Command{
 	Name:         "unwarn",
 	Description:  "Removes an active warning from a player's record.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
-	Requirements: types.ModerationRequirements,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

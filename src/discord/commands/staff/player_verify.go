@@ -27,10 +27,11 @@ func init() {
 
 // PlayerVerifyCommand reports whether a player is currently eligible to queue and why not.
 var PlayerVerifyCommand = &types.Command{
-	Name:        "verify",
-	Description: "Checks a player's queue eligibility: registration, account age, restrictions, and game state.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "verify",
+	Description:  "Checks a player's queue eligibility: registration, account age, restrictions, and game state.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

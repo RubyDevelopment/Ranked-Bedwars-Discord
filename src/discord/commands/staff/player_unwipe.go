@@ -27,10 +27,11 @@ func init() {
 
 // PlayerUnwipeCommand undoes a stat wipe and restores the player's stats.
 var PlayerUnwipeCommand = &types.Command{
-	Name:        "unwipe",
-	Description: "Undoes a wipe and restores the player's stats.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:         "unwipe",
+	Description:  "Undoes a wipe and restores the player's stats.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

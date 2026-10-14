@@ -27,10 +27,11 @@ func init() {
 
 // PlayerWipeCommand wipes a player's stats for the active season, entirely or from a game onwards.
 var PlayerWipeCommand = &types.Command{
-	Name:        "wipe",
-	Description: "Wipes a player's stats for the active season, entirely or from a game onwards.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:         "wipe",
+	Description:  "Wipes a player's stats for the active season, entirely or from a game onwards.",
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Ephemeral:    true,
+	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
