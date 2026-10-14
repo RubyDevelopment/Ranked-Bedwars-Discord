@@ -187,6 +187,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	}
 	embed := punishmentAppliedEmbed(spec, target, username, durationLabel, reason, applied)
 	LogCommandResult(s, i.GuildID, spec.Command, actor, embed)
+	SendPunishmentAlert(s, i.GuildID, spec.Command, "applied", target, username, spec.Type, durationLabel, reason)
 	return EditInteractionEmbed(s, i, embed)
 }
 
@@ -256,6 +257,7 @@ func RevokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec
 	}
 	embed := punishmentRevokedEmbed(spec.Action, target, reason)
 	LogCommandResult(s, i.GuildID, spec.Command, actor, embed)
+	SendPunishmentAlert(s, i.GuildID, spec.Command, "revoked", target, target.Username, spec.Type, "removed", reason)
 	return EditInteractionEmbed(s, i, embed)
 }
 
@@ -509,6 +511,7 @@ func undoExpiredPunishment(s *discordgo.Session, guildID string, p models.Player
 		}
 	}
 	logPunishmentExpiry(s, guildID, command, userID, p)
+	SendPunishmentAlert(s, guildID, command, "expired", &discordgo.User{ID: userID}, userID, p.Type, "expired", p.Reason)
 }
 
 // logPunishmentExpiry posts the expiry to the moderation log channel, when the command has one assigned.
@@ -523,6 +526,53 @@ func logPunishmentExpiry(s *discordgo.Session, guildID, command, userID string, 
 	_, _ = s.ChannelMessageSendEmbed(channelID, &discordgo.MessageEmbed{
 		Title:       "Punishment Expired",
 		Description: fmt.Sprintf("> **Player:** <@%s>\n> **Type:** `%s`\n> **Reason:** %s", userID, p.Type, p.Reason),
+		Timestamp:   time.Now().Format(time.RFC3339),
+	})
+}
+
+// SendPunishmentAlert sends an alert to the moderation alerts channel when a punishment is applied or revoked.
+// Different punishment types have their own alert channels (e.g., queue_ban_alerts for queue_ban/queue_unban).
+func SendPunishmentAlert(s *discordgo.Session, guildID, command, action string, user *discordgo.User, username, pType, duration, reason string) {
+	// Map commands to their alert channel keys
+	alertKey := types.ModerationAlertsKey
+	switch command {
+	case "queue_ban", "queue_unban":
+		alertKey = "queue_ban_alerts"
+	case "server_ban", "server_unban":
+		alertKey = "server_ban_alerts"
+	case "server_mute", "server_unmute":
+		alertKey = "server_mute_alerts"
+	case "server_vc_mute", "server_vc_unmute":
+		alertKey = "server_vc_mute_alerts"
+	case "server_kick":
+		alertKey = "server_kick_alerts"
+	}
+
+	alertChannelID, err := RequirementSlotID(guildID, command, types.ReqChannel, alertKey)
+	if err != nil || alertChannelID == "" {
+		// Fall back to general moderation alerts if specific channel not set
+		alertChannelID, err = RequirementSlotID(guildID, command, types.ReqChannel, types.ModerationAlertsKey)
+		if err != nil || alertChannelID == "" {
+			return
+		}
+	}
+
+	title := "Punishment Applied"
+	if action == "revoked" {
+		title = "Punishment Revoked"
+	} else if action == "expired" {
+		title = "Punishment Expired"
+	}
+
+	description := fmt.Sprintf("> **Player:** <@%s> (**%s**)\n> **Type:** `%s`\n", user.ID, username, pType)
+	if duration != "" && duration != "removed" {
+		description += fmt.Sprintf("> **Duration:** `%s`\n", duration)
+	}
+	description += fmt.Sprintf("> **Reason:** %s", reason)
+
+	_, _ = s.ChannelMessageSendEmbed(alertChannelID, &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
 		Timestamp:   time.Now().Format(time.RFC3339),
 	})
 }

@@ -23,10 +23,11 @@ func init() {
 
 // ServerUnmuteCommand removes a player's active text chat mute.
 var ServerUnmuteCommand = &types.Command{
-	Name:        "server_unmute",
-	Description: "Removes a player's text chat mute.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "server_unmute",
+	Description:  "Removes a player's text chat mute.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirementsWithRole("chat_muted_role"), types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -52,7 +53,7 @@ var ServerUnmuteCommand = &types.Command{
 
 func executeServerUnmuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "server_unmute",
+		Command:   "server_mute", // Use server_mute for shared alerts
 		RoleKey:   "chat_muted_role",
 		Action:    "Chat Mute",
 		Adjective: "chat muted",

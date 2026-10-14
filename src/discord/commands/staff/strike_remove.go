@@ -30,6 +30,7 @@ var StrikeRemoveCommand = &types.Command{
 	Description: "Removes a specific strike entry from a player's record.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,
+	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -112,6 +113,7 @@ func executeStrikeRemoveCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 	embed := strikeRemoveSuccessEmbed(strikeID, target, username)
 	helpers.LogCommandResult(s, i.GuildID, "strike_remove", actor, embed)
+	helpers.SendPunishmentAlert(s, i.GuildID, "strike_issue", "revoked", target, username, "strike", "voided", "Strike voided by staff")
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
 

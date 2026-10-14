@@ -27,6 +27,7 @@ var ServerBanCommand = &types.Command{
 	Description: "Bans a player from the Discord guild.",
 	Ephemeral:   true,
 	Cooldown:    3 * time.Second,
+	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

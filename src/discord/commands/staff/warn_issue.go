@@ -23,10 +23,11 @@ func init() {
 
 // WarnIssueCommand records a formal warning against a player.
 var WarnIssueCommand = &types.Command{
-	Name:        "warn_issue",
-	Description: "Issues a formal warning to a player for breaking the rules.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "warn_issue",
+	Description:  "Issues a formal warning to a player for breaking the rules.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: types.ModerationRequirements,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

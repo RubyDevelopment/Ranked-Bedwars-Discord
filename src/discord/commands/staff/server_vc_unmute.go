@@ -23,10 +23,11 @@ func init() {
 
 // ServerVcUnmuteCommand removes a player's voice server-mute.
 var ServerVcUnmuteCommand = &types.Command{
-	Name:        "server_vc_unmute",
-	Description: "Removes a voice channel server-mute from a player.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "server_vc_unmute",
+	Description:  "Removes a voice channel server-mute from a player.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirementsWithRole("vc_muted_role"), types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -52,7 +53,7 @@ var ServerVcUnmuteCommand = &types.Command{
 
 func executeServerVcUnmuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:       "server_vc_unmute",
+		Command:       "server_vc_mute", // Use server_vc_mute for shared alerts
 		RoleKey:       "vc_muted_role",
 		Action:        "Voice Mute",
 		Adjective:     "voice muted",

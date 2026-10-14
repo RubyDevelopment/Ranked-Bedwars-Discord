@@ -51,6 +51,14 @@ type DiscordThread struct {
 	Archived bool   `json:"archived"`
 }
 
+// GuildState represents the synchronized state of a guild's roles and channels.
+type GuildState struct {
+	Roles      map[string]DiscordRole     `json:"roles"`
+	Channels   map[string]DiscordChannel  `json:"channels"`
+	Categories map[string]DiscordCategory `json:"categories,omitempty"`
+	Threads    map[string]DiscordThread   `json:"threads,omitempty"`
+}
+
 // GuildSettings represents guild-specific settings for command handling.
 type GuildSettings struct {
 	Prefix        string

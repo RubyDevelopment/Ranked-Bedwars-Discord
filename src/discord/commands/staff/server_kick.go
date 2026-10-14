@@ -23,10 +23,11 @@ func init() {
 
 // ServerKickCommand records a kick and removes the member from the Discord guild.
 var ServerKickCommand = &types.Command{
-	Name:        "server_kick",
-	Description: "Kicks a member from the Discord guild.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "server_kick",
+	Description:  "Kicks a member from the Discord guild.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

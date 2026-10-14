@@ -27,10 +27,11 @@ func init() {
 
 // StrikeIssueCommand issues an official strike to a player.
 var StrikeIssueCommand = &types.Command{
-	Name:        "strike_issue",
-	Description: "Issues an official strike penalty to a player.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "strike_issue",
+	Description:  "Issues an official strike penalty to a player.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -98,6 +99,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 	embed := strikeIssueSuccessEmbed(strike.ID, target, username, strikeType, reason)
 	helpers.LogCommandResult(s, i.GuildID, "strike_issue", actor, embed)
+	helpers.SendPunishmentAlert(s, i.GuildID, "strike_issue", "applied", target, username, "strike", "", reason)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
 

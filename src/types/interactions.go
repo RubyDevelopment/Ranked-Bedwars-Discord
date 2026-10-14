@@ -132,10 +132,14 @@ type Requirement struct {
 // ModerationLogsKey is the optional channel requirement every moderation command shares: each use is logged there.
 const ModerationLogsKey = "moderation_command_logs"
 
+// ModerationAlertsKey is the optional channel requirement for punishment alerts (expiry, enforcement).
+const ModerationAlertsKey = "moderation_alerts"
+
 // ModerationRequirements is declared by every moderation command. Requirements are identified by type and key, so one
 // assignment of each (/server_config channel|role set) applies to all of them.
 var ModerationRequirements = []Requirement{
 	{Type: ReqChannel, Key: ModerationLogsKey, Optional: true},
+	{Type: ReqChannel, Key: ModerationAlertsKey, Optional: true},
 	{Type: ReqRole, Key: "staff_role"},
 }
 

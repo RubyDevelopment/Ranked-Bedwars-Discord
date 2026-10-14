@@ -23,10 +23,11 @@ func init() {
 
 // QueueUnbanCommand removes a player's active queue ban.
 var QueueUnbanCommand = &types.Command{
-	Name:        "queue_unban",
-	Description: "Removes a queue ban from a player.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "queue_unban",
+	Description:  "Removes a queue ban from a player.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirementsWithRole("queue_banned_role"), types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -52,7 +53,7 @@ var QueueUnbanCommand = &types.Command{
 
 func executeQueueUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "queue_unban",
+		Command:   "queue_ban", // Use queue_ban for shared alerts
 		RoleKey:   "queue_banned_role",
 		Action:    "Queue Ban",
 		Adjective: "queue banned",

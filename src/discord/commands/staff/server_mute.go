@@ -23,10 +23,11 @@ func init() {
 
 // ServerMuteCommand mutes a player in text chat by recording a mute restriction.
 var ServerMuteCommand = &types.Command{
-	Name:        "server_mute",
-	Description: "Mutes a player in text chat across the guild.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "server_mute",
+	Description:  "Mutes a player in text chat across the guild.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirementsWithRole("chat_muted_role"), types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

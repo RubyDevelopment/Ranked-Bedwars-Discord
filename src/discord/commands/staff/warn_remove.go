@@ -23,10 +23,11 @@ func init() {
 
 // WarnRemoveCommand removes a player's active warning.
 var WarnRemoveCommand = &types.Command{
-	Name:        "warn_remove",
-	Description: "Removes an active warning from a player's record.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "warn_remove",
+	Description:  "Removes an active warning from a player's record.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: types.ModerationRequirements,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -52,7 +53,7 @@ var WarnRemoveCommand = &types.Command{
 
 func executeWarnRemoveCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "warn_remove",
+		Command:   "warn_issue", // Use warn_issue for shared alerts
 		Action:    "Warning",
 		Adjective: "warned",
 		Type:      "warn",

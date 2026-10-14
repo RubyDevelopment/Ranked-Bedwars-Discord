@@ -30,10 +30,11 @@ func init() {
 
 // ServerUnbanCommand removes a Discord guild ban by user ID.
 var ServerUnbanCommand = &types.Command{
-	Name:        "server_unban",
-	Description: "Revokes a guild-wide ban by user ID.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "server_unban",
+	Description:  "Revokes a guild-wide ban by user ID.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
+	Requirements: append(types.ModerationRequirements, types.Requirement{Type: types.ReqRole, Key: "staff_role", Optional: true}),
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -116,6 +117,7 @@ func executeServerUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 	embed := serverUnbanSuccessEmbed(targetID, username, reason, unbanned)
 	helpers.LogCommandResult(s, i.GuildID, "server_unban", actor, embed)
+	helpers.SendPunishmentAlert(s, i.GuildID, "server_ban", "revoked", &discordgo.User{ID: targetID}, username, "server_ban", "removed", reason)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
 
