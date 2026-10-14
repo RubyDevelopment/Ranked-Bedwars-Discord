@@ -98,7 +98,7 @@ func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
 
 		name := bot.Username
 		if strings.TrimSpace(bot.Tier) != "" {
-			name = fmt.Sprintf("%s (%s)", name, bot.Tier)
+			name = fmt.Sprintf("%s", name)
 		}
 
 		status := bot.Status
