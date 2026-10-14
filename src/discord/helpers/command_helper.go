@@ -2039,7 +2039,7 @@ func RegisterCommand(cmd *types.Command) {
 
 	// Automatically infer category from package directory name if not set
 	if cmd.Category == "" {
-		if _, file, _, ok := runtime.Caller(1); ok {
+		if _, file, _, ok := runtime.Caller(2); ok {
 			cmd.Category = filepath.Base(filepath.Dir(file))
 		}
 	}

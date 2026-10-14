@@ -25,7 +25,7 @@ func init() {
 var QueueUnbanCommand = &types.Command{
 	Name:          "queueunban",
 	Description:   "Removes a queue ban from a player.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}, {Type: types.ReqRole, Key: "queue_banned_role"}},
 	PrefixAliases: []string{"qunban"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

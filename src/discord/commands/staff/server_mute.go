@@ -25,7 +25,7 @@ func init() {
 var ServerMuteCommand = &types.Command{
 	Name:         "mute",
 	Description:  "Mutes a player in text chat across the guild.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}, {Type: types.ReqRole, Key: "muted_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
