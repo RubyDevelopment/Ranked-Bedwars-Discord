@@ -66,6 +66,21 @@ var GuildJoinEvent = &types.Event{
 }
 
 func init() {
+	helpers.RegisterEvent(GuildUpdateEvent)
+}
+
+// GuildUpdateEvent refreshes stored Discord branding when the server changes its icon or banner.
+var GuildUpdateEvent = &types.Event{
+	Name:        "Guild Update",
+	System:      true,
+	Description: "Keeps saved server branding and default bot appearance current.",
+	Type:        "guild_update",
+	Once:        false,
+	Disabled:    false,
+	Execute:     helpers.HandleGuildUpdate,
+}
+
+func init() {
 	helpers.RegisterEvent(GuildSetupEvent)
 }
 

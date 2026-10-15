@@ -146,6 +146,10 @@ func EnsureGuildSetup(s *discordgo.Session, guildID string) (*types.SetupResult,
 	result.MetaCreated = fresh
 	result.GameConfigCreated = fresh
 
+	if err := syncGuildDiscordProfile(guild); err != nil {
+		return nil, fmt.Errorf("sync Discord profile: %w", err)
+	}
+
 	if err := SyncGuildSnapshot(s, guildID); err == nil {
 		result.SnapshotSynced = true
 	}
@@ -162,6 +166,62 @@ func EnsureGuildSetup(s *discordgo.Session, guildID string) (*types.SetupResult,
 	}
 
 	return result, nil
+}
+
+type guildDiscordProfile struct {
+	IconURL     string `json:"icon_url"`
+	BannerURL   string `json:"banner_url"`
+	MemberCount int    `json:"member_count"`
+}
+
+func discordGuildAssetURL(guildID, hash, asset string, size int) string {
+	if hash == "" {
+		return ""
+	}
+	extension := "png"
+	if strings.HasPrefix(hash, "a_") {
+		extension = "gif"
+	}
+	return fmt.Sprintf("https://cdn.discordapp.com/%s/%s/%s.%s?size=%d", asset, guildID, hash, extension, size)
+}
+
+// syncGuildDiscordProfile stores the live Discord branding used by the dashboard
+// and fills unset appearance fields with those same assets.
+func syncGuildDiscordProfile(guild *discordgo.Guild) error {
+	if guild == nil || guild.ID == "" {
+		return fmt.Errorf("guild is nil or has no ID")
+	}
+
+	profile := guildDiscordProfile{
+		IconURL:     discordGuildAssetURL(guild.ID, guild.Icon, "icons", 128),
+		BannerURL:   discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
+		MemberCount: guild.MemberCount,
+	}
+	if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "discord_profile", profile); err != nil {
+		return err
+	}
+
+	config, err := database.Must().GuildConfig.Get(guild.ID)
+	if err != nil {
+		return err
+	}
+	var appearance types.AppearanceConfig
+	if !config.Appearance.IsEmpty() {
+		_ = config.Appearance.Unmarshal(&appearance)
+	}
+	changed := false
+	if appearance.Avatar == "" && profile.IconURL != "" {
+		appearance.Avatar = profile.IconURL
+		changed = true
+	}
+	if appearance.Banner == "" && profile.BannerURL != "" {
+		appearance.Banner = profile.BannerURL
+		changed = true
+	}
+	if changed {
+		_, err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "appearance", appearance)
+	}
+	return err
 }
 
 // ensureGuildInvite keeps one permanent, unlimited invite per guild in guild_configs.invite_code:
@@ -584,9 +644,27 @@ func HandleGuildJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 		logger.Error(fmt.Sprintf("Failed to run automatic guild setup for %s (%s): %v", g.Guild.Name, g.Guild.ID, err))
 		return
 	}
+	if err := updateGuildAppearance(s, g.Guild.ID, logger); err != nil {
+		logger.Error(fmt.Sprintf("Failed to apply default appearance for %s (%s): %v", g.Guild.Name, g.Guild.ID, err))
+	}
 
 	logger.Info(fmt.Sprintf("Automatic guild setup completed for %s (%s) - GuildCreated: %v, ConfigCreated: %v, SnapshotCreated: %v, SnapshotSynced: %v, MetaCreated: %v, GameConfigCreated: %v",
 		g.Guild.Name, g.Guild.ID, result.GuildCreated, result.ConfigCreated, result.SnapshotCreated, result.SnapshotSynced, result.MetaCreated, result.GameConfigCreated))
+}
+
+// HandleGuildUpdate refreshes branding after Discord changes a guild's icon or banner.
+func HandleGuildUpdate(s *discordgo.Session, g *discordgo.GuildUpdate) {
+	if g == nil || g.Guild == nil || g.Guild.ID == "" || database.Get() == nil {
+		return
+	}
+	logger := baseutility.CreateModuleLogger("GUILD_SETUP", "GuildUpdate")
+	if err := syncGuildDiscordProfile(g.Guild); err != nil {
+		logger.Error(fmt.Sprintf("Failed to save branding for guild %s: %v", g.Guild.ID, err))
+		return
+	}
+	if err := updateGuildAppearance(s, g.Guild.ID, logger); err != nil {
+		logger.Error(fmt.Sprintf("Failed to apply branding for guild %s: %v", g.Guild.ID, err))
+	}
 }
 
 // setInitialSetupComplete marks the initial setup as complete (called by the guild setup event).
@@ -633,6 +711,9 @@ func HandleGuildSetup(s *discordgo.Session, r *discordgo.Ready) {
 			logger.Error(fmt.Sprintf("Failed to set up guild %s (%s): %v", guild.Name, guild.ID, err))
 			errorCount++
 			continue
+		}
+		if err := updateGuildAppearance(s, guild.ID, logger); err != nil {
+			logger.Error(fmt.Sprintf("Failed to apply default appearance for %s (%s): %v", guild.Name, guild.ID, err))
 		}
 
 		if result.GuildCreated {
