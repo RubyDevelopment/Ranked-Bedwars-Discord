@@ -168,12 +168,6 @@ func EnsureGuildSetup(s *discordgo.Session, guildID string) (*types.SetupResult,
 	return result, nil
 }
 
-type guildDiscordProfile struct {
-	IconURL     string `json:"icon_url"`
-	BannerURL   string `json:"banner_url"`
-	MemberCount int    `json:"member_count"`
-}
-
 func discordGuildAssetURL(guildID, hash, asset string, size int) string {
 	if hash == "" {
 		return ""
@@ -185,43 +179,49 @@ func discordGuildAssetURL(guildID, hash, asset string, size int) string {
 	return fmt.Sprintf("https://cdn.discordapp.com/%s/%s/%s.%s?size=%d", asset, guildID, hash, extension, size)
 }
 
-// syncGuildDiscordProfile stores the live Discord branding used by the dashboard
-// and fills unset appearance fields with those same assets.
+// syncGuildDiscordProfile stores the server's live branding independently from
+// bot-specific overrides. Legacy asset fields are migrated without losing custom URLs.
 func syncGuildDiscordProfile(guild *discordgo.Guild) error {
 	if guild == nil || guild.ID == "" {
 		return fmt.Errorf("guild is nil or has no ID")
 	}
 
-	profile := guildDiscordProfile{
-		IconURL:     discordGuildAssetURL(guild.ID, guild.Icon, "icons", 128),
-		BannerURL:   discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
-		MemberCount: guild.MemberCount,
+	profile := types.DiscordGuildProfile{
+		ServerIconURL:   discordGuildAssetURL(guild.ID, guild.Icon, "icons", 128),
+		ServerBannerURL: discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
+		MemberCount:     guild.MemberCount,
+		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
 	}
-	if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "discord_profile", profile); err != nil {
-		return err
-	}
-
 	config, err := database.Must().GuildConfig.Get(guild.ID)
 	if err != nil {
 		return err
 	}
+
+	var previousProfile types.DiscordGuildProfile
+	if !config.DiscordProfile.IsEmpty() {
+		if err := config.DiscordProfile.Unmarshal(&previousProfile); err != nil {
+			return fmt.Errorf("decode previous Discord profile: %w", err)
+		}
+	}
+	previousProfile.NormalizeLegacy()
+
 	var appearance types.AppearanceConfig
 	if !config.Appearance.IsEmpty() {
-		_ = config.Appearance.Unmarshal(&appearance)
+		if err := config.Appearance.Unmarshal(&appearance); err != nil {
+			return fmt.Errorf("decode bot appearance: %w", err)
+		}
 	}
-	changed := false
-	if appearance.Avatar == "" && profile.IconURL != "" {
-		appearance.Avatar = profile.IconURL
-		changed = true
+	appearanceChanged := appearance.NormalizeLegacy(profile, previousProfile)
+	profile.NormalizeLegacy()
+	if appearanceChanged {
+		if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "appearance", appearance); err != nil {
+			return fmt.Errorf("migrate bot appearance: %w", err)
+		}
 	}
-	if appearance.Banner == "" && profile.BannerURL != "" {
-		appearance.Banner = profile.BannerURL
-		changed = true
+	if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "discord_profile", profile); err != nil {
+		return fmt.Errorf("save Discord profile: %w", err)
 	}
-	if changed {
-		_, err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "appearance", appearance)
-	}
-	return err
+	return nil
 }
 
 // ensureGuildInvite keeps one permanent, unlimited invite per guild in guild_configs.invite_code:
@@ -1069,6 +1069,12 @@ func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) 
 	}
 
 	for _, guild := range guilds {
+		liveGuild, err := s.Guild(guild.SnowflakeID)
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to refresh server branding for guild %s: %v", guild.SnowflakeID, err))
+		} else if err := syncGuildDiscordProfile(liveGuild); err != nil {
+			logger.Error(fmt.Sprintf("Failed to save server branding for guild %s: %v", guild.SnowflakeID, err))
+		}
 		if err := updateGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
 			logger.Error(fmt.Sprintf("Failed to update appearance for guild %s: %v", guild.SnowflakeID, err))
 		}
@@ -1098,11 +1104,18 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 
 	var appearance types.AppearanceConfig
 	if !config.Appearance.IsEmpty() {
-		_ = config.Appearance.Unmarshal(&appearance)
+		if err := config.Appearance.Unmarshal(&appearance); err != nil {
+			return fmt.Errorf("failed to decode bot appearance: %w", err)
+		}
 	}
-	if appearance == (types.AppearanceConfig{}) {
-		return nil // nothing configured
+	var profile types.DiscordGuildProfile
+	if !config.DiscordProfile.IsEmpty() {
+		if err := config.DiscordProfile.Unmarshal(&profile); err != nil {
+			return fmt.Errorf("failed to decode server profile: %w", err)
+		}
 	}
+	profile.NormalizeLegacy()
+	appearance.NormalizeLegacy(profile, profile)
 
 	botToken := os.Getenv("DISCORD_BOT_TOKEN")
 	if botToken == "" {
@@ -1110,14 +1123,16 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 	}
 	restAPI := NewDiscordRestAPI(botToken)
 
-	if appearance.Nickname != "" {
-		if err := s.GuildMemberNickname(snowflakeID, "@me", appearance.Nickname); err != nil {
-			logger.Error(fmt.Sprintf("Failed to update nickname for guild %s: %v", snowflakeID, err))
-		}
+	if err := s.GuildMemberNickname(snowflakeID, "@me", appearance.Nickname); err != nil {
+		logger.Error(fmt.Sprintf("Failed to update nickname for guild %s: %v", snowflakeID, err))
 	}
 
-	if appearance.Avatar != "" {
-		if err := restAPI.UpdateGuildMemberAvatar(snowflakeID, appearance.Avatar); err != nil {
+	botIconURL := appearance.BotIconURL
+	if botIconURL == "" {
+		botIconURL = profile.ServerIconURL
+	}
+	if botIconURL != "" {
+		if err := restAPI.UpdateGuildMemberAvatar(snowflakeID, botIconURL); err != nil {
 			logger.Error(fmt.Sprintf("Failed to update avatar for guild %s: %v", snowflakeID, err))
 		}
 	} else {
@@ -1126,8 +1141,12 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 		}
 	}
 
-	if appearance.Banner != "" {
-		if err := restAPI.UpdateGuildMemberBanner(snowflakeID, appearance.Banner); err != nil {
+	botBannerURL := appearance.BotBannerURL
+	if botBannerURL == "" {
+		botBannerURL = profile.ServerBannerURL
+	}
+	if botBannerURL != "" {
+		if err := restAPI.UpdateGuildMemberBanner(snowflakeID, botBannerURL); err != nil {
 			logger.Error(fmt.Sprintf("Failed to update banner for guild %s: %v", snowflakeID, err))
 		}
 	} else {

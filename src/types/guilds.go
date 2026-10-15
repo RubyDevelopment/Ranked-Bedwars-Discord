@@ -1,11 +1,69 @@
 package types
 
-// AppearanceConfig is the guild config's "appearance" section.
+// AppearanceConfig stores bot-specific branding overrides in the guild config's "appearance" section.
+// Empty bot asset URLs use the corresponding server asset from discord_profile.
 type AppearanceConfig struct {
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Bio      string `json:"bio"`
-	Banner   string `json:"banner"`
+	Nickname     string `json:"nickname"`
+	BotIconURL   string `json:"bot_icon_url,omitempty"`
+	BotBannerURL string `json:"bot_banner_url,omitempty"`
+	Bio          string `json:"bio"`
+	Avatar       string `json:"avatar,omitempty"`
+	Banner       string `json:"banner,omitempty"`
+}
+
+// DiscordGuildProfile stores the server's synchronized branding separately from
+// the bot-specific overrides in AppearanceConfig.
+type DiscordGuildProfile struct {
+	ServerIconURL   string `json:"server_icon_url"`
+	ServerBannerURL string `json:"server_banner_url"`
+	MemberCount     int    `json:"member_count"`
+	SyncedAt        string `json:"synced_at"`
+	IconURL         string `json:"icon_url,omitempty"`
+	BannerURL       string `json:"banner_url,omitempty"`
+}
+
+// NormalizeLegacy migrates old asset keys without treating a saved server default
+// as a bot-specific override.
+func (profile *DiscordGuildProfile) NormalizeLegacy() bool {
+	changed := false
+	if profile.ServerIconURL == "" && profile.IconURL != "" {
+		profile.ServerIconURL = profile.IconURL
+	}
+	if profile.ServerBannerURL == "" && profile.BannerURL != "" {
+		profile.ServerBannerURL = profile.BannerURL
+	}
+	if profile.IconURL != "" {
+		profile.IconURL = ""
+		changed = true
+	}
+	if profile.BannerURL != "" {
+		profile.BannerURL = ""
+		changed = true
+	}
+	return changed
+}
+
+// NormalizeLegacy migrates old avatar/banner keys and drops values that were
+// copied from either the previous or current server profile.
+func (appearance *AppearanceConfig) NormalizeLegacy(current, previous DiscordGuildProfile) bool {
+	changed := false
+	if appearance.BotIconURL == "" && appearance.Avatar != "" &&
+		appearance.Avatar != current.ServerIconURL && appearance.Avatar != previous.ServerIconURL {
+		appearance.BotIconURL = appearance.Avatar
+	}
+	if appearance.BotBannerURL == "" && appearance.Banner != "" &&
+		appearance.Banner != current.ServerBannerURL && appearance.Banner != previous.ServerBannerURL {
+		appearance.BotBannerURL = appearance.Banner
+	}
+	if appearance.Avatar != "" {
+		appearance.Avatar = ""
+		changed = true
+	}
+	if appearance.Banner != "" {
+		appearance.Banner = ""
+		changed = true
+	}
+	return changed
 }
 
 // RegistrationVerification is the guild config's "registration_verification" section.
