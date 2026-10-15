@@ -29,7 +29,7 @@ func init() {
 var PlayerForceRegisterCommand = &types.Command{
 	Name:          "forceregister",
 	Description:   "Force-registers a Minecraft account to a Discord account without verification.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Requirements:  types.StaffRegistrationRequirements(),
 	PrefixAliases: []string{"fregister"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
@@ -101,6 +101,9 @@ func executePlayerForceRegisterCommand(s *discordgo.Session, i *discordgo.Intera
 		if err := helpers.ApplyStartingRank(i.GuildID, actor, reg.PlayerID); err != nil {
 			return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceRegisterEmbed())
 		}
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, reg.PlayerID, target.ID); err != nil {
+		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceRegisterEmbed())
 	}
 
 	return helpers.EditInteractionEmbed(s, i, playerForceRegisterSuccessEmbed(target, username))

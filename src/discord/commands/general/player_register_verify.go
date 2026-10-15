@@ -135,7 +135,7 @@ func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if existing, err := database.Must().Player.Get(i.GuildID, userID); err == nil && existing != nil {
 		embed = playerRegisterAlreadyRegisteredEmbed(existing.Config.Username)
 	} else {
-		embed = registerNewPlayer(i.GuildID, userID, username)
+		embed = registerNewPlayer(s, i.GuildID, userID, username)
 	}
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{embed},

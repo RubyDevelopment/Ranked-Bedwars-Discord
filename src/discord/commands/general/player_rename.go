@@ -27,10 +27,11 @@ func init() {
 
 // PlayerRenameCommand updates the caller's linked Minecraft username.
 var PlayerRenameCommand = &types.Command{
-	Name:        "rename",
-	Description: "Updates your linked Minecraft username.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:         "rename",
+	Description:  "Updates your linked Minecraft username.",
+	Requirements: types.GeneralRequirements,
+	Ephemeral:    true,
+	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -90,6 +91,9 @@ func executePlayerRenameCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		if sdk.IsConflict(err) {
 			return helpers.EditInteractionEmbed(s, i, playerRenameConflictEmbed(newUsername))
 		}
+		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerRenameEmbed())
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID); err != nil {
 		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerRenameEmbed())
 	}
 

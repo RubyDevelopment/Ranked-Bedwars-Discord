@@ -29,7 +29,7 @@ func init() {
 var PlayerForceRenameCommand = &types.Command{
 	Name:          "forcerename",
 	Description:   "Force-renames a player's linked Minecraft username.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Requirements:  types.StaffRegistrationRequirements(),
 	PrefixAliases: []string{"frename"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
@@ -93,6 +93,9 @@ func executePlayerForceRenameCommand(s *discordgo.Session, i *discordgo.Interact
 		if sdk.IsConflict(err) {
 			return helpers.EditInteractionEmbed(s, i, playerForceRenameConflictEmbed(newUsername))
 		}
+		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceRenameEmbed())
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, target.ID); err != nil {
 		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceRenameEmbed())
 	}
 

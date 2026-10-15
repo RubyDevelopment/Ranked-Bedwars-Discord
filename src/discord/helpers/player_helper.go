@@ -962,10 +962,11 @@ func SyncRegisteredPlayerProfile(
 	var actions []string
 
 	if roleID := RegisteredRoleID(guildID); roleID != "" && !MemberHasRole(member, roleID) {
-		if err := AddMemberRole(s, guildID, discordUserID, roleID); err == nil {
-			actions = append(actions, "Assigned standard server verified `Registered` profile identity card.")
-			member, _ = FetchGuildMember(s, guildID, discordUserID)
+		if err := AddMemberRole(s, guildID, discordUserID, roleID); err != nil {
+			return actions, fmt.Errorf("assign registered role: %w", err)
 		}
+		actions = append(actions, "Assigned standard server verified `Registered` profile identity card.")
+		member, _ = FetchGuildMember(s, guildID, discordUserID)
 	}
 
 	if member != nil {

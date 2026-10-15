@@ -29,6 +29,7 @@ func init() {
 var PlayerNicknameCommand = &types.Command{
 	Name:          "nickname",
 	Description:   "Updates or syncs your display nickname across the platform.",
+	Requirements:  types.GeneralRequirements,
 	PrefixAliases: []string{"nick"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
@@ -73,6 +74,9 @@ func executePlayerNicknameCommand(s *discordgo.Session, i *discordgo.Interaction
 		if _, err := database.Must().Player.SetNickname(userID, i.GuildID, pid, ""); err != nil {
 			return helpers.EditInteractionEmbed(s, i, unexpectedErrorNicknameEmbed())
 		}
+		if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID); err != nil {
+			return helpers.EditInteractionEmbed(s, i, unexpectedErrorNicknameEmbed())
+		}
 		return helpers.EditInteractionEmbed(s, i, nicknameRemovedEmbed())
 	}
 
@@ -96,6 +100,9 @@ func executePlayerNicknameCommand(s *discordgo.Session, i *discordgo.Interaction
 		if sdk.IsConflict(err) {
 			return helpers.EditInteractionEmbed(s, i, nicknameConflictEmbed(newNickname))
 		}
+		return helpers.EditInteractionEmbed(s, i, unexpectedErrorNicknameEmbed())
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID); err != nil {
 		return helpers.EditInteractionEmbed(s, i, unexpectedErrorNicknameEmbed())
 	}
 

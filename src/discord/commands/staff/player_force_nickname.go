@@ -29,7 +29,7 @@ func init() {
 var PlayerForceNicknameCommand = &types.Command{
 	Name:          "forcenickname",
 	Description:   "Force-sets or removes a player's in-game Minecraft nickname.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Requirements:  types.StaffRegistrationRequirements(),
 	PrefixAliases: []string{"fnickname"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
@@ -88,6 +88,9 @@ func executePlayerForceNicknameCommand(s *discordgo.Session, i *discordgo.Intera
 		if _, err := database.Must().Player.SetNickname(actor, i.GuildID, pid, ""); err != nil {
 			return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceNicknameEmbed())
 		}
+		if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, target.ID); err != nil {
+			return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceNicknameEmbed())
+		}
 		return helpers.EditInteractionEmbed(s, i, playerForceNicknameRemovedEmbed(target, config.Username))
 	}
 
@@ -111,6 +114,9 @@ func executePlayerForceNicknameCommand(s *discordgo.Session, i *discordgo.Intera
 		if sdk.IsConflict(err) {
 			return helpers.EditInteractionEmbed(s, i, playerForceNicknameConflictEmbed(newNickname))
 		}
+		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceNicknameEmbed())
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, target.ID); err != nil {
 		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerForceNicknameEmbed())
 	}
 

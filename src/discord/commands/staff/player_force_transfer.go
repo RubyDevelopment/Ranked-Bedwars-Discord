@@ -29,7 +29,7 @@ func init() {
 var PlayerForceTransferCommand = &types.Command{
 	Name:          "forcetransfer",
 	Description:   "Force-transfers a Minecraft account link between Discord users.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
+	Requirements:  types.StaffRegistrationRequirements(),
 	PrefixAliases: []string{"ftransfer"},
 	Ephemeral:     true,
 	Cooldown:      5 * time.Second,

@@ -29,6 +29,7 @@ func init() {
 var PlayerSyncCommand = &types.Command{
 	Name:          "sync",
 	Description:   "Synchronizes your registered role, rank role, and nickname with the guild.",
+	Requirements:  types.GeneralRequirements,
 	PrefixAliases: []string{"refresh"},
 	Ephemeral:     true,
 	Cooldown:      5 * time.Second,

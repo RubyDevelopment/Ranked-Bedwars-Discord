@@ -2595,7 +2595,11 @@ func roleRequirementDenial(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 
 	if types.RequiresRole(cmd.Requirements, types.RegisteredRoleKey) {
-		if id := settings.Commands[cmd.Name].RequiredRoles[types.RegisteredRoleKey].ID; id != "" && !MemberHasRole(i.Member, id) {
+		id := settings.Commands[cmd.Name].RequiredRoles[types.RegisteredRoleKey].ID
+		if id == "" {
+			id = RegisteredRoleID(i.GuildID)
+		}
+		if id != "" && !MemberHasRole(i.Member, id) {
 			return Preset("error", types.PresetOptions{
 				Title:       "Registration Required",
 				Description: "You must be registered to use this command. Run `/player_register` to link your Minecraft account first, or `/player_refresh` if you are already registered.",

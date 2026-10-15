@@ -26,10 +26,11 @@ func init() {
 
 // PlayerRegisterCommand links the caller's Minecraft account to their Discord account.
 var PlayerRegisterCommand = &types.Command{
-	Name:        "register",
-	Description: "Links your Minecraft account to your Discord account.",
-	Ephemeral:   true,
-	Cooldown:    5 * time.Second,
+	Name:         "register",
+	Description:  "Links your Minecraft account to your Discord account.",
+	Requirements: types.RegistrationRequirements,
+	Ephemeral:    true,
+	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
@@ -89,7 +90,7 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 	}
 
 	// Register player atomically
-	return helpers.EditInteractionEmbed(s, i, registerNewPlayer(i.GuildID, userID, username))
+	return helpers.EditInteractionEmbed(s, i, registerNewPlayer(s, i.GuildID, userID, username))
 }
 
 // ============================================================================
@@ -97,7 +98,7 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 // ============================================================================
 
 // registerNewPlayer links the Minecraft name to the Discord user and returns the embed that says how it went.
-func registerNewPlayer(guildID, userID, username string) *discordgo.MessageEmbed {
+func registerNewPlayer(s *discordgo.Session, guildID, userID, username string) *discordgo.MessageEmbed {
 	reg, err := database.Must().Player.Register(userID, guildID, userID, username, 0)
 	if err != nil {
 		if sdk.IsConflict(err) {
@@ -110,6 +111,9 @@ func registerNewPlayer(guildID, userID, username string) *discordgo.MessageEmbed
 		if err := helpers.ApplyStartingRank(guildID, userID, reg.PlayerID); err != nil {
 			return unexpectedErrorPlayerRegisterEmbed()
 		}
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, guildID, reg.PlayerID, userID); err != nil {
+		return unexpectedErrorPlayerRegisterEmbed()
 	}
 	return playerRegisterSuccessEmbed(username)
 }
