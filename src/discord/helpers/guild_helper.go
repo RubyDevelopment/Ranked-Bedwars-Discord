@@ -194,53 +194,55 @@ func syncGuildDiscordProfile(guild *discordgo.Guild) error {
 		ServerBannerURL: discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
 		MemberCount:     guild.MemberCount,
 	}
-	err := database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "appearance", func(config *models.GuildConfigsModel) (any, error) {
+	migratedLegacy := false
+	err := database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
 		var profile types.DiscordGuildProfile
 		if !config.DiscordProfile.IsEmpty() {
 			if err := config.DiscordProfile.Unmarshal(&profile); err != nil {
 				return nil, fmt.Errorf("decode previous Discord profile: %w", err)
 			}
 		}
-		profile.NormalizeLegacy()
-		var appearance types.AppearanceConfig
-		if !config.Appearance.IsEmpty() {
-			if err := config.Appearance.Unmarshal(&appearance); err != nil {
-				return nil, fmt.Errorf("decode bot appearance: %w", err)
+		previous := profile
+		legacyChanged := profile.NormalizeLegacy()
+		profileMigration := profile.BotProfileVersion < 1
+		if profileMigration {
+			var legacyAppearance types.AppearanceConfig
+			if !config.Appearance.IsEmpty() {
+				if err := config.Appearance.Unmarshal(&legacyAppearance); err != nil {
+					return nil, fmt.Errorf("decode legacy appearance: %w", err)
+				}
 			}
+			profile.MigrateLegacyAppearance(legacyAppearance, previous)
+			migratedLegacy = !config.Appearance.IsEmpty()
 		}
-		if !appearance.NormalizeLegacy(nextProfile, profile) {
-			return nil, errGuildConfigUnchanged
-		}
-		return appearance, nil
-	})
-	if err != nil && !errors.Is(err, errGuildConfigUnchanged) {
-		return fmt.Errorf("migrate bot appearance: %w", err)
-	}
-
-	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
-		var current types.DiscordGuildProfile
-		if !config.DiscordProfile.IsEmpty() {
-			if err := config.DiscordProfile.Unmarshal(&current); err != nil {
-				return nil, fmt.Errorf("decode Discord profile: %w", err)
-			}
-		}
-		legacyChanged := current.NormalizeLegacy()
 		changed := legacyChanged ||
-			current.ServerIconURL != nextProfile.ServerIconURL ||
-			current.ServerBannerURL != nextProfile.ServerBannerURL ||
-			current.MemberCount != nextProfile.MemberCount ||
-			current.SyncedAt == ""
+			profileMigration ||
+			profile.ServerIconURL != nextProfile.ServerIconURL ||
+			profile.ServerBannerURL != nextProfile.ServerBannerURL ||
+			profile.MemberCount != nextProfile.MemberCount ||
+			profile.SyncedAt == ""
 		if !changed {
 			return nil, errGuildConfigUnchanged
 		}
-		current.ServerIconURL = nextProfile.ServerIconURL
-		current.ServerBannerURL = nextProfile.ServerBannerURL
-		current.MemberCount = nextProfile.MemberCount
-		current.SyncedAt = time.Now().UTC().Format(time.RFC3339)
-		return current, nil
+		profile.ServerIconURL = nextProfile.ServerIconURL
+		profile.ServerBannerURL = nextProfile.ServerBannerURL
+		profile.MemberCount = nextProfile.MemberCount
+		profile.SyncedAt = time.Now().UTC().Format(time.RFC3339)
+		return profile, nil
 	})
 	if err != nil && !errors.Is(err, errGuildConfigUnchanged) {
 		return fmt.Errorf("save Discord profile: %w", err)
+	}
+	if migratedLegacy {
+		err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "appearance", func(config *models.GuildConfigsModel) (any, error) {
+			if config.Appearance.IsEmpty() {
+				return nil, errGuildConfigUnchanged
+			}
+			return map[string]any{}, nil
+		})
+		if err != nil && !errors.Is(err, errGuildConfigUnchanged) {
+			return fmt.Errorf("clear migrated appearance config: %w", err)
+		}
 	}
 	return nil
 }
@@ -1127,12 +1129,6 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 		return fmt.Errorf("failed to get guild config: %w", err)
 	}
 
-	var appearance types.AppearanceConfig
-	if !config.Appearance.IsEmpty() {
-		if err := config.Appearance.Unmarshal(&appearance); err != nil {
-			return fmt.Errorf("failed to decode bot appearance: %w", err)
-		}
-	}
 	var profile types.DiscordGuildProfile
 	if !config.DiscordProfile.IsEmpty() {
 		if err := config.DiscordProfile.Unmarshal(&profile); err != nil {
@@ -1140,19 +1136,18 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 		}
 	}
 	profile.NormalizeLegacy()
-	appearance.NormalizeLegacy(profile, profile)
 
 	desired := types.SyncedBotAppearance{
-		Nickname: appearance.Nickname,
-		Bio:      appearance.Bio,
+		Nickname: profile.Nickname,
+		Bio:      profile.Bio,
 	}
-	if appearance.BotIconMode == "custom" {
-		desired.Avatar = appearance.BotIconURL
+	if profile.BotIconMode == "custom" {
+		desired.Avatar = profile.BotIconURL
 	} else {
 		desired.Avatar = profile.ServerIconURL
 	}
-	if appearance.BotBannerMode == "custom" {
-		desired.Banner = appearance.BotBannerURL
+	if profile.BotBannerMode == "custom" {
+		desired.Banner = profile.BotBannerURL
 	} else {
 		desired.Banner = profile.ServerBannerURL
 	}

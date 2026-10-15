@@ -1,7 +1,7 @@
 package types
 
-// AppearanceConfig stores bot-specific branding overrides in the guild config's "appearance" section.
-// Empty bot asset URLs use the corresponding server asset from discord_profile.
+// AppearanceConfig is the legacy appearance-section shape, retained only for
+// migrating existing guild configs into DiscordGuildProfile.
 type AppearanceConfig struct {
 	Nickname      string `json:"nickname"`
 	BotIconMode   string `json:"bot_icon_mode,omitempty"`
@@ -13,13 +13,20 @@ type AppearanceConfig struct {
 	Banner        string `json:"banner,omitempty"`
 }
 
-// DiscordGuildProfile stores the server's synchronized branding separately from
-// the bot-specific overrides in AppearanceConfig.
+// DiscordGuildProfile stores synchronized server branding and configured bot
+// identity together, in the guild config's "discord_profile" section.
 type DiscordGuildProfile struct {
 	ServerIconURL     string              `json:"server_icon_url"`
 	ServerBannerURL   string              `json:"server_banner_url"`
 	MemberCount       int                 `json:"member_count"`
 	SyncedAt          string              `json:"synced_at"`
+	BotProfileVersion int                 `json:"bot_profile_version,omitempty"`
+	Nickname          string              `json:"nickname"`
+	BotIconMode       string              `json:"bot_icon_mode"`
+	BotIconURL        string              `json:"bot_icon_url"`
+	BotBannerMode     string              `json:"bot_banner_mode"`
+	BotBannerURL      string              `json:"bot_banner_url"`
+	Bio               string              `json:"bio"`
 	AppliedAppearance SyncedBotAppearance `json:"applied_appearance,omitempty"`
 	BlockedAvatarURL  string              `json:"blocked_avatar_url,omitempty"`
 	BlockedBannerURL  string              `json:"blocked_banner_url,omitempty"`
@@ -63,45 +70,54 @@ func (profile *DiscordGuildProfile) NormalizeLegacy() bool {
 	return changed
 }
 
-// NormalizeLegacy migrates old avatar/banner keys and drops values that were
-// copied from either the previous or current server profile.
-func (appearance *AppearanceConfig) NormalizeLegacy(current, previous DiscordGuildProfile) bool {
-	changed := false
-	if appearance.BotIconURL == "" && appearance.Avatar != "" {
-		appearance.BotIconURL = appearance.Avatar
-		changed = true
-	}
-	if appearance.BotBannerURL == "" && appearance.Banner != "" {
-		appearance.BotBannerURL = appearance.Banner
-		changed = true
-	}
-	if appearance.Avatar != "" {
-		appearance.Avatar = ""
-		changed = true
-	}
-	if appearance.Banner != "" {
-		appearance.Banner = ""
-		changed = true
-	}
-	if appearance.BotIconMode == "" {
-		appearance.BotIconMode = "custom"
-		if appearance.BotIconURL == "" ||
-			appearance.BotIconURL == current.ServerIconURL ||
-			appearance.BotIconURL == previous.ServerIconURL {
-			appearance.BotIconMode = "server"
+// MigrateLegacyAppearance moves bot settings out of the legacy appearance
+// section and infers old asset modes without discarding their saved URLs.
+func (profile *DiscordGuildProfile) MigrateLegacyAppearance(appearance AppearanceConfig, previous DiscordGuildProfile) {
+	if profile.BotIconURL == "" {
+		if appearance.BotIconURL != "" {
+			profile.BotIconURL = appearance.BotIconURL
+		} else if appearance.Avatar != "" {
+			profile.BotIconURL = appearance.Avatar
 		}
-		changed = true
 	}
-	if appearance.BotBannerMode == "" {
-		appearance.BotBannerMode = "custom"
-		if appearance.BotBannerURL == "" ||
-			appearance.BotBannerURL == current.ServerBannerURL ||
-			appearance.BotBannerURL == previous.ServerBannerURL {
-			appearance.BotBannerMode = "server"
+	if profile.BotBannerURL == "" {
+		if appearance.BotBannerURL != "" {
+			profile.BotBannerURL = appearance.BotBannerURL
+		} else if appearance.Banner != "" {
+			profile.BotBannerURL = appearance.Banner
 		}
-		changed = true
 	}
-	return changed
+	if profile.Nickname == "" {
+		profile.Nickname = appearance.Nickname
+	}
+	if profile.Bio == "" {
+		profile.Bio = appearance.Bio
+	}
+	if profile.BotIconMode == "" {
+		if appearance.BotIconMode == "server" || appearance.BotIconMode == "custom" {
+			profile.BotIconMode = appearance.BotIconMode
+		} else {
+			profile.BotIconMode = "custom"
+			if profile.BotIconURL == "" ||
+				profile.BotIconURL == profile.ServerIconURL ||
+				profile.BotIconURL == previous.ServerIconURL {
+				profile.BotIconMode = "server"
+			}
+		}
+	}
+	if profile.BotBannerMode == "" {
+		if appearance.BotBannerMode == "server" || appearance.BotBannerMode == "custom" {
+			profile.BotBannerMode = appearance.BotBannerMode
+		} else {
+			profile.BotBannerMode = "custom"
+			if profile.BotBannerURL == "" ||
+				profile.BotBannerURL == profile.ServerBannerURL ||
+				profile.BotBannerURL == previous.ServerBannerURL {
+				profile.BotBannerMode = "server"
+			}
+		}
+	}
+	profile.BotProfileVersion = 1
 }
 
 // RegistrationVerification is the guild config's "registration_verification" section.
