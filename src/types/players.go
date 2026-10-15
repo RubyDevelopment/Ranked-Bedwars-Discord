@@ -5,7 +5,7 @@ type CodeResult int
 
 // GuildMember represents a Discord guild member from REST API
 type GuildMember struct {
-	Bio    *string `json:"bio,omitempty"`
-	Avatar *string `json:"avatar,omitempty"`
-	Banner *string `json:"banner,omitempty"`
+	Bio    *string `json:"bio"`
+	Avatar *string `json:"avatar"`
+	Banner *string `json:"banner"`
 }

@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -17,6 +18,8 @@ import (
 	"ranked-bedwars/src/types"
 	baseutility "ranked-bedwars/src/utility"
 )
+
+var errGuildConfigUnchanged = errors.New("guild config unchanged")
 
 // LFGConfig is defined in package types (guilds.go).
 type LFGConfig = types.LFGConfig
@@ -186,39 +189,57 @@ func syncGuildDiscordProfile(guild *discordgo.Guild) error {
 		return fmt.Errorf("guild is nil or has no ID")
 	}
 
-	profile := types.DiscordGuildProfile{
+	nextProfile := types.DiscordGuildProfile{
 		ServerIconURL:   discordGuildAssetURL(guild.ID, guild.Icon, "icons", 128),
 		ServerBannerURL: discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
 		MemberCount:     guild.MemberCount,
-		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
 	}
-	config, err := database.Must().GuildConfig.Get(guild.ID)
-	if err != nil {
-		return err
+	err := database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "appearance", func(config *models.GuildConfigsModel) (any, error) {
+		var profile types.DiscordGuildProfile
+		if !config.DiscordProfile.IsEmpty() {
+			if err := config.DiscordProfile.Unmarshal(&profile); err != nil {
+				return nil, fmt.Errorf("decode previous Discord profile: %w", err)
+			}
+		}
+		profile.NormalizeLegacy()
+		var appearance types.AppearanceConfig
+		if !config.Appearance.IsEmpty() {
+			if err := config.Appearance.Unmarshal(&appearance); err != nil {
+				return nil, fmt.Errorf("decode bot appearance: %w", err)
+			}
+		}
+		if !appearance.NormalizeLegacy(nextProfile, profile) {
+			return nil, errGuildConfigUnchanged
+		}
+		return appearance, nil
+	})
+	if err != nil && !errors.Is(err, errGuildConfigUnchanged) {
+		return fmt.Errorf("migrate bot appearance: %w", err)
 	}
 
-	var previousProfile types.DiscordGuildProfile
-	if !config.DiscordProfile.IsEmpty() {
-		if err := config.DiscordProfile.Unmarshal(&previousProfile); err != nil {
-			return fmt.Errorf("decode previous Discord profile: %w", err)
+	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
+		var current types.DiscordGuildProfile
+		if !config.DiscordProfile.IsEmpty() {
+			if err := config.DiscordProfile.Unmarshal(&current); err != nil {
+				return nil, fmt.Errorf("decode Discord profile: %w", err)
+			}
 		}
-	}
-	previousProfile.NormalizeLegacy()
-
-	var appearance types.AppearanceConfig
-	if !config.Appearance.IsEmpty() {
-		if err := config.Appearance.Unmarshal(&appearance); err != nil {
-			return fmt.Errorf("decode bot appearance: %w", err)
+		legacyChanged := current.NormalizeLegacy()
+		changed := legacyChanged ||
+			current.ServerIconURL != nextProfile.ServerIconURL ||
+			current.ServerBannerURL != nextProfile.ServerBannerURL ||
+			current.MemberCount != nextProfile.MemberCount ||
+			current.SyncedAt == ""
+		if !changed {
+			return nil, errGuildConfigUnchanged
 		}
-	}
-	appearanceChanged := appearance.NormalizeLegacy(profile, previousProfile)
-	profile.NormalizeLegacy()
-	if appearanceChanged {
-		if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "appearance", appearance); err != nil {
-			return fmt.Errorf("migrate bot appearance: %w", err)
-		}
-	}
-	if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guild.ID, "discord_profile", profile); err != nil {
+		current.ServerIconURL = nextProfile.ServerIconURL
+		current.ServerBannerURL = nextProfile.ServerBannerURL
+		current.MemberCount = nextProfile.MemberCount
+		current.SyncedAt = time.Now().UTC().Format(time.RFC3339)
+		return current, nil
+	})
+	if err != nil && !errors.Is(err, errGuildConfigUnchanged) {
 		return fmt.Errorf("save Discord profile: %w", err)
 	}
 	return nil
@@ -1071,8 +1092,13 @@ func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) 
 	for _, guild := range guilds {
 		liveGuild, err := s.Guild(guild.SnowflakeID)
 		if err != nil {
+			if isDiscordRESTCode(err, 10004) {
+				continue
+			}
 			logger.Error(fmt.Sprintf("Failed to refresh server branding for guild %s: %v", guild.SnowflakeID, err))
-		} else if err := syncGuildDiscordProfile(liveGuild); err != nil {
+			continue
+		}
+		if err := syncGuildDiscordProfile(liveGuild); err != nil {
 			logger.Error(fmt.Sprintf("Failed to save server branding for guild %s: %v", guild.SnowflakeID, err))
 		}
 		if err := updateGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
@@ -1081,15 +1107,14 @@ func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) 
 	}
 }
 
-// updateGuildAppearance re-applies the guild's configured bot appearance
-// (nickname, avatar, banner, bio) every cycle.
-//
-// ponytail: the old schema tracked an appearance_needs_update flag to skip
-// unchanged guilds; the current schema has no such column, so this just
-// re-applies unconditionally. These are idempotent Discord calls on a 30-minute
-// interval, so the extra calls are cheap; add the flag back (on
-// models.GuildConfigsModel) if this ever runs against enough guilds for it to matter.
+var appearanceApplyMu sync.Mutex
+
+// updateGuildAppearance applies only values that differ from the last values
+// successfully sent to Discord.
 func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger) error {
+	appearanceApplyMu.Lock()
+	defer appearanceApplyMu.Unlock()
+
 	if snowflakeID == "" {
 		return fmt.Errorf("guild has no snowflake")
 	}
@@ -1117,53 +1142,129 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 	profile.NormalizeLegacy()
 	appearance.NormalizeLegacy(profile, profile)
 
+	desired := types.SyncedBotAppearance{
+		Nickname: appearance.Nickname,
+		Bio:      appearance.Bio,
+	}
+	if appearance.BotIconMode == "custom" {
+		desired.Avatar = appearance.BotIconURL
+	} else {
+		desired.Avatar = profile.ServerIconURL
+	}
+	if appearance.BotBannerMode == "custom" {
+		desired.Banner = appearance.BotBannerURL
+	} else {
+		desired.Banner = profile.ServerBannerURL
+	}
+
+	applied := profile.AppliedAppearance
+	nextApplied := applied
+	nextBlockedAvatar := profile.BlockedAvatarURL
+	nextBlockedBanner := profile.BlockedBannerURL
+	stateChanged := false
+
+	if types.ShouldApplyAppearance(desired.Nickname, applied.Nickname, false) {
+		if err := s.GuildMemberNickname(snowflakeID, "@me", desired.Nickname); err != nil {
+			if !isDiscordRESTCode(err, 10007) {
+				logger.Error(fmt.Sprintf("Failed to update nickname for guild %s: %v", snowflakeID, err))
+			}
+		} else {
+			nextApplied.Nickname = desired.Nickname
+			stateChanged = true
+		}
+	}
+
+	if types.ShouldApplyAppearance(desired.Avatar, applied.Avatar, desired.Avatar != "" && desired.Avatar == profile.BlockedAvatarURL) {
+		restAPI, err := discordRestAPI()
+		if err != nil {
+			return err
+		}
+		if err := restAPI.UpdateGuildMemberAvatar(snowflakeID, desired.Avatar); err != nil {
+			if isMissingDiscordImage(err) {
+				logger.Error(fmt.Sprintf("Skipping unavailable avatar URL for guild %s until it changes: %v", snowflakeID, err))
+				nextBlockedAvatar = desired.Avatar
+				stateChanged = true
+			} else if !isDiscordRESTCode(err, 10007) {
+				logger.Error(fmt.Sprintf("Failed to update avatar for guild %s: %v", snowflakeID, err))
+			}
+		} else {
+			nextApplied.Avatar = desired.Avatar
+			nextBlockedAvatar = ""
+			stateChanged = true
+		}
+	}
+
+	if types.ShouldApplyAppearance(desired.Banner, applied.Banner, desired.Banner != "" && desired.Banner == profile.BlockedBannerURL) {
+		restAPI, err := discordRestAPI()
+		if err != nil {
+			return err
+		}
+		if err := restAPI.UpdateGuildMemberBanner(snowflakeID, desired.Banner); err != nil {
+			if isMissingDiscordImage(err) {
+				logger.Error(fmt.Sprintf("Skipping unavailable banner URL for guild %s until it changes: %v", snowflakeID, err))
+				nextBlockedBanner = desired.Banner
+				stateChanged = true
+			} else if !isDiscordRESTCode(err, 10007) {
+				logger.Error(fmt.Sprintf("Failed to update banner for guild %s: %v", snowflakeID, err))
+			}
+		} else {
+			nextApplied.Banner = desired.Banner
+			nextBlockedBanner = ""
+			stateChanged = true
+		}
+	}
+
+	if types.ShouldApplyAppearance(desired.Bio, applied.Bio, false) {
+		restAPI, err := discordRestAPI()
+		if err != nil {
+			return err
+		}
+		if err := restAPI.UpdateGuildMemberBio(snowflakeID, desired.Bio); err != nil {
+			if !isDiscordRESTCode(err, 10007) {
+				logger.Error(fmt.Sprintf("Failed to update bio for guild %s: %v", snowflakeID, err))
+			}
+		} else {
+			nextApplied.Bio = desired.Bio
+			stateChanged = true
+		}
+	}
+
+	if !stateChanged {
+		return nil
+	}
+
+	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, snowflakeID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
+		var current types.DiscordGuildProfile
+		if !config.DiscordProfile.IsEmpty() {
+			if err := config.DiscordProfile.Unmarshal(&current); err != nil {
+				return nil, fmt.Errorf("decode Discord profile appearance state: %w", err)
+			}
+		}
+		if current.AppliedAppearance == nextApplied &&
+			current.BlockedAvatarURL == nextBlockedAvatar &&
+			current.BlockedBannerURL == nextBlockedBanner {
+			return nil, errGuildConfigUnchanged
+		}
+		current.AppliedAppearance = nextApplied
+		current.BlockedAvatarURL = nextBlockedAvatar
+		current.BlockedBannerURL = nextBlockedBanner
+		return current, nil
+	})
+	if errors.Is(err, errGuildConfigUnchanged) {
+		return nil
+	}
+	return err
+}
+
+func discordRestAPI() (*DiscordRestAPI, error) {
 	botToken := os.Getenv("DISCORD_BOT_TOKEN")
 	if botToken == "" {
-		return fmt.Errorf("DISCORD_BOT_TOKEN environment variable is not set")
+		return nil, fmt.Errorf("DISCORD_BOT_TOKEN environment variable is not set")
 	}
-	restAPI := NewDiscordRestAPI(botToken)
+	return NewDiscordRestAPI(botToken), nil
+}
 
-	if err := s.GuildMemberNickname(snowflakeID, "@me", appearance.Nickname); err != nil {
-		logger.Error(fmt.Sprintf("Failed to update nickname for guild %s: %v", snowflakeID, err))
-	}
-
-	botIconURL := appearance.BotIconURL
-	if botIconURL == "" {
-		botIconURL = profile.ServerIconURL
-	}
-	if botIconURL != "" {
-		if err := restAPI.UpdateGuildMemberAvatar(snowflakeID, botIconURL); err != nil {
-			logger.Error(fmt.Sprintf("Failed to update avatar for guild %s: %v", snowflakeID, err))
-		}
-	} else {
-		if err := restAPI.UpdateGuildMemberAvatar(snowflakeID, ""); err != nil {
-			logger.Error(fmt.Sprintf("Failed to remove avatar for guild %s: %v", snowflakeID, err))
-		}
-	}
-
-	botBannerURL := appearance.BotBannerURL
-	if botBannerURL == "" {
-		botBannerURL = profile.ServerBannerURL
-	}
-	if botBannerURL != "" {
-		if err := restAPI.UpdateGuildMemberBanner(snowflakeID, botBannerURL); err != nil {
-			logger.Error(fmt.Sprintf("Failed to update banner for guild %s: %v", snowflakeID, err))
-		}
-	} else {
-		if err := restAPI.UpdateGuildMemberBanner(snowflakeID, ""); err != nil {
-			logger.Error(fmt.Sprintf("Failed to remove banner for guild %s: %v", snowflakeID, err))
-		}
-	}
-
-	if appearance.Bio != "" {
-		if err := restAPI.UpdateGuildMemberBio(snowflakeID, appearance.Bio); err != nil {
-			logger.Error(fmt.Sprintf("Failed to update bio for guild %s: %v", snowflakeID, err))
-		}
-	} else {
-		if err := restAPI.UpdateGuildMemberBio(snowflakeID, ""); err != nil {
-			logger.Error(fmt.Sprintf("Failed to remove bio for guild %s: %v", snowflakeID, err))
-		}
-	}
-
-	return nil
+func isDiscordRESTCode(err error, code int) bool {
+	var restErr *discordgo.RESTError
+	return errors.As(err, &restErr) && restErr.Message != nil && restErr.Message.Code == code
 }

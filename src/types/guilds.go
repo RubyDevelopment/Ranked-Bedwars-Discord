@@ -3,23 +3,43 @@ package types
 // AppearanceConfig stores bot-specific branding overrides in the guild config's "appearance" section.
 // Empty bot asset URLs use the corresponding server asset from discord_profile.
 type AppearanceConfig struct {
-	Nickname     string `json:"nickname"`
-	BotIconURL   string `json:"bot_icon_url,omitempty"`
-	BotBannerURL string `json:"bot_banner_url,omitempty"`
-	Bio          string `json:"bio"`
-	Avatar       string `json:"avatar,omitempty"`
-	Banner       string `json:"banner,omitempty"`
+	Nickname      string `json:"nickname"`
+	BotIconMode   string `json:"bot_icon_mode,omitempty"`
+	BotIconURL    string `json:"bot_icon_url,omitempty"`
+	BotBannerMode string `json:"bot_banner_mode,omitempty"`
+	BotBannerURL  string `json:"bot_banner_url,omitempty"`
+	Bio           string `json:"bio"`
+	Avatar        string `json:"avatar,omitempty"`
+	Banner        string `json:"banner,omitempty"`
 }
 
 // DiscordGuildProfile stores the server's synchronized branding separately from
 // the bot-specific overrides in AppearanceConfig.
 type DiscordGuildProfile struct {
-	ServerIconURL   string `json:"server_icon_url"`
-	ServerBannerURL string `json:"server_banner_url"`
-	MemberCount     int    `json:"member_count"`
-	SyncedAt        string `json:"synced_at"`
-	IconURL         string `json:"icon_url,omitempty"`
-	BannerURL       string `json:"banner_url,omitempty"`
+	ServerIconURL     string              `json:"server_icon_url"`
+	ServerBannerURL   string              `json:"server_banner_url"`
+	MemberCount       int                 `json:"member_count"`
+	SyncedAt          string              `json:"synced_at"`
+	AppliedAppearance SyncedBotAppearance `json:"applied_appearance,omitempty"`
+	BlockedAvatarURL  string              `json:"blocked_avatar_url,omitempty"`
+	BlockedBannerURL  string              `json:"blocked_banner_url,omitempty"`
+	IconURL           string              `json:"icon_url,omitempty"`
+	BannerURL         string              `json:"banner_url,omitempty"`
+}
+
+// SyncedBotAppearance records the bot appearance values successfully applied
+// to Discord so unchanged values do not trigger another REST request.
+type SyncedBotAppearance struct {
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Banner   string `json:"banner"`
+	Bio      string `json:"bio"`
+}
+
+// ShouldApplyAppearance reports whether desired differs from applied and is not
+// blocked after a permanent asset-not-found response.
+func ShouldApplyAppearance(desired, applied string, blocked bool) bool {
+	return desired != applied && !blocked
 }
 
 // NormalizeLegacy migrates old asset keys without treating a saved server default
@@ -47,13 +67,13 @@ func (profile *DiscordGuildProfile) NormalizeLegacy() bool {
 // copied from either the previous or current server profile.
 func (appearance *AppearanceConfig) NormalizeLegacy(current, previous DiscordGuildProfile) bool {
 	changed := false
-	if appearance.BotIconURL == "" && appearance.Avatar != "" &&
-		appearance.Avatar != current.ServerIconURL && appearance.Avatar != previous.ServerIconURL {
+	if appearance.BotIconURL == "" && appearance.Avatar != "" {
 		appearance.BotIconURL = appearance.Avatar
+		changed = true
 	}
-	if appearance.BotBannerURL == "" && appearance.Banner != "" &&
-		appearance.Banner != current.ServerBannerURL && appearance.Banner != previous.ServerBannerURL {
+	if appearance.BotBannerURL == "" && appearance.Banner != "" {
 		appearance.BotBannerURL = appearance.Banner
+		changed = true
 	}
 	if appearance.Avatar != "" {
 		appearance.Avatar = ""
@@ -61,6 +81,24 @@ func (appearance *AppearanceConfig) NormalizeLegacy(current, previous DiscordGui
 	}
 	if appearance.Banner != "" {
 		appearance.Banner = ""
+		changed = true
+	}
+	if appearance.BotIconMode == "" {
+		appearance.BotIconMode = "custom"
+		if appearance.BotIconURL == "" ||
+			appearance.BotIconURL == current.ServerIconURL ||
+			appearance.BotIconURL == previous.ServerIconURL {
+			appearance.BotIconMode = "server"
+		}
+		changed = true
+	}
+	if appearance.BotBannerMode == "" {
+		appearance.BotBannerMode = "custom"
+		if appearance.BotBannerURL == "" ||
+			appearance.BotBannerURL == current.ServerBannerURL ||
+			appearance.BotBannerURL == previous.ServerBannerURL {
+			appearance.BotBannerMode = "server"
+		}
 		changed = true
 	}
 	return changed

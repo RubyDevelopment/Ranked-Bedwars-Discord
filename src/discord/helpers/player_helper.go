@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -27,6 +28,19 @@ import (
 	"ranked-bedwars/src/types"
 	appLog "ranked-bedwars/src/utility"
 )
+
+type discordImageFetchError struct {
+	statusCode int
+}
+
+func (err *discordImageFetchError) Error() string {
+	return fmt.Sprintf("failed to fetch image: HTTP %d", err.statusCode)
+}
+
+func isMissingDiscordImage(err error) bool {
+	var fetchErr *discordImageFetchError
+	return errors.As(err, &fetchErr) && fetchErr.statusCode == http.StatusNotFound
+}
 
 // ============================================================================
 // Account age
@@ -353,7 +367,7 @@ func (api *DiscordRestAPI) fetchImageAsBase64(imageURL string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch image: HTTP %d", resp.StatusCode)
+		return "", &discordImageFetchError{statusCode: resp.StatusCode}
 	}
 
 	// Check content type
