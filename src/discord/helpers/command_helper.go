@@ -1409,7 +1409,27 @@ func (r *runner) exec(st step) (string, bool) {
 	case "require_role":
 		id := r.e.cfg.RequiredRoles[st.Name].ID
 		if id == "" || !hasRole(r.i.Member, id) {
+			if id == "" {
+				return stop("That role requirement is not configured.")
+			}
 			return stop("You need the <@&" + id + "> role for this.")
+		}
+	case "check_role":
+		u := r.who(st.Target)
+		id := r.e.cfg.RequiredRoles[st.Name].ID
+		if u == nil || id == "" {
+			return stop("I could not check that user's role. Check the user option and configured role.")
+		}
+		member := r.i.Member
+		if member == nil || member.User == nil || member.User.ID != u.ID {
+			var err error
+			member, err = FetchGuildMember(r.s, guildID, u.ID)
+			if err != nil || member == nil {
+				return stop("I could not find that member in this server.")
+			}
+		}
+		if !hasRole(member, id) {
+			return stop("That user does not have the <@&" + id + "> role.")
 		}
 	case "add_role", "remove_role":
 		u := r.who(st.Target)
@@ -1428,13 +1448,41 @@ func (r *runner) exec(st step) (string, bool) {
 		}
 	case "send_message":
 		if id := r.e.cfg.RequiredChannels[st.Name].ID; id != "" {
-			_, _ = r.s.ChannelMessageSendComplex(id, &discordgo.MessageSend{Content: r.fill(st.Value), AllowedMentions: &discordgo.MessageAllowedMentions{}})
+			if _, err := r.s.ChannelMessageSendComplex(id, &discordgo.MessageSend{Content: r.fill(st.Value), AllowedMentions: &discordgo.MessageAllowedMentions{}}); err != nil {
+				logger.Warn(fmt.Sprintf("sending custom command message in %s: %v", id, err))
+				return stop("I could not send the message. Check the bot's channel permissions.")
+			}
+		}
+	case "send_payload":
+		id := r.e.cfg.RequiredChannels[st.Name].ID
+		if id == "" {
+			return stop("That channel is not configured.")
+		}
+		var payload map[string]any
+		if st.Reply.MessageID != "" {
+			payload = r.savedMessage(st.Reply.MessageID)
+		} else {
+			payload = r.replyPayload(st.Reply)
+		}
+		if payload == nil {
+			return stop("I could not load the selected rich message.")
+		}
+		if _, err := SendPayload(r.s, id, payload); err != nil {
+			logger.Warn(fmt.Sprintf("sending custom command rich message in %s: %v", id, err))
+			return stop("I could not send the rich message. Check the bot's channel permissions.")
 		}
 	case "dm_user":
-		if u := r.who(st.Target); u != nil {
-			if dm, err := r.s.UserChannelCreate(u.ID); err == nil {
-				_, _ = r.s.ChannelMessageSend(dm.ID, r.fill(st.Value))
-			}
+		u := r.who(st.Target)
+		if u == nil {
+			return stop("I could not find the user to message.")
+		}
+		dm, err := r.s.UserChannelCreate(u.ID)
+		if err == nil {
+			_, err = r.s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{Content: r.fill(st.Value), AllowedMentions: &discordgo.MessageAllowedMentions{}})
+		}
+		if err != nil {
+			logger.Warn(fmt.Sprintf("sending custom command DM to %s: %v", u.ID, err))
+			return stop("I could not send that DM. The user may have DMs disabled.")
 		}
 	}
 	return "", false
@@ -1491,13 +1539,44 @@ func (r *runner) buttonRow(rep reply) []discordgo.MessageComponent {
 	var row []discordgo.MessageComponent
 	for _, b := range rep.Buttons {
 		if url := r.fill(b.URL); url != "" {
-			row = append(row, discordgo.Button{Style: discordgo.LinkButton, Label: r.fill(b.Label), URL: url})
+			button := discordgo.Button{Style: discordgo.LinkButton, Label: r.fill(b.Label), URL: url, Disabled: b.Disabled}
+			if b.Emoji != "" {
+				button.Emoji = &discordgo.ComponentEmoji{Name: b.Emoji}
+			}
+			row = append(row, button)
 		}
 	}
 	if len(row) == 0 {
 		return nil
 	}
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: row}}
+}
+
+func (r *runner) replyPayload(rep reply) map[string]any {
+	doc := &MessageDoc{AllowMentions: false}
+	switch rep.Type {
+	case "component":
+		doc.Mode = "v2"
+		doc.V2 = rep.Components
+	case "embed":
+		doc.Mode = "embeds"
+		doc.Content = rep.Content
+		doc.Embeds = rep.Embeds
+		if len(doc.Embeds) == 0 {
+			legacy := Embed{Title: rep.Title, Description: rep.Text, Color: rep.Color, Thumbnail: rep.Thumbnail}
+			legacy.Footer.Text = rep.Footer
+			doc.Embeds = []Embed{legacy}
+		}
+		doc.Buttons = rep.Buttons
+	default:
+		doc.Mode = "embeds"
+		doc.Content = rep.Content
+		if doc.Content == "" {
+			doc.Content = rep.Text
+		}
+		doc.Buttons = rep.Buttons
+	}
+	return doc.Payload(r.fill)
 }
 
 // embedOf is the embed an "embed" reply describes, with its variables filled in.
@@ -1535,6 +1614,16 @@ func (r *runner) sendAs(rep reply) error {
 			_, err := s.RequestWithBucketID("POST", discordgo.EndpointWebhookToken(i.AppID, i.Token), payload, discordgo.EndpointWebhookToken(i.AppID, ""))
 			return err
 		}
+	}
+	if rep.Type == "message" || rep.Type == "embed" || rep.Type == "component" {
+		payload := r.replyPayload(rep)
+		if flags != 0 {
+			bits, _ := payload["flags"].(int)
+			payload["flags"] = bits | int(flags)
+		}
+		_ = s.InteractionResponseDelete(i.Interaction)
+		_, err := s.RequestWithBucketID("POST", discordgo.EndpointWebhookToken(i.AppID, i.Token), payload, discordgo.EndpointWebhookToken(i.AppID, ""))
+		return err
 	}
 
 	params := &discordgo.WebhookParams{Flags: flags, AllowedMentions: &discordgo.MessageAllowedMentions{}}
@@ -1581,18 +1670,28 @@ func (r *runner) send(rep reply) error {
 			}
 			return EditOriginalPayload(s, i.Interaction, payload)
 		}
-		return EditInteractionEmbed(s, i, SimpleErrorEmbed("The saved message for this reply was deleted."))
+		if rep.MessageID != "" {
+			return EditInteractionEmbed(s, i, SimpleErrorEmbed("The saved message for this reply was deleted."))
+		}
+		payload := r.replyPayload(rep)
+		if IsPrefixInteraction(i) {
+			_, err := SendPayload(s, i.ChannelID, payload)
+			return err
+		}
+		return EditOriginalPayload(s, i.Interaction, payload)
+
+	case "embed", "component":
+		payload := r.replyPayload(rep)
+		if IsPrefixInteraction(i) {
+			_, err := SendPayload(s, i.ChannelID, payload)
+			return err
+		}
+		return EditOriginalPayload(s, i.Interaction, payload)
 
 	case "banner":
 		if img := r.banner(); img != nil {
 			return EditInteractionFile(s, i, r.fill(rep.Text), r.name+".png", img)
 		}
-	case "embed":
-		edit := &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{r.embedOf(rep)}}
-		if row := r.buttonRow(rep); row != nil {
-			edit.Components = &row
-		}
-		return EditInteractionResponse(s, i, edit)
 	}
 	text := r.fill(rep.Text)
 	if strings.TrimSpace(text) == "" {
@@ -1676,23 +1775,24 @@ type step struct {
 	Name    string     `json:"name"`
 	Value   string     `json:"value"`
 	When    *condition `json:"when"`
+	Reply   reply      `json:"reply"`
 }
 
-type replyButton struct {
-	Label string `json:"label"`
-	URL   string `json:"url"`
-}
+type replyButton = types.LinkButton
 
 type reply struct {
-	Type      string        `json:"type"`
-	Text      string        `json:"text"`
-	MessageID string        `json:"messageId"`
-	Ephemeral bool          `json:"ephemeral"`
-	Title     string        `json:"title"`
-	Color     string        `json:"color"`
-	Footer    string        `json:"footer"`
-	Thumbnail string        `json:"thumbnail"`
-	Buttons   []replyButton `json:"buttons"`
+	Type       string         `json:"type"`
+	Text       string         `json:"text"`
+	Content    string         `json:"content"`
+	MessageID  string         `json:"messageId"`
+	Ephemeral  bool           `json:"ephemeral"`
+	Title      string         `json:"title"`
+	Color      string         `json:"color"`
+	Footer     string         `json:"footer"`
+	Thumbnail  string         `json:"thumbnail"`
+	Buttons    []replyButton  `json:"buttons"`
+	Embeds     []types.Embed  `json:"embeds"`
+	Components []types.V2Item `json:"components"`
 }
 
 type replyRule struct {
