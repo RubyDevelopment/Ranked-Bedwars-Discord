@@ -27,6 +27,7 @@ type InteractivePanel struct {
 // PanelAppearance controls how the panel message looks. Text fields accept
 // Discord markdown.
 type PanelAppearance struct {
+	Format           string `json:"format,omitempty"` // message, embed or component (Components V2)
 	Title            string `json:"title"`
 	Description      string `json:"description"`
 	Footer           string `json:"footer"`

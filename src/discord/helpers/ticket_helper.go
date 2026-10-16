@@ -1435,6 +1435,100 @@ func TicketPanelMessage(panel *types.InteractivePanel, preview bool) []discordgo
 	return []discordgo.MessageComponent{v2Container(color, inner...)}
 }
 
+func ticketPanelSend(panel *types.InteractivePanel, preview bool) *discordgo.MessageSend {
+	look := panel.Appearance
+	switch look.Format {
+	case "message":
+		var parts []string
+		if look.Title != "" {
+			parts = append(parts, "## "+look.Title)
+		}
+		if look.Description != "" {
+			parts = append(parts, look.Description)
+		}
+		if !look.HideCategoryList {
+			for _, category := range panel.Ticket.Categories {
+				text := fmt.Sprintf("**%s%s**", emojiPrefix(category.Emoji), category.Label)
+				if category.Description != "" {
+					text += "\n" + category.Description
+				}
+				parts = append(parts, text)
+			}
+		}
+		if look.Footer != "" {
+			parts = append(parts, look.Footer)
+		}
+		return &discordgo.MessageSend{
+			Content:         truncate(strings.Join(parts, "\n\n"), 2000),
+			Components:      ticketPanelButtons(panel, preview),
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		}
+	case "embed":
+		embed := &discordgo.MessageEmbed{
+			Title:       look.Title,
+			Description: look.Description,
+			Color:       look.Color,
+		}
+		if look.NoColor {
+			embed.Color = EmbedBlendColor
+		} else if embed.Color == 0 {
+			embed.Color = defaultPanelColor
+		}
+		if look.Footer != "" {
+			embed.Footer = &discordgo.MessageEmbedFooter{Text: look.Footer}
+		}
+		if look.BannerURL != "" {
+			embed.Image = &discordgo.MessageEmbedImage{URL: look.BannerURL}
+		}
+		if !look.HideCategoryList {
+			for _, category := range panel.Ticket.Categories {
+				value := category.Description
+				if value == "" {
+					value = "Select the button below to open this ticket."
+				}
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+					Name:   truncate(emojiPrefix(category.Emoji)+category.Label, 256),
+					Value:  truncate(value, 1024),
+					Inline: false,
+				})
+			}
+		}
+		if embed.Title == "" && embed.Description == "" && embed.Footer == nil && embed.Image == nil && len(embed.Fields) == 0 {
+			embed.Description = "Choose a category below to open a ticket."
+		}
+		return &discordgo.MessageSend{
+			Embeds:          []*discordgo.MessageEmbed{embed},
+			Components:      ticketPanelButtons(panel, preview),
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		}
+	default:
+		return &discordgo.MessageSend{
+			Flags:           discordgo.MessageFlagsIsComponentsV2,
+			Components:      TicketPanelMessage(panel, preview),
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		}
+	}
+}
+
+func ticketPanelButtons(panel *types.InteractivePanel, preview bool) []discordgo.MessageComponent {
+	buttons := make([]discordgo.MessageComponent, 0, len(panel.Ticket.Categories))
+	for _, category := range panel.Ticket.Categories {
+		label := category.ButtonLabel
+		if label == "" {
+			label = category.Label
+		}
+		button := v2Button(
+			fmt.Sprintf("%s:%s:%s", TicketIDOpen, panel.ID, category.ID),
+			label,
+			category.Emoji,
+			discordgo.ButtonStyle(category.ButtonStyle),
+		)
+		button.Disabled = preview
+		buttons = append(buttons, button)
+	}
+	return v2ButtonRows(buttons)
+}
+
 func layoutHas(layout []types.PanelBlock, blockType string) bool {
 	for _, b := range layout {
 		if b.Type == blockType {
@@ -2415,10 +2509,7 @@ func builderSendPanel(s *discordgo.Session, i *discordgo.InteractionCreate, pane
 		_ = UpdateV2(s, i, TicketEditorScreen(panel, "Add at least one category before sending the panel.")...)
 		return
 	}
-	message, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-		Flags:      discordgo.MessageFlagsIsComponentsV2,
-		Components: TicketPanelMessage(panel, false),
-	})
+	message, err := s.ChannelMessageSendComplex(channelID, ticketPanelSend(panel, false))
 	if err != nil {
 		_ = UpdateV2(s, i, TicketEditorScreen(panel, "Could not send the panel to <#"+channelID+">. Make sure I can view and send messages there.")...)
 		return
@@ -2441,12 +2532,36 @@ func builderSendPanel(s *discordgo.Session, i *discordgo.InteractionCreate, pane
 
 // builderRefreshPanel rewrites the already-sent panel message with the latest design.
 func builderRefreshPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panel *types.InteractivePanel) {
-	components := TicketPanelMessage(panel, false)
+	send := ticketPanelSend(panel, false)
+	existing, fetchErr := s.ChannelMessage(panel.ChannelID, panel.MessageID)
+	if fetchErr == nil && (existing.Flags&discordgo.MessageFlagsIsComponentsV2 != 0) != (send.Flags&discordgo.MessageFlagsIsComponentsV2 != 0) {
+		replacement, err := s.ChannelMessageSendComplex(panel.ChannelID, send)
+		if err != nil {
+			_ = UpdateV2(s, i, TicketEditorScreen(panel, "Could not replace the panel message with the selected format.")...)
+			return
+		}
+		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
+			p.MessageID = replacement.ID
+			return nil
+		})
+		if err != nil {
+			_ = s.ChannelMessageDelete(panel.ChannelID, replacement.ID)
+			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+			return
+		}
+		_ = s.ChannelMessageDelete(panel.ChannelID, panel.MessageID)
+		_ = UpdateV2(s, i, TicketEditorScreen(updated, "The panel format changed and the panel was reposted in <#"+panel.ChannelID+">.")...)
+		return
+	}
+	content, embeds, components := send.Content, send.Embeds, send.Components
 	_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:         panel.MessageID,
-		Channel:    panel.ChannelID,
-		Flags:      discordgo.MessageFlagsIsComponentsV2,
-		Components: &components,
+		ID:              panel.MessageID,
+		Channel:         panel.ChannelID,
+		Content:         &content,
+		Embeds:          &embeds,
+		Components:      &components,
+		Flags:           send.Flags,
+		AllowedMentions: send.AllowedMentions,
 	})
 	if err != nil {
 		_, _ = mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
