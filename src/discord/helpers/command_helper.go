@@ -965,10 +965,7 @@ func HandleSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ephemeral := cmd.Ephemeral
 	if e := entries(i.GuildID)[cmd.Name]; e != nil && e.cmd == cmd {
 		// A custom command is private or public by the called subcommand's own default reply.
-		sub := ""
-		if opts := i.ApplicationCommandData().Options; len(e.b.Subcommands) > 0 && len(opts) > 0 {
-			sub = opts[0].Name
-		}
+		sub, _ := customCommandPath(i.ApplicationCommandData(), &e.b)
 		if b := e.b.bodyFor(sub); b != nil {
 			ephemeral = b.Reply.Ephemeral
 		}
@@ -1093,7 +1090,12 @@ func run(s *discordgo.Session, i *discordgo.InteractionCreate, name string) erro
 	}
 	data := i.ApplicationCommandData()
 	opts, sub := data.Options, ""
-	if len(e.b.Subcommands) > 0 {
+	if len(e.b.SubcommandGroups) > 0 {
+		if len(opts) == 0 || len(opts[0].Options) == 0 {
+			return EditInteractionEmbed(s, i, SimpleErrorEmbed("Pick a subcommand to run."))
+		}
+		sub, opts = opts[0].Name+" "+opts[0].Options[0].Name, opts[0].Options[0].Options
+	} else if len(e.b.Subcommands) > 0 {
 		if len(opts) == 0 {
 			return EditInteractionEmbed(s, i, SimpleErrorEmbed("Pick a subcommand to run."))
 		}
@@ -1719,13 +1721,39 @@ type builder struct {
 		Key      string `json:"key"`
 		Optional bool   `json:"optional"`
 	} `json:"requirements"`
+	Subcommands      []subcommand      `json:"subcommands"`
+	SubcommandGroups []subcommandGroup `json:"subcommandGroups"`
+}
+
+type subcommandGroup struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
 	Subcommands []subcommand `json:"subcommands"`
 }
 
 // bodyFor is the body a call runs: the named subcommand's, or the command's own.
 func (b *builder) bodyFor(sub string) *body {
+	if strings.Contains(sub, " ") {
+		parts := strings.SplitN(sub, " ", 2)
+		for groupIndex := range b.SubcommandGroups {
+			group := &b.SubcommandGroups[groupIndex]
+			if group.Name != parts[0] {
+				continue
+			}
+			for commandIndex := range group.Subcommands {
+				if group.Subcommands[commandIndex].Name == parts[1] {
+					return &group.Subcommands[commandIndex].body
+				}
+			}
+			return nil
+		}
+		return nil
+	}
 	if len(b.Subcommands) == 0 {
-		return &b.body
+		if len(b.SubcommandGroups) == 0 {
+			return &b.body
+		}
+		return nil
 	}
 	for idx := range b.Subcommands {
 		if b.Subcommands[idx].Name == sub {
@@ -1737,6 +1765,9 @@ func (b *builder) bodyFor(sub string) *body {
 
 // defaultReply is the one whose ephemerality Discord is told when the reply is deferred.
 func (b *builder) defaultReply() reply {
+	if len(b.SubcommandGroups) > 0 && len(b.SubcommandGroups[0].Subcommands) > 0 {
+		return b.SubcommandGroups[0].Subcommands[0].Reply
+	}
 	if len(b.Subcommands) > 0 {
 		return b.Subcommands[0].Reply
 	}
@@ -1818,6 +1849,23 @@ func slashOptions(opts []option) []*discordgo.ApplicationCommandOption {
 
 // applicationOptions is the command's option list: its own, or one sub-command per subcommand.
 func (b *builder) applicationOptions() []*discordgo.ApplicationCommandOption {
+	if len(b.SubcommandGroups) > 0 {
+		out := make([]*discordgo.ApplicationCommandOption, 0, len(b.SubcommandGroups))
+		for _, group := range b.SubcommandGroups {
+			groupOption := &discordgo.ApplicationCommandOption{
+				Name: group.Name, Description: describe(group.Description, group.Name),
+				Type: discordgo.ApplicationCommandOptionSubCommandGroup,
+			}
+			for _, sc := range group.Subcommands {
+				groupOption.Options = append(groupOption.Options, &discordgo.ApplicationCommandOption{
+					Name: sc.Name, Description: describe(sc.Description, sc.Name),
+					Type: discordgo.ApplicationCommandOptionSubCommand, Options: slashOptions(sc.Options),
+				})
+			}
+			out = append(out, groupOption)
+		}
+		return out
+	}
 	if len(b.Subcommands) == 0 {
 		return slashOptions(b.Options)
 	}
@@ -1918,13 +1966,31 @@ func build(name string, c types.CommandConfig, b *builder) *types.Command {
 		Description: describe(c.Description, "Custom command"),
 		Category:    "custom",
 		Ephemeral:   b.defaultReply().Ephemeral,
-		Data:        &discordgo.ApplicationCommand{Name: name, Description: describe(c.Description, "Custom command"), Options: b.applicationOptions()},
+		Data:        &discordgo.ApplicationCommand{Name: name, Description: describe(c.Description, "Custom command"), Options: b.applicationOptions(), DefaultMemberPermissions: c.DefaultMemberPermissions},
 	}
 	for _, r := range b.Requirements {
 		cmd.Requirements = append(cmd.Requirements, types.Requirement{Type: types.RequirementType(r.Type), Key: r.Key, Optional: r.Optional})
 	}
 	cmd.Execute = func(s *discordgo.Session, i *discordgo.InteractionCreate) error { return run(s, i, name) }
 	return cmd
+}
+
+func customCommandPath(data discordgo.ApplicationCommandInteractionData, b *builder) (string, []*discordgo.ApplicationCommandInteractionDataOption) {
+	options := data.Options
+	if len(options) == 0 {
+		return "", nil
+	}
+	if len(b.SubcommandGroups) > 0 && options[0].Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+		if len(options[0].Options) == 0 {
+			return options[0].Name, nil
+		}
+		command := options[0].Options[0]
+		return options[0].Name + " " + command.Name, command.Options
+	}
+	if len(b.Subcommands) > 0 && options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
+		return options[0].Name, options[0].Options
+	}
+	return "", options
 }
 
 // ============================================================================

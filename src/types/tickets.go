@@ -74,10 +74,21 @@ type TicketSettings struct {
 
 // TicketState is the runtime state of every ticket panel in a guild.
 type TicketState struct {
-	Counter int                          `json:"counter"`
-	Open    map[string]*Ticket           `json:"open"`
-	Stats   map[string]*TicketStaffStats `json:"stats"`
-	History []*Ticket                    `json:"history"`
+	Counter   int                          `json:"counter"`
+	Open      map[string]*Ticket           `json:"open"`
+	Stats     map[string]*TicketStaffStats `json:"stats"`
+	History   []*Ticket                    `json:"history"`
+	Blacklist []*TicketBlacklistEntry      `json:"blacklist,omitempty"`
+}
+
+// TicketBlacklistEntry prevents a member from opening new support tickets.
+// ExpiresAt is a Unix timestamp; zero means the entry is permanent.
+type TicketBlacklistEntry struct {
+	UserID    string `json:"user_id"`
+	Reason    string `json:"reason"`
+	AddedBy   string `json:"added_by"`
+	CreatedAt int64  `json:"created_at"`
+	ExpiresAt int64  `json:"expires_at"`
 }
 
 // Ticket is one support ticket, keyed in TicketState.Open by its thread ID.

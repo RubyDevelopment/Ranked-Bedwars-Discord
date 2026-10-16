@@ -171,6 +171,9 @@ func normalizeInteractivePanels(ip *types.InteractivePanels) {
 	if ip.Tickets.Stats == nil {
 		ip.Tickets.Stats = map[string]*types.TicketStaffStats{}
 	}
+	if ip.Tickets.Blacklist == nil {
+		ip.Tickets.Blacklist = []*types.TicketBlacklistEntry{}
+	}
 	for _, panel := range ip.Panels {
 		if panel.Type == types.PanelTypeTicket && panel.Ticket == nil {
 			panel.Ticket = &types.TicketPanelConfig{}
@@ -274,6 +277,17 @@ func OpenTicketsFor(ip *types.InteractivePanels, userID string) []*types.Ticket 
 	return owned
 }
 
+// TicketBlacklistEntryFor returns an active blacklist record for userID.
+func TicketBlacklistEntryFor(ip *types.InteractivePanels, userID string) *types.TicketBlacklistEntry {
+	now := time.Now().Unix()
+	for _, entry := range ip.Tickets.Blacklist {
+		if entry != nil && entry.UserID == userID && (entry.ExpiresAt == 0 || entry.ExpiresAt > now) {
+			return entry
+		}
+	}
+	return nil
+}
+
 // StaffStatsFor returns (creating if needed) a staff member's leaderboard row.
 func StaffStatsFor(ip *types.InteractivePanels, staffID string) *types.TicketStaffStats {
 	stats, ok := ip.Tickets.Stats[staffID]
@@ -374,6 +388,12 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 	category := FindTicketCategory(panel, categoryID)
 	if category == nil {
 		return nil, ErrTicketCategoryNotFound
+	}
+	if entry := TicketBlacklistEntryFor(ip, owner.ID); entry != nil {
+		if entry.Reason != "" {
+			return nil, fmt.Errorf("you cannot open tickets: %s", entry.Reason)
+		}
+		return nil, errors.New("you are not allowed to open tickets")
 	}
 
 	if limit := panel.Ticket.Settings.MaxOpenPerUser; limit > 0 {

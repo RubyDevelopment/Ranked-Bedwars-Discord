@@ -56,8 +56,9 @@ type CommandConfig struct {
 	RequiredChannels   map[string]RequirementSlot `json:"required_channels"`
 	RequiredCategories map[string]RequirementSlot `json:"required_categories"`
 
-	Options  []CommandOption `json:"options,omitempty"`
-	Cooldown int             `json:"cooldown,omitempty"`
+	Options                  []CommandOption `json:"options,omitempty"`
+	Cooldown                 int             `json:"cooldown,omitempty"`
+	DefaultMemberPermissions *int64          `json:"default_member_permissions,string,omitempty"`
 
 	// Builder is the panel's custom-command definition (options, steps and
 	// reply). It is carried verbatim so saving the commands map never drops it.

@@ -149,7 +149,7 @@ func EnsureGuildSetup(s *discordgo.Session, guildID string) (*types.SetupResult,
 	result.MetaCreated = fresh
 	result.GameConfigCreated = fresh
 
-	if err := syncGuildDiscordProfile(guild); err != nil {
+	if err := syncGuildDiscordProfile(s, guild); err != nil {
 		return nil, fmt.Errorf("sync Discord profile: %w", err)
 	}
 
@@ -184,18 +184,33 @@ func discordGuildAssetURL(guildID, hash, asset string, size int) string {
 
 // syncGuildDiscordProfile stores the server's live branding independently from
 // bot-specific overrides. Legacy asset fields are migrated without losing custom URLs.
-func syncGuildDiscordProfile(guild *discordgo.Guild) error {
+func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error {
+	if s == nil {
+		return fmt.Errorf("Discord session is nil")
+	}
 	if guild == nil || guild.ID == "" {
 		return fmt.Errorf("guild is nil or has no ID")
+	}
+
+	guildWithCounts, err := s.GuildWithCounts(guild.ID)
+	if err != nil {
+		return fmt.Errorf("fetch Discord member count: %w", err)
+	}
+	if guildWithCounts == nil {
+		return fmt.Errorf("fetch Discord member count: Discord returned no guild data")
+	}
+	memberCount := guildWithCounts.ApproximateMemberCount
+	if memberCount == 0 {
+		memberCount = guild.MemberCount
 	}
 
 	nextProfile := types.DiscordGuildProfile{
 		ServerIconURL:   discordGuildAssetURL(guild.ID, guild.Icon, "icons", 128),
 		ServerBannerURL: discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
-		MemberCount:     guild.MemberCount,
+		MemberCount:     memberCount,
 	}
 	migratedLegacy := false
-	err := database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
+	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
 		var profile types.DiscordGuildProfile
 		if !config.DiscordProfile.IsEmpty() {
 			if err := config.DiscordProfile.Unmarshal(&profile); err != nil {
@@ -214,6 +229,9 @@ func syncGuildDiscordProfile(guild *discordgo.Guild) error {
 			}
 			profile.MigrateLegacyAppearance(legacyAppearance, previous)
 			migratedLegacy = !config.Appearance.IsEmpty()
+		}
+		if nextProfile.MemberCount <= 0 {
+			nextProfile.MemberCount = profile.MemberCount
 		}
 		changed := legacyChanged ||
 			profileMigration ||
@@ -681,7 +699,7 @@ func HandleGuildUpdate(s *discordgo.Session, g *discordgo.GuildUpdate) {
 		return
 	}
 	logger := baseutility.CreateModuleLogger("GUILD_SETUP", "GuildUpdate")
-	if err := syncGuildDiscordProfile(g.Guild); err != nil {
+	if err := syncGuildDiscordProfile(s, g.Guild); err != nil {
 		logger.Error(fmt.Sprintf("Failed to save branding for guild %s: %v", g.Guild.ID, err))
 		return
 	}
@@ -1100,7 +1118,7 @@ func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) 
 			logger.Error(fmt.Sprintf("Failed to refresh server branding for guild %s: %v", guild.SnowflakeID, err))
 			continue
 		}
-		if err := syncGuildDiscordProfile(liveGuild); err != nil {
+		if err := syncGuildDiscordProfile(s, liveGuild); err != nil {
 			logger.Error(fmt.Sprintf("Failed to save server branding for guild %s: %v", guild.SnowflakeID, err))
 		}
 		if err := updateGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
