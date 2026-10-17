@@ -688,6 +688,9 @@ func HandleGuildJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 	if err := updateGuildAppearance(s, g.Guild.ID, logger); err != nil {
 		logger.Error(fmt.Sprintf("Failed to apply default appearance for %s (%s): %v", g.Guild.Name, g.Guild.ID, err))
 	}
+	if result.GuildCreated {
+		notifyUnassignedGuild(s, g.Guild.ID, logger)
+	}
 
 	logger.Info(fmt.Sprintf("Automatic guild setup completed for %s (%s) - GuildCreated: %v, ConfigCreated: %v, SnapshotCreated: %v, SnapshotSynced: %v, MetaCreated: %v, GameConfigCreated: %v",
 		g.Guild.Name, g.Guild.ID, result.GuildCreated, result.ConfigCreated, result.SnapshotCreated, result.SnapshotSynced, result.MetaCreated, result.GameConfigCreated))
@@ -759,6 +762,7 @@ func HandleGuildSetup(s *discordgo.Session, r *discordgo.Ready) {
 
 		if result.GuildCreated {
 			setupCount++
+			notifyUnassignedGuild(s, guild.ID, logger)
 		} else {
 			syncCount++
 		}
@@ -771,6 +775,22 @@ func HandleGuildSetup(s *discordgo.Session, r *discordgo.Ready) {
 	// Mark initial setup as complete so guild_create events can now process new guilds
 	setInitialSetupComplete()
 	logger.Info("Initial guild setup complete, guild_create events will now process new guild joins")
+}
+
+func notifyUnassignedGuild(s *discordgo.Session, guildID string, logger baseutility.AppLogger) {
+	guild, err := s.Guild(guildID)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Could not load guild %s to send setup notice: %v", guildID, err))
+		return
+	}
+	if guild.SystemChannelID == "" {
+		logger.Info(fmt.Sprintf("Guild %s has no system channel; skipped the plan setup notice", guildID))
+		return
+	}
+	_, err = s.ChannelMessageSend(guild.SystemChannelID, "Ranked Bedwars is connected and has created this server's configuration. No plan is assigned yet. Please visit the Ranked Bedwars dashboard to review plans and contact support to activate one. Paid features stay locked until a plan is assigned.")
+	if err != nil {
+		logger.Error(fmt.Sprintf("Could not send plan setup notice to guild %s: %v", guildID, err))
+	}
 }
 
 // ============================================================================
