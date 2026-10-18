@@ -1,17 +1,19 @@
 // Package database holds the process-wide Ranked Bedwars Database API client
-// (see github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/sdk). Every command
+// (see github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk). Every command
 // and event handler reaches the database through database.Get() or
 // database.Must(), then the domain fields on *sdk.Services directly, e.g.
 // database.Must().Player.Register(...) or database.Must().Stats.Get(...).
 package database
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/sdk"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 
 	"ranked-bedwars/src/utility"
 )
@@ -38,6 +40,22 @@ func NewClient() *Manager {
 	return &Manager{Logger: utility.CreateModuleLogger("DATABASE_MANAGER", "Database")}
 }
 
+// startupHealthTimeout bounds the health check that gates bot startup.
+const startupHealthTimeout = 10 * time.Second
+
+// requestTimeout reads DATABASE_API_TIMEOUT (a Go duration such as "20s"); unset means sdk.DefaultTimeout.
+func requestTimeout() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv("DATABASE_API_TIMEOUT"))
+	if raw == "" {
+		return sdk.DefaultTimeout, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("DATABASE_API_TIMEOUT %q must be a positive duration like 20s", raw)
+	}
+	return d, nil
+}
+
 // Initialize loads DATABASE_API_URL and DATABASE_API_KEY from the environment,
 // connects the SDK client, stores it process-wide, and confirms it with a health check.
 func (m *Manager) Initialize() error {
@@ -52,8 +70,20 @@ func (m *Manager) Initialize() error {
 		return fmt.Errorf("database api key is not set in environment variables")
 	}
 
-	svc := sdk.NewWithLogger(baseURL, apiKey, &apiLoggerAdapter{logger: utility.DatabaseAPILogger})
-	if err := svc.Health(); err != nil {
+	timeout, err := requestTimeout()
+	if err != nil {
+		m.Logger.Error(err.Error())
+		return err
+	}
+	svc := sdk.NewServicesWithOptions(sdk.Options{
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+		Timeout: timeout,
+		Logger:  &apiLoggerAdapter{logger: utility.DatabaseAPILogger},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), startupHealthTimeout)
+	defer cancel()
+	if err := svc.HealthContext(ctx); err != nil {
 		m.Logger.Error(fmt.Sprintf("Database API health check failed: %v", err))
 		return fmt.Errorf("database api health check failed: %w", err)
 	}
@@ -85,7 +115,7 @@ func (m *Manager) Instance() (*sdk.Services, error) {
 }
 
 // New creates an isolated SDK client instance without assigning it process-wide.
-func New(baseURL, apiKey string) *sdk.Services { return sdk.New(baseURL, apiKey) }
+func New(baseURL, apiKey string) *sdk.Services { return sdk.NewServices(baseURL, apiKey) }
 
 // NewWithAPILogger creates an isolated SDK client instance with request tracing.
 func NewWithAPILogger(baseURL, apiKey string, logger utility.AppLogger) *sdk.Services {

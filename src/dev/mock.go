@@ -2,12 +2,13 @@
 // maps, bots, a season, role assignments, command and event configs) and registered mock players, so every command can
 // be tried without registering or configuring anything first.
 //
-// Run the throwaway API (Ranked-Bedwars-Database-Go/cmd/dev-server), then start the bot with:
+// Run a scratch Ranked-Bedwars-Database API (go run . in that repo, with DATABASE_DRIVER=sqlite,
+// DATABASE_DSN=file:dev.db and MASTER_API_KEY=devmaster), then start the bot with:
 //
 //	DEV_MODE=true
 //	DEV_GUILD_ID=<the Discord server to test in>
 //	DEV_USER_ID=<your Discord user id>        (you are registered as DEV_USERNAME, default "DevPlayer")
-//	DATABASE_API_URL=http://127.0.0.1:8099
+//	DATABASE_API_URL=http://127.0.0.1:8080
 //	DATABASE_API_KEY=devmaster
 package dev
 
@@ -18,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/sdk"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
@@ -124,23 +125,15 @@ func Seed(guildID, devUserID string) error {
 		return fmt.Errorf("guild: %w", err)
 	}
 
-	// 2. Game config: ranks, modes, maps and bots. Each write needs the row's latest updated_at.
+	// 2. Game config: ranks, modes, maps and bots (each collection is synced to its own table by name)
 	for field, value := range map[string]any{"ranks": mockRanks, "modes": mockModes(), "maps": mockMaps(), "bots": mockBots()} {
-		cfg, err := client.GameConfig(ctx, guildID)
-		if err != nil {
-			return fmt.Errorf("game config: %w", err)
-		}
-		if _, err := client.PutConfigField(ctx, actor, guildID, sdk.ConfigGame, field, cfg.UpdatedAt, value); err != nil {
+		if err := svc.GameConfig.SaveField(actor, guildID, field, value); err != nil {
 			return fmt.Errorf("game config %s: %w", field, err)
 		}
 	}
 
 	// 3. Role assignments
-	state, err := client.States(ctx, guildID)
-	if err != nil {
-		return fmt.Errorf("guild state: %w", err)
-	}
-	if _, err := client.PutStateField(ctx, actor, guildID, "roles", state.UpdatedAt, mockRoles()); err != nil {
+	if _, err := svc.GuildState.Patch(actor, guildID, map[string]any{"roles": mockRoles()}); err != nil {
 		return fmt.Errorf("guild roles: %w", err)
 	}
 

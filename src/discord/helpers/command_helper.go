@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/sdk"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
 	dbjson "github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/utility"
 	"github.com/bwmarrin/discordgo"

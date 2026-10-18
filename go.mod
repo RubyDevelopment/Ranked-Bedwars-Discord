@@ -13,7 +13,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
-replace github.com/RubyDevelopment/Ranked-Bedwars-Database-Go => ../Ranked-Bedwars-Database-Go
+replace github.com/RubyDevelopment/Ranked-Bedwars-Database-Go => ../Ranked-Bedwars-Database
 
 require (
 	github.com/gorilla/websocket v1.4.2
