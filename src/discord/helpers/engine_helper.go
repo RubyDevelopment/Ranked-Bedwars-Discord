@@ -321,8 +321,8 @@ func (b *EngineBridge) Host(g Game) (bool, error) {
 	if g.Custom != nil && !g.Custom.UseBot {
 		return false, nil // staff chose to host this one by hand
 	}
-	if !b.Connected() {
-		return false, nil
+	if !b.Connected() || !GuildHasFeature(g.GuildID, "automated-hosting") {
+		return false, nil // no engine, or the server's plan doesn't include bot hosting: host by hand
 	}
 	job, err := buildHostJob(g)
 	if err != nil {

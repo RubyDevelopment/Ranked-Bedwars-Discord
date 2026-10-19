@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	dbjson "github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/utility"
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
@@ -65,6 +65,11 @@ func RunCommandPipeline(s *discordgo.Session, i *discordgo.InteractionCreate, cm
 
 	if !opts.SkipGuildRegistration && !gc.Registered {
 		RespondGuildNotRegistered(s, i, cmd.Ephemeral)
+		return nil
+	}
+
+	if denied := planDenial(gc, cmd, time.Now()); denied != nil && !opts.SkipGuildRegistration {
+		respondInteractionEmbed(s, i, cmd.Ephemeral, denied, nil)
 		return nil
 	}
 
