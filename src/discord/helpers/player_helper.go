@@ -1131,7 +1131,7 @@ func verifyViaMojang(username string) (bool, error) {
 // matching the dashboard's test and /api/v1/verify/external. Legacy configs with only uuid_field_path accept
 // any non-empty value there.
 func verifyViaCustomAPI(username string, api *types.ExternalAPI) (bool, error) {
-	if api.EndpointURL == "" || api.QueryParam == "" || (api.ResponseFieldPath == "" && api.UUIDFieldPath == "") {
+	if api.EndpointURL == "" || (api.QueryParam == "" && !strings.Contains(api.EndpointURL, "{")) || (api.ResponseFieldPath == "" && api.UUIDFieldPath == "") {
 		return false, fmt.Errorf("external API configuration is incomplete")
 	}
 	token := strings.TrimSpace(api.APIKey)
@@ -1139,7 +1139,21 @@ func verifyViaCustomAPI(username string, api *types.ExternalAPI) (bool, error) {
 		return false, fmt.Errorf("external API token is missing")
 	}
 
-	endpoint, err := url.Parse(api.EndpointURL)
+	// {username} / {uuid} in the URL put the player in the path; otherwise the lookup goes in a query parameter.
+	inPath := strings.Contains(api.EndpointURL, "{username}") || strings.Contains(api.EndpointURL, "{uuid}")
+	needsUUID := api.QueryParamType == "uuid" || strings.Contains(api.EndpointURL, "{uuid}")
+	uuid := ""
+	if needsUUID {
+		var err error
+		if uuid, err = mojangUUID(username); err != nil {
+			return false, err
+		}
+		if uuid == "" {
+			return false, nil
+		}
+	}
+	rawURL := strings.NewReplacer("{username}", url.PathEscape(username), "{uuid}", url.PathEscape(uuid)).Replace(api.EndpointURL)
+	endpoint, err := url.Parse(rawURL)
 	if err != nil {
 		return false, fmt.Errorf("invalid endpoint URL: %w", err)
 	}
@@ -1147,18 +1161,14 @@ func verifyViaCustomAPI(username string, api *types.ExternalAPI) (bool, error) {
 		return false, fmt.Errorf("external API URL must use HTTPS without embedded credentials")
 	}
 
-	lookup := username
-	if api.QueryParamType == "uuid" {
-		if lookup, err = mojangUUID(username); err != nil {
-			return false, err
-		}
-		if lookup == "" {
-			return false, nil
-		}
-	}
-
 	query := endpoint.Query()
-	query.Set(api.QueryParam, lookup)
+	if !inPath {
+		lookup := username
+		if api.QueryParamType == "uuid" {
+			lookup = uuid
+		}
+		query.Set(api.QueryParam, lookup)
+	}
 	headers := http.Header{"Accept": {"application/json"}}
 	switch api.AuthType {
 	case "none":
