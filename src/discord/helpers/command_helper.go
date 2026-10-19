@@ -68,7 +68,7 @@ func RunCommandPipeline(s *discordgo.Session, i *discordgo.InteractionCreate, cm
 		return nil
 	}
 
-	if denied := planDenial(gc, cmd, time.Now()); denied != nil && !opts.SkipGuildRegistration {
+	if denied := planDenial(gc, i.GuildID, cmd, time.Now()); denied != nil && !opts.SkipGuildRegistration {
 		respondInteractionEmbed(s, i, cmd.Ephemeral, denied, nil)
 		return nil
 	}
@@ -1029,6 +1029,9 @@ func RegisterComponentHandler(h ComponentHandler) {
 
 // HandleRegisteredComponent offers customID to every registered handler.
 func HandleRegisteredComponent(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
+	if planBlocksComponent(s, i) {
+		return true
+	}
 	componentMu.RLock()
 	handlers := append([]ComponentHandler(nil), componentHandlers...)
 	componentMu.RUnlock()

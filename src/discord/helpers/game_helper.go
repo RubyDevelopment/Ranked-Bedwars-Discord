@@ -2756,6 +2756,9 @@ func (m *GameManager) start(group *QueueGroup, custom *CustomGame) (Game, error)
 		return Game{}, ErrInvalidGroup
 	}
 	defer m.deps.ReleaseGroup(group.GuildID, group.ID)
+	if !GuildPlanActive(group.GuildID) {
+		return Game{}, ErrPlanInactive
+	}
 
 	if custom == nil { // a staff-built game sets its own team sizes
 		teams, perTeam := TeamLayout(group.Mode)
