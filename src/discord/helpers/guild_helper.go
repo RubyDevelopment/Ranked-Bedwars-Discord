@@ -808,7 +808,7 @@ func unassignedGuildEmbed() *discordgo.MessageEmbed {
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Getting Started",
-				Value:  "1. An administrator opens the dashboard.\n2. Choose a plan and select this guild.\n3. Join the matching Ko-fi membership and the bot switches on automatically.",
+				Value:  "1. An administrator opens the dashboard.\n2. Choose a plan, select this guild and request access.\n3. Once the request is approved, the bot switches on.",
 				Inline: false,
 			},
 			{
@@ -833,7 +833,7 @@ func unassignedGuildComponents() []discordgo.MessageComponent {
 	}
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
-			discordgo.Button{Label: "Choose a Plan", Style: discordgo.LinkButton, URL: base + "/setup"},
+			discordgo.Button{Label: "Request Access", Style: discordgo.LinkButton, URL: base + "/setup"},
 			discordgo.Button{Label: "View Pricing", Style: discordgo.LinkButton, URL: base + "/pricing"},
 		}},
 	}

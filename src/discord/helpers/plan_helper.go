@@ -16,8 +16,8 @@ import (
 	baseutility "ranked-bedwars/src/utility"
 )
 
-// A guild's plan comes from the Database (guilds.tier and tier_expires_at), which the dashboard fills in when a Ko-fi
-// membership payment arrives and the Database clears when the paid period and its grace days run out. The bot only
+// A guild's plan comes from the Database (guilds.tier and tier_expires_at), which the developer sets by hand
+// (approving a plan request in the dashboard) and the Database clears when the period and its grace days run out. The bot only
 // reads it: while the plan is active the bot works, once it lapses commands, buttons and new games are refused with
 // how to renew. Ongoing upkeep (rank decay, syncs, an already running game) is deliberately not stopped.
 
@@ -57,11 +57,16 @@ func dashboardBase() string {
 	return strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
 }
 
-func planRenewURL() string {
-	if base := dashboardBase(); base != "" {
+// planPageURL is where an administrator asks for or renews a plan: the guild's plan page in the dashboard.
+func planPageURL(guildID string) string {
+	base := dashboardBase()
+	if base == "" {
+		return ""
+	}
+	if guildID == "" {
 		return base + "/setup"
 	}
-	return ""
+	return base + "/dashboard/" + guildID + "/plan"
 }
 
 // lastKnown remembers each guild's most recent plan answer. It makes a click cheap (no Database call within
@@ -93,7 +98,7 @@ func recallPlan(guildID string) (lastKnown, bool) {
 	return k, ok
 }
 
-func inactiveEmbed(disabled bool, expires *time.Time) *discordgo.MessageEmbed {
+func inactiveEmbed(guildID string, disabled bool, expires *time.Time) *discordgo.MessageEmbed {
 	if disabled {
 		return &discordgo.MessageEmbed{Title: "Server Disabled", Description: "Ranked Bedwars has been disabled for this server. Contact support if you think this is a mistake.", Color: ColorError}
 	}
@@ -101,11 +106,9 @@ func inactiveEmbed(disabled bool, expires *time.Time) *discordgo.MessageEmbed {
 	if expires != nil {
 		desc = fmt.Sprintf("This server's plan ended on <t:%d:D>, so Ranked Bedwars is paused.", expires.Unix())
 	}
-	desc += " An administrator can renew it on Ko-fi"
-	if url := planRenewURL(); url != "" {
-		desc += " through the dashboard: " + url
-	} else {
-		desc += " through the dashboard"
+	desc += " An administrator can request a plan or a renewal in the dashboard"
+	if url := planPageURL(guildID); url != "" {
+		desc += ": " + url
 	}
 	desc += ". Settings and setup commands still work meanwhile."
 	return &discordgo.MessageEmbed{Title: "Plan Inactive", Description: desc, Color: ColorError}
@@ -122,10 +125,10 @@ func planDenial(gc GuildContext, guildID string, cmd *types.Command, now time.Ti
 		if planCounts(gc.Guild, now) {
 			return nil
 		}
-		return inactiveEmbed(!gc.Guild.IsEnabled, gc.Guild.TierExpiresAt)
+		return inactiveEmbed(guildID, !gc.Guild.IsEnabled, gc.Guild.TierExpiresAt)
 	}
 	if k, ok := recallPlan(guildID); ok && !k.active {
-		return inactiveEmbed(k.disabled, k.expires)
+		return inactiveEmbed(guildID, k.disabled, k.expires)
 	}
 	return nil
 }
@@ -141,12 +144,12 @@ func guildPlanOK(guildID string) (ok bool, embed *discordgo.MessageEmbed) {
 		if k.active {
 			return true, nil
 		}
-		return false, inactiveEmbed(k.disabled, k.expires)
+		return false, inactiveEmbed(guildID, k.disabled, k.expires)
 	}
 	guild, err := lookupGuildBySnowflake(guildID)
 	if err != nil || guild == nil {
 		if k, found := recallPlan(guildID); found && !k.active {
-			return false, inactiveEmbed(k.disabled, k.expires)
+			return false, inactiveEmbed(guildID, k.disabled, k.expires)
 		}
 		return true, nil
 	}
@@ -154,7 +157,7 @@ func guildPlanOK(guildID string) (ok bool, embed *discordgo.MessageEmbed) {
 	if planCounts(guild, now) {
 		return true, nil
 	}
-	return false, inactiveEmbed(!guild.IsEnabled, guild.TierExpiresAt)
+	return false, inactiveEmbed(guildID, !guild.IsEnabled, guild.TierExpiresAt)
 }
 
 // GuildPlanActive reports whether the server may use the bot now (for work that is not a command, e.g. starting a game).
@@ -251,13 +254,13 @@ func runPlanReminders(s *discordgo.Session, logger baseutility.AppLogger, now ti
 		case g.PlanActive(now) && g.Tier != nil && g.TierExpiresAt.Sub(now) <= planReminderWindow && g.TierExpiresAt.After(now):
 			kind = remindedEnding
 			if g.PlanCancelRequestedAt != nil {
-				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D> because it was cancelled, so it will not renew. To keep the bot running, join the membership again here", g.Name, g.TierExpiresAt.Unix())
+				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D> because you asked to cancel it. To keep the bot running, say so or request a renewal here", g.Name, g.TierExpiresAt.Unix())
 			} else {
-				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D>. A Ko-fi membership renews on its own each month; if you cancelled it or a payment failed, renew here", g.Name, g.TierExpiresAt.Unix())
+				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D>. Plans are renewed by hand, so request a renewal here before then", g.Name, g.TierExpiresAt.Unix())
 			}
 		case !g.PlanActive(now) && now.Sub(*g.TierExpiresAt) <= planExpiredWindow:
 			kind = remindedEnded
-			text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ended on <t:%d:D>, so the bot is paused there. Your configuration is kept; renew here to switch it back on", g.Name, g.TierExpiresAt.Unix())
+			text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ended on <t:%d:D>, so the bot is paused there. Your configuration is kept; request a renewal here to switch it back on", g.Name, g.TierExpiresAt.Unix())
 		default:
 			continue
 		}
@@ -277,10 +280,10 @@ func runPlanReminders(s *discordgo.Session, logger baseutility.AppLogger, now ti
 		if err != nil {
 			continue
 		}
-		if url := planRenewURL(); url != "" {
+		if url := planPageURL(g.SnowflakeID); url != "" {
 			text += ": " + url
 		} else {
-			text += " through the dashboard"
+			text += " in the dashboard"
 		}
 		if _, err := s.ChannelMessageSendEmbed(dm.ID, &discordgo.MessageEmbed{Title: "Ranked Bedwars plan", Description: text, Color: ColorError}); err != nil {
 			logger.Error(fmt.Sprintf("Could not DM the owner of %s about the plan: %v", g.SnowflakeID, err))
