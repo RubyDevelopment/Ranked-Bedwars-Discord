@@ -52,8 +52,13 @@ func planCounts(g *models.GuildsModel, now time.Time) bool {
 	return g.IsEnabled && (g.PlanActive(now) || planGrandfathered(g))
 }
 
+// dashboardBase is the dashboard's address from DASHBOARD_URL, without a trailing slash ("" when unset).
+func dashboardBase() string {
+	return strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
+}
+
 func planRenewURL() string {
-	if base := strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/"); base != "" {
+	if base := dashboardBase(); base != "" {
 		return base + "/setup"
 	}
 	return ""

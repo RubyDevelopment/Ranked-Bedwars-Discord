@@ -787,9 +787,55 @@ func notifyUnassignedGuild(s *discordgo.Session, guildID string, logger baseutil
 		logger.Info(fmt.Sprintf("Guild %s has no system channel; skipped the plan setup notice", guildID))
 		return
 	}
-	_, err = s.ChannelMessageSend(guild.SystemChannelID, "Ranked Bedwars is connected and has created this server's configuration. No plan is assigned yet. Please visit the Ranked Bedwars dashboard to review plans and contact support to activate one. Paid features stay locked until a plan is assigned.")
+	_, err = s.ChannelMessageSendComplex(guild.SystemChannelID, &discordgo.MessageSend{
+		Embeds:     []*discordgo.MessageEmbed{unassignedGuildEmbed()},
+		Components: unassignedGuildComponents(),
+	})
 	if err != nil {
 		logger.Error(fmt.Sprintf("Could not send plan setup notice to guild %s: %v", guildID, err))
+	}
+}
+
+// ============================================================================
+// Embed Builders
+// ============================================================================
+
+// unassignedGuildEmbed is the notice posted when the bot joins a guild that has no plan yet.
+func unassignedGuildEmbed() *discordgo.MessageEmbed {
+	return Preset("caution", types.PresetOptions{
+		Title:       "Ranked Bedwars Is Connected",
+		Description: "Ranked Bedwars has joined this guild and created its configuration. A plan is required before the bot can be used.",
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Getting Started",
+				Value:  "1. An administrator opens the dashboard.\n2. Choose a plan and select this guild.\n3. Join the matching Ko-fi membership and the bot switches on automatically.",
+				Inline: false,
+			},
+			{
+				Name:   "Until Then",
+				Value:  "Commands and buttons stay paused. The setup and configuration commands keep working, so the guild can be prepared in advance.",
+				Inline: false,
+			},
+			{
+				Name:   "Need Help?",
+				Value:  "Contact support through the dashboard and include the name of this guild.",
+				Inline: false,
+			},
+		},
+	})
+}
+
+// unassignedGuildComponents are the dashboard links under that notice (none when no dashboard URL is configured).
+func unassignedGuildComponents() []discordgo.MessageComponent {
+	base := dashboardBase()
+	if base == "" {
+		return nil
+	}
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: "Choose a Plan", Style: discordgo.LinkButton, URL: base + "/setup"},
+			discordgo.Button{Label: "View Pricing", Style: discordgo.LinkButton, URL: base + "/pricing"},
+		}},
 	}
 }
 

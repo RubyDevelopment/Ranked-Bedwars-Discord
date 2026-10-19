@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/types"
 )
@@ -105,5 +106,26 @@ func TestPlanGrandfathering(t *testing.T) {
 	lapsed.CreatedAt = now.AddDate(0, -2, 0)
 	if planDenial(GuildContext{Registered: true, Guild: &lapsed}, "lapsed2", stats, now) == nil {
 		t.Error("a server that had a plan and let it lapse is not grandfathered")
+	}
+}
+
+func TestUnassignedGuildNotice(t *testing.T) {
+	t.Setenv("DASHBOARD_URL", "")
+	emb := unassignedGuildEmbed()
+	if emb.Title != "Ranked Bedwars Is Connected" || len(emb.Fields) != 3 || emb.Color != ColorCaution {
+		t.Fatalf("unexpected embed: %+v", emb)
+	}
+	if unassignedGuildComponents() != nil {
+		t.Error("without DASHBOARD_URL there should be no buttons")
+	}
+
+	t.Setenv("DASHBOARD_URL", "https://example.dev/")
+	rows := unassignedGuildComponents()
+	if len(rows) != 1 {
+		t.Fatalf("want one row of buttons, got %d", len(rows))
+	}
+	buttons := rows[0].(discordgo.ActionsRow).Components
+	if len(buttons) != 2 || buttons[0].(discordgo.Button).URL != "https://example.dev/setup" || buttons[1].(discordgo.Button).URL != "https://example.dev/pricing" {
+		t.Errorf("unexpected buttons: %+v", buttons)
 	}
 }
