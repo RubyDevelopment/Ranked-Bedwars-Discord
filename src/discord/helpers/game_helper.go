@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
@@ -44,7 +44,7 @@ func GameNumberAutocomplete(states ...GameState) func(s *discordgo.Session, i *d
 			}
 		}
 
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
 			Data: &discordgo.InteractionResponseData{Choices: choices},
 		})
@@ -1083,7 +1083,7 @@ func (d *gameDiscord) handleComponent(s *discordgo.Session, i *discordgo.Interac
 }
 
 func ephemeral(s *discordgo.Session, i *discordgo.InteractionCreate, text string) {
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Content: text, Flags: discordgo.MessageFlagsEphemeral},
 	})
@@ -1114,7 +1114,7 @@ func (d *gameDiscord) handleMapVote(s *discordgo.Session, i *discordgo.Interacti
 	embed := v.embed(false)
 	d.mu.Unlock()
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(uint(gameID), false)},
 	})
@@ -1142,7 +1142,7 @@ func (d *gameDiscord) handleDraftPick(s *discordgo.Session, i *discordgo.Interac
 		ephemeral(s, i, draftErrorText(err))
 		return
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 	d.refreshDraft(s, uint(gameID), ui)
 }
 
@@ -5049,7 +5049,7 @@ func HandleHostGameComponent(s *discordgo.Session, i *discordgo.InteractionCreat
 		respondHostGame(s, i, HostGameErrorEmbed(errors.New("this panel has expired, run `/game_host create` again")), nil)
 		return true
 	case user != h.UserID:
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "Only the staff member who opened this panel can use it.", Flags: discordgo.MessageFlagsEphemeral}})
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "Only the staff member who opened this panel can use it.", Flags: discordgo.MessageFlagsEphemeral}})
 		return true
 	}
 
@@ -5112,7 +5112,7 @@ func respondHostGame(s *discordgo.Session, i *discordgo.InteractionCreate, embed
 	if components == nil {
 		components = []discordgo.MessageComponent{}
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: components},
 	})

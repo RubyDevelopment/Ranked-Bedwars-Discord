@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 	"github.com/fogleman/gg"
 	"github.com/golang/freetype/truetype"
@@ -1032,7 +1032,7 @@ func StyleAutocomplete(command string) func(s *discordgo.Session, i *discordgo.I
 				break
 			}
 		}
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
 			Data: &discordgo.InteractionResponseData{Choices: choices},
 		})

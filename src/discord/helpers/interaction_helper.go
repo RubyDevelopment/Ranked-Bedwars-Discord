@@ -49,7 +49,7 @@ func Respond(s *discordgo.Session, i *discordgo.InteractionCreate, resp *discord
 		}
 		return sendPrefixReply(s, i, content, embeds)
 	}
-	return s.InteractionRespond(i.Interaction, resp)
+	return InteractionRespond(s, i.Interaction, resp)
 }
 
 // EditInteractionEmbed edits an interaction response with an embed.
@@ -115,7 +115,7 @@ func DeferSlashInteraction(s *discordgo.Session, i *discordgo.InteractionCreate,
 			Flags: discordgo.MessageFlagsEphemeral,
 		}
 	}
-	if err := s.InteractionRespond(i.Interaction, deferResponse); err != nil {
+	if err := InteractionRespond(s, i.Interaction, deferResponse); err != nil {
 		return err
 	}
 	MarkDeferredSlashInteraction(i)
@@ -1348,7 +1348,7 @@ func HandleHistoryPageClick(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	// Only the person who ran the command turns its pages.
 	if owner := historyOwner(i); owner != "" && owner != InteractionUserID(i) {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Flags:  discordgo.MessageFlagsEphemeral,
@@ -1366,7 +1366,7 @@ func HandleHistoryPageClick(s *discordgo.Session, i *discordgo.InteractionCreate
 		})
 		components = nil
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
 			Embeds:     []*discordgo.MessageEmbed{emb},

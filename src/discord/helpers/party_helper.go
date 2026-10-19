@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
@@ -73,14 +73,14 @@ func HandlePartyButton(s *discordgo.Session, i *discordgo.InteractionCreate, cus
 	clickerID := InteractionUserID(i)
 
 	if clickerID != targetID {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral, Embeds: []*discordgo.MessageEmbed{partyNotYourInvitationEmbed()}},
 		})
 		return true
 	}
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 
 	if action == "accept" {
 		party, err := Parties.Accept(i.GuildID, leaderID, targetID)

@@ -226,7 +226,7 @@ func autocompleteGameHost(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	if len(choices) > 25 {
 		choices = choices[:25]
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
 		Data: &discordgo.InteractionResponseData{Choices: choices},
 	})

@@ -40,3 +40,16 @@ var PaginationEvent = &types.Event{
 		}
 	},
 }
+
+func init() {
+	helpers.RegisterEvent(InteractionWatchdogEvent)
+}
+
+// InteractionWatchdogEvent defers any button, menu or modal that is still unanswered after 2.5 seconds.
+var InteractionWatchdogEvent = &types.Event{
+	Name:        "Interaction Watchdog",
+	System:      true,
+	Description: "Acknowledges a button, menu or form that is taking long to answer, so Discord does not report it as failed.",
+	Type:        "interaction_create",
+	Execute:     helpers.WatchInteraction,
+}

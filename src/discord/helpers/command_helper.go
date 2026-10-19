@@ -2573,6 +2573,8 @@ func handleRequirementSelectPick(s *discordgo.Session, i *discordgo.InteractionC
 	if !ok || len(remaining) == 0 {
 		return false
 	}
+	// Saving goes through several database calls; acknowledge now so Discord's 3-second window never runs out.
+	ackRequirementFix(s, i)
 
 	if !MemberIsAdministrator(s, i) {
 		updateRequirementFixMessage(s, i, AccessDeniedEmbed("Permission Denied", "Only administrators can configure this."), nil)
@@ -2633,6 +2635,7 @@ func handleOptionalPrompt(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	if !ok {
 		return false
 	}
+	ackRequirementFix(s, i)
 
 	if !MemberIsAdministrator(s, i) {
 		updateRequirementFixMessage(s, i, AccessDeniedEmbed("Permission Denied", "Only administrators can configure this."), nil)
@@ -2665,17 +2668,17 @@ func configurationCompleteEmbed(cmdName string) *discordgo.MessageEmbed {
 	})
 }
 
+// ackRequirementFix acknowledges a component click without changing the message (updateRequirementFixMessage edits it later).
+func ackRequirementFix(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+}
+
 func updateRequirementFixMessage(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed, components []discordgo.MessageComponent) {
 	if components == nil {
 		components = []discordgo.MessageComponent{}
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{emb},
-			Components: components,
-		},
-	})
+	embeds := []*discordgo.MessageEmbed{emb}
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
 }
 
 func encodeRequirementFixCustomID(phase, cmdName string, remaining []types.Requirement) string {

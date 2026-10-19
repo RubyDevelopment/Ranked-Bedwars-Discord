@@ -1192,7 +1192,7 @@ func truncate(text string, limit int) string {
 
 // UpdateV2 rewrites the message a component (or component-born modal) came from.
 func UpdateV2(s *discordgo.Session, i *discordgo.InteractionCreate, components ...discordgo.MessageComponent) error {
-	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsIsComponentsV2, Components: components},
 	})
@@ -1228,7 +1228,7 @@ func EditInteractionV2(s *discordgo.Session, i *discordgo.InteractionCreate, com
 
 // RespondEmbed answers a component or modal interaction with an embed only the clicker sees.
 func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
-	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Flags:  discordgo.MessageFlagsEphemeral,
@@ -1322,7 +1322,7 @@ func ModalTextInput(customID, label, value, placeholder string, paragraph, requi
 
 // RespondModal opens a modal in answer to a component click.
 func RespondModal(s *discordgo.Session, i *discordgo.InteractionCreate, customID, title string, rows ...discordgo.MessageComponent) error {
-	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{CustomID: customID, Title: title, Components: rows},
 	})
@@ -2241,7 +2241,7 @@ func HandleTicketComponent(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 // handleTicketOpen creates a ticket from a panel button.
 func handleTicketOpen(s *discordgo.Session, i *discordgo.InteractionCreate, panelID, categoryID string) {
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
 	})
@@ -2272,7 +2272,7 @@ func handleTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate, cla
 		return
 	}
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 
 	staffID := InteractionUserID(i)
 	if claim {
@@ -2311,7 +2311,7 @@ func handleTicketCloseAsk(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		_ = RespondEmbed(s, i, TicketPermissionDeniedEmbed("Only support staff can close this ticket."))
 		return
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Flags:      discordgo.MessageFlagsEphemeral,

@@ -685,7 +685,7 @@ func runPanelActions(s *discordgo.Session, i *discordgo.InteractionCreate, actio
 		return
 	}
 	if len(lines) == 0 {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 		return
 	}
 	_ = respondText(s, i, strings.Join(lines, "\n"))
@@ -731,7 +731,7 @@ func runPanelCommand(s *discordgo.Session, i *discordgo.InteractionCreate, name 
 
 // respondText answers the press privately with plain text and no pings.
 func respondText(s *discordgo.Session, i *discordgo.InteractionCreate, text string) error {
-	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Content: text, Flags: discordgo.MessageFlagsEphemeral, AllowedMentions: &discordgo.MessageAllowedMentions{}},
 	})

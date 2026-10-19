@@ -128,7 +128,7 @@ func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	// The code is right: turn the prompt message into the result (registering takes a few calls, so acknowledge first).
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate}); err != nil {
+	if err := helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate}); err != nil {
 		return
 	}
 	var embed *discordgo.MessageEmbed
@@ -144,7 +144,7 @@ func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func respondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed) {
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{emb}, Flags: discordgo.MessageFlagsEphemeral},
 	})
