@@ -250,7 +250,11 @@ func runPlanReminders(s *discordgo.Session, logger baseutility.AppLogger, now ti
 		switch {
 		case g.PlanActive(now) && g.Tier != nil && g.TierExpiresAt.Sub(now) <= planReminderWindow && g.TierExpiresAt.After(now):
 			kind = remindedEnding
-			text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D>. A Ko-fi membership renews on its own each month; if you cancelled it or a payment failed, renew here", g.Name, g.TierExpiresAt.Unix())
+			if g.PlanCancelRequestedAt != nil {
+				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D> because it was cancelled, so it will not renew. To keep the bot running, join the membership again here", g.Name, g.TierExpiresAt.Unix())
+			} else {
+				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D>. A Ko-fi membership renews on its own each month; if you cancelled it or a payment failed, renew here", g.Name, g.TierExpiresAt.Unix())
+			}
 		case !g.PlanActive(now) && now.Sub(*g.TierExpiresAt) <= planExpiredWindow:
 			kind = remindedEnded
 			text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ended on <t:%d:D>, so the bot is paused there. Your configuration is kept; renew here to switch it back on", g.Name, g.TierExpiresAt.Unix())
