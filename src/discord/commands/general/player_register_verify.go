@@ -22,7 +22,7 @@ import (
 // In a guild whose registration_verification.mode is "party_code", /player_register proves the user owns the
 // Minecraft account before linking it:
 //
-//	/player_register <ign> → the engine's bot invites <ign> to a party and says a 6-digit code in party chat
+//	/player_register <ign> → the engine's bot invites <ign> to a party and says a one-time code in party chat
 //	→ the user presses "Enter code" and submits it in a modal → the account is linked.
 //
 // The code and its limits live in helpers.RegistrationVerifier; the bot's side is the engine's verify.js.
@@ -52,7 +52,7 @@ var PlayerRegisterVerifyEvent = &types.Event{
 // ============================================================================
 
 // startPartyCodeRegistration sends the code to the player's party chat and offers the button to enter it.
-func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, userID, username string) error {
+func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, userID, username string, cfg *types.InGameCode) error {
 	if helpers.IsPrefixInteraction(i) {
 		return helpers.EditInteractionEmbed(s, i, registerUseSlashEmbed())
 	}
@@ -67,7 +67,7 @@ func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCr
 		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerRegisterEmbed())
 	}
 
-	code, err := helpers.RegistrationVerifier.Begin(i.GuildID, userID, username)
+	code, err := helpers.RegistrationVerifier.Begin(i.GuildID, userID, username, cfg)
 	var limited *helpers.RateLimitError
 	if errors.As(err, &limited) {
 		return helpers.EditInteractionEmbed(s, i, registerRateLimitedEmbed(limited.Wait))
@@ -85,7 +85,7 @@ func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCr
 		return helpers.EditInteractionEmbed(s, i, registerVerifyFailedEmbed(username, res.Status))
 	}
 
-	return helpers.EditInteractionComponents(s, i, registerCodePromptEmbed(username), []discordgo.MessageComponent{
+	return helpers.EditInteractionComponents(s, i, registerCodePromptEmbed(username, len(code), cfg), []discordgo.MessageComponent{
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 			discordgo.Button{Label: "Enter code", Style: discordgo.PrimaryButton, CustomID: helpers.RegVerifyOpenID},
 		}},
@@ -114,7 +114,7 @@ func openRegisterCodeModal(s *discordgo.Session, i *discordgo.InteractionCreate)
 		return
 	}
 	_ = helpers.RespondModal(s, i, helpers.RegVerifyModalID, "Verify your Minecraft account",
-		helpers.ModalTextInput(helpers.RegVerifyCodeField, "6-digit code from the party chat", "", "123456", false, true, 6))
+		helpers.ModalTextInput(helpers.RegVerifyCodeField, "Code from the party chat", "", "", false, true, 12))
 }
 
 func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -169,10 +169,14 @@ func registerContactingEmbed(username string) *discordgo.MessageEmbed {
 	})
 }
 
-func registerCodePromptEmbed(username string) *discordgo.MessageEmbed {
+func registerCodePromptEmbed(username string, length int, cfg *types.InGameCode) *discordgo.MessageEmbed {
+	minutes := 10
+	if cfg != nil && cfg.ExpiresMinutes >= 1 && cfg.ExpiresMinutes <= 60 {
+		minutes = cfg.ExpiresMinutes
+	}
 	return helpers.Preset("info", types.PresetOptions{
 		Title:       "Check Your Party Chat",
-		Description: fmt.Sprintf("A 6-digit code was sent to **%s** in the Minecraft party chat. Press **Enter code** and type it in to finish registering. The code expires in 10 minutes.", username),
+		Description: fmt.Sprintf("A %d-character code was sent to **%s** in the Minecraft party chat. Press **Enter code** and type it in to finish registering. The code expires in %d minute%s.", length, username, minutes, plural(minutes)),
 		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
 	})
 }
@@ -215,7 +219,7 @@ func registerCodeRejectedEmbed(result helpers.CodeResult, attemptsLeft int) *dis
 	case helpers.CodeInvalid:
 		return helpers.Preset("error", types.PresetOptions{
 			Title:       "Invalid Code",
-			Description: "The code is 6 digits long. Check the Minecraft party chat and try again.",
+			Description: "That is not the code format. Check the Minecraft party chat and try again.",
 		})
 	case helpers.CodeLocked:
 		return helpers.Preset("error", types.PresetOptions{

@@ -75,7 +75,7 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 
 	// Party-code mode: the user proves they own the account first; the code modal finishes the registration
 	if helpers.RequiresPartyCodeVerification(verification) {
-		return startPartyCodeRegistration(s, i, userID, username)
+		return startPartyCodeRegistration(s, i, userID, username, verification.InGame)
 	}
 
 	// Verify Minecraft account existence if required by guild setup

@@ -1126,99 +1126,146 @@ func verifyViaMojang(username string) (bool, error) {
 	}
 }
 
-// verifyViaCustomAPI checks username existence via a configured external API.
+// verifyViaCustomAPI looks the player up in the configured external API. The lookup succeeds only when the
+// response is HTTP 200 JSON and the configured response field equals the submitted username (case-insensitive),
+// matching the dashboard's test and /api/v1/verify/external. Legacy configs with only uuid_field_path accept
+// any non-empty value there.
 func verifyViaCustomAPI(username string, api *types.ExternalAPI) (bool, error) {
-	if api.EndpointURL == "" || api.APIKey == "" {
+	if api.EndpointURL == "" || api.QueryParam == "" || (api.ResponseFieldPath == "" && api.UUIDFieldPath == "") {
 		return false, fmt.Errorf("external API configuration is incomplete")
 	}
-
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-
-	// Build request with authentication
-	headers := make(map[string]string)
-	if api.AuthType == "bearer" {
-		headers["Authorization"] = "Bearer " + api.APIKey
-	} else {
-		headers[api.HeaderName] = api.APIKey
+	token := strings.TrimSpace(api.APIKey)
+	if api.AuthType != "none" && token == "" {
+		return false, fmt.Errorf("external API token is missing")
 	}
 
-	// Build URL with query parameter
-	url, err := url.Parse(api.EndpointURL)
+	endpoint, err := url.Parse(api.EndpointURL)
 	if err != nil {
 		return false, fmt.Errorf("invalid endpoint URL: %w", err)
 	}
+	if endpoint.Scheme != "https" || endpoint.User != nil {
+		return false, fmt.Errorf("external API URL must use HTTPS without embedded credentials")
+	}
 
-	query := url.Query()
-	query.Set(api.QueryParam, username)
-	url.RawQuery = query.Encode()
+	lookup := username
+	if api.QueryParamType == "uuid" {
+		if lookup, err = mojangUUID(username); err != nil {
+			return false, err
+		}
+		if lookup == "" {
+			return false, nil
+		}
+	}
 
-	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
+	query := endpoint.Query()
+	query.Set(api.QueryParam, lookup)
+	headers := http.Header{"Accept": {"application/json"}}
+	switch api.AuthType {
+	case "none":
+	case "bearer":
+		headers.Set("Authorization", "Bearer "+token)
+	case "header":
+		name := strings.TrimSpace(api.HeaderName)
+		if name == "" {
+			name = "API-Key"
+		}
+		headers.Set(name, token)
+	case "query":
+		name := strings.TrimSpace(api.TokenQueryParam)
+		if name == "" {
+			name = "api_key"
+		}
+		query.Set(name, token)
+	default:
+		return false, fmt.Errorf("unsupported external API auth type %q", api.AuthType)
+	}
+	endpoint.RawQuery = query.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return false, err
 	}
+	req.Header = headers
 
-	// Set headers
-	for key, value := range headers {
-		req.Header.Set(key, value)
+	httpClient := &http.Client{
+		Timeout:       10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return false, err
 	}
 	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return false, err
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("external API returned status %d: %s", resp.StatusCode, string(body))
+		return false, fmt.Errorf("external API returned status %d", resp.StatusCode)
 	}
 
-	// Parse JSON response
-	var data map[string]interface{}
+	var data interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
 		return false, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
-	// Extract UUID using the configured field path
-	uuid, err := extractNestedValue(data, api.UUIDFieldPath)
-	if err != nil {
-		return false, fmt.Errorf("could not extract UUID from response: %w", err)
+	if api.ResponseFieldPath != "" {
+		value, ok := extractNestedValue(data, api.ResponseFieldPath).(string)
+		return ok && strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(username)), nil
 	}
-
-	return uuid != "", nil
+	value := extractNestedValue(data, api.UUIDFieldPath)
+	return value != nil && fmt.Sprint(value) != "", nil
 }
 
-// extractNestedValue extracts a value from a nested map using a dot-notation path.
-func extractNestedValue(data map[string]interface{}, path string) (string, error) {
-	keys := strings.Split(path, ".")
-	var current interface{} = data
+// mojangUUID resolves a Minecraft username to its UUID ("" when the account does not exist).
+func mojangUUID(username string) (string, error) {
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := httpClient.Get("https://api.mojang.com/users/profiles/minecraft/" + url.PathEscape(username))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var profile struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&profile); err != nil {
+			return "", err
+		}
+		return profile.ID, nil
+	case http.StatusNotFound:
+		return "", nil
+	default:
+		return "", fmt.Errorf("minecraft profile lookup failed with status %d", resp.StatusCode)
+	}
+}
 
-	for _, key := range keys {
-		if m, ok := current.(map[string]interface{}); ok {
-			if val, exists := m[key]; exists {
-				current = val
-			} else {
-				return "", fmt.Errorf("key '%s' not found in path", key)
+// extractNestedValue follows a dot path through objects and arrays (numeric segments index arrays); nil if absent.
+func extractNestedValue(data interface{}, path string) interface{} {
+	current := data
+	for _, key := range strings.Split(path, ".") {
+		if key == "" {
+			continue
+		}
+		switch node := current.(type) {
+		case map[string]interface{}:
+			next, ok := node[key]
+			if !ok {
+				return nil
 			}
-		} else {
-			return "", fmt.Errorf("expected map at key '%s', got %T", key, current)
+			current = next
+		case []interface{}:
+			index, err := strconv.Atoi(key)
+			if err != nil || index < 0 || index >= len(node) {
+				return nil
+			}
+			current = node[index]
+		default:
+			return nil
 		}
 	}
-
-	if current == nil {
-		return "", nil
-	}
-
-	if str, ok := current.(string); ok {
-		return str, nil
-	}
-
-	return fmt.Sprintf("%v", current), nil
+	return current
 }
 
 // RegistrationNetworkLabel returns user-facing copy for the configured verification mode.
@@ -1340,6 +1387,28 @@ const (
 	regVerifyNameWait    = 2 * time.Minute  // the same Minecraft name is never invited more often than this
 )
 
+// regVerifyAlphanumeric leaves out look-alikes (0/O, 1/I) so a code read from party chat is hard to mistype.
+const regVerifyAlphanumeric = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+// regVerifyCodeSettings resolves the in-game code settings (4-12 characters, 1-60 minutes) to the alphabet,
+// length and lifetime to use; nil falls back to a six-digit, ten-minute code.
+func regVerifyCodeSettings(cfg *types.InGameCode) (length int, alphabet string, ttl time.Duration) {
+	length, alphabet, ttl = 6, "0123456789", regVerifyTTL
+	if cfg == nil {
+		return
+	}
+	if cfg.CodeLength >= 4 && cfg.CodeLength <= 12 {
+		length = cfg.CodeLength
+	}
+	if cfg.CodeFormat == "alphanumeric" {
+		alphabet = regVerifyAlphanumeric
+	}
+	if cfg.ExpiresMinutes >= 1 && cfg.ExpiresMinutes <= 60 {
+		ttl = time.Duration(cfg.ExpiresMinutes) * time.Minute
+	}
+	return
+}
+
 // RequiresPartyCodeVerification reports whether /register has to prove ownership with a party code.
 func RequiresPartyCodeVerification(cfg *types.RegistrationVerification) bool {
 	return cfg != nil && cfg.Mode == RegistrationModePartyCode
@@ -1392,7 +1461,7 @@ func regKey(guildID, userID string) string { return guildID + "|" + userID }
 // Begin counts a request and, if it is allowed, makes a fresh six-digit code for the user and name
 // (replacing any earlier one). The limits keep /register from being used to spam someone else's account
 // with party invites: a few requests per user, and one per Minecraft name every couple of minutes.
-func (v *RegistrationVerifierStore) Begin(guildID, userID, username string) (string, error) {
+func (v *RegistrationVerifierStore) Begin(guildID, userID, username string, cfg *types.InGameCode) (string, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	now := v.now()
@@ -1407,16 +1476,20 @@ func (v *RegistrationVerifierStore) Begin(guildID, userID, username string) (str
 		return "", &RateLimitError{Wait: regVerifyUserWindow - now.Sub(hits[0])}
 	}
 
-	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
-	if err != nil {
-		return "", err
+	length, alphabet, ttl := regVerifyCodeSettings(cfg)
+	code := make([]byte, length)
+	for i := range code {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
+		if err != nil {
+			return "", err
+		}
+		code[i] = alphabet[n.Int64()]
 	}
-	code := fmt.Sprintf("%06d", n.Int64())
 
 	v.nameLast[nameKey] = now
 	v.userHits[regKey(guildID, userID)] = append(hits, now)
-	v.pending[regKey(guildID, userID)] = &pendingRegistration{username: username, code: code, expires: now.Add(regVerifyTTL)}
-	return code, nil
+	v.pending[regKey(guildID, userID)] = &pendingRegistration{username: username, code: string(code), expires: now.Add(ttl)}
+	return string(code), nil
 }
 
 // Discard forgets the user's pending code (the code never reached them).
@@ -1445,8 +1518,8 @@ func (v *RegistrationVerifierStore) Check(guildID, userID, input string) (userna
 		delete(v.pending, key)
 		return "", CodeNone, 0
 	}
-	input = strings.TrimSpace(input)
-	if len(input) != 6 || strings.Trim(input, "0123456789") != "" {
+	input = strings.ToUpper(strings.TrimSpace(input))
+	if len(input) != len(p.code) || strings.Trim(input, regVerifyAlphanumeric+"01") != "" {
 		return "", CodeInvalid, regVerifyMaxAttempts - p.attempts
 	}
 	if subtle.ConstantTimeCompare([]byte(input), []byte(p.code)) == 1 {

@@ -126,17 +126,27 @@ type RegistrationVerification struct {
 	NetworkPresetID  string       `json:"network_preset_id"`
 	CustomProfileURL string       `json:"custom_profile_url,omitempty"`
 	ExternalAPI      *ExternalAPI `json:"external_api,omitempty"`
+	InGame           *InGameCode  `json:"in_game,omitempty"`
+}
+
+// InGameCode configures the party_code verification mode's one-time code.
+type InGameCode struct {
+	CodeLength     int    `json:"code_length"`     // 4-12
+	CodeFormat     string `json:"code_format"`     // numeric or alphanumeric
+	ExpiresMinutes int    `json:"expires_minutes"` // 1-60
 }
 
 // ExternalAPI configuration for custom_api verification mode.
 type ExternalAPI struct {
-	EndpointURL    string `json:"endpoint_url"`     // Base API endpoint URL
-	APIKey         string `json:"api_key"`          // API key or token
-	AuthType       string `json:"auth_type"`        // bearer or custom_header
-	HeaderName     string `json:"header_name"`      // Custom header name if auth_type is custom_header
-	UUIDFieldPath  string `json:"uuid_field_path"`  // JSON field path to extract UUID (e.g., "player.uuid")
-	QueryParam     string `json:"query_param"`      // Parameter name for username/UUID in request
-	QueryParamType string `json:"query_param_type"` // uuid or username
+	EndpointURL       string `json:"endpoint_url"`        // https endpoint
+	APIKey            string `json:"api_key"`             // API token (unused when auth_type is none)
+	AuthType          string `json:"auth_type"`           // none, bearer, header or query
+	HeaderName        string `json:"header_name"`         // header carrying the token when auth_type is header
+	TokenQueryParam   string `json:"token_query_param"`   // query parameter carrying the token when auth_type is query
+	ResponseFieldPath string `json:"response_field_path"` // JSON field that must equal the submitted username
+	UUIDFieldPath     string `json:"uuid_field_path"`     // legacy: any non-empty value at this path counts as found
+	QueryParam        string `json:"query_param"`         // parameter name for the username/UUID lookup
+	QueryParamType    string `json:"query_param_type"`    // uuid or username
 }
 
 // DiscordChannel is one entry of the guild state's "channels" map.
