@@ -219,17 +219,94 @@ func guildMemberAssetURL(guildID, userID, hash, asset string, size int) string {
 	return fmt.Sprintf("https://cdn.discordapp.com/guilds/%s/users/%s/%s/%s.%s?size=%d", guildID, userID, asset, hash, extension, size)
 }
 
-// fetchLiveBotMember reads the bot's own nickname and bio in a guild, so the dashboard can show what is
-// actually set on the bot instead of an empty form the first time it is opened.
-func fetchLiveBotMember(guildID string) (liveBotMember, error) {
+// fetchLiveBotMember reads the bot's own member record in a guild (nickname, server avatar and banner).
+func fetchLiveBotMember(guildID, botUserID string) (liveBotMember, error) {
 	var member liveBotMember
 	api, err := discordRestAPI()
 	if err != nil {
 		return member, err
 	}
-	endpoint := fmt.Sprintf("%s/guilds/%s/members/@me", api.baseURL, guildID)
+	// Bots address themselves by id: "@me" only works for PATCH, not for reading.
+	endpoint := fmt.Sprintf("%s/guilds/%s/members/%s", api.baseURL, guildID, botUserID)
 	err = api.makeRequest("GET", endpoint, nil, &member)
 	return member, err
+}
+
+// botLiveProfile is what Discord currently shows for the bot in one guild.
+type botLiveProfile struct {
+	nickname, bio, avatarURL, bannerURL string
+}
+
+var (
+	liveProfileMu      sync.Mutex
+	liveProfileChecked = map[string]cachedLiveProfile{} // guild -> last lookup, so a sync does not ask Discord every time
+	liveProfileLogged  = map[string]bool{}      // guild+problem -> already reported
+)
+
+type cachedLiveProfile struct {
+	at      time.Time
+	profile botLiveProfile
+	ok      bool
+}
+
+const liveProfileRecheck = 6 * time.Hour
+
+func logLiveProfileOnce(guildID, problem string, err error) {
+	liveProfileMu.Lock()
+	defer liveProfileMu.Unlock()
+	key := guildID + "|" + problem
+	if liveProfileLogged[key] {
+		return
+	}
+	liveProfileLogged[key] = true
+	log.Printf("guild %s: %s: %v (not repeated for this guild)", guildID, problem, err)
+}
+
+// readBotLiveProfile looks up the bot's nickname, bio, server avatar and server banner. It returns ok=false when it
+// cannot look; a failed lookup only means the dashboard keeps its saved values. The answer is reused for a few hours.
+func readBotLiveProfile(s *discordgo.Session, guildID string) (profile botLiveProfile, ok bool) {
+	if s.State == nil || s.State.User == nil {
+		return profile, false
+	}
+	liveProfileMu.Lock()
+	if last, seen := liveProfileChecked[guildID]; seen && time.Since(last.at) < liveProfileRecheck {
+		liveProfileMu.Unlock()
+		return last.profile, last.ok
+	}
+	liveProfileMu.Unlock()
+	defer func() {
+		liveProfileMu.Lock()
+		liveProfileChecked[guildID] = cachedLiveProfile{at: time.Now(), profile: profile, ok: ok}
+		liveProfileMu.Unlock()
+	}()
+
+	botUserID := s.State.User.ID
+	member, err := fetchLiveBotMember(guildID, botUserID)
+	if err != nil {
+		logLiveProfileOnce(guildID, "reading the bot's server profile over REST failed", err)
+		// Without the REST token the gateway still knows the nickname, avatar and banner (not the bio).
+		gatewayMember, gatewayErr := s.GuildMember(guildID, botUserID)
+		if gatewayErr != nil || gatewayMember == nil {
+			if gatewayErr != nil {
+				logLiveProfileOnce(guildID, "reading the bot's member record failed", gatewayErr)
+			}
+			return profile, false
+		}
+		member = liveBotMember{Nick: &gatewayMember.Nick, Avatar: &gatewayMember.Avatar, Banner: &gatewayMember.Banner}
+	}
+	profile.nickname = strings.TrimSpace(derefString(member.Nick))
+	profile.bio = strings.TrimSpace(derefString(member.Bio))
+	if profile.bio == "" {
+		// No server-specific bio: Discord shows the bot's application description instead.
+		if description, err := fetchBotApplicationDescription(); err == nil {
+			profile.bio = description
+		} else {
+			logLiveProfileOnce(guildID, "reading the bot's application description failed", err)
+		}
+	}
+	profile.avatarURL = guildMemberAssetURL(guildID, botUserID, derefString(member.Avatar), "avatars", 128)
+	profile.bannerURL = guildMemberAssetURL(guildID, botUserID, derefString(member.Banner), "banners", 1024)
+	return profile, true
 }
 
 func derefString(value *string) string {
@@ -266,36 +343,6 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 		ServerBannerURL: discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
 		MemberCount:     memberCount,
 	}
-	// Best effort: a failed lookup only means the dashboard keeps showing its saved values.
-	liveBot, liveBotErr := fetchLiveBotMember(guild.ID)
-	if liveBotErr != nil {
-		log.Printf("guild %s: reading the bot's server profile over REST failed: %v", guild.ID, liveBotErr)
-		// Without the REST token the gateway still knows the bot's nickname, avatar and banner (not its bio).
-		if s.State != nil && s.State.User != nil {
-			if member, err := s.GuildMember(guild.ID, s.State.User.ID); err == nil && member != nil {
-				liveBot = liveBotMember{Nick: &member.Nick, Avatar: &member.Avatar, Banner: &member.Banner}
-				liveBotErr = nil
-			} else if err != nil {
-				log.Printf("guild %s: reading the bot's member record failed: %v", guild.ID, err)
-			}
-		}
-	}
-	liveNickname := strings.TrimSpace(derefString(liveBot.Nick))
-	liveBio := strings.TrimSpace(derefString(liveBot.Bio))
-	if liveBotErr == nil && liveBio == "" {
-		// No server-specific bio: Discord shows the bot's application description instead.
-		if description, err := fetchBotApplicationDescription(); err == nil {
-			liveBio = description
-		} else {
-			log.Printf("guild %s: reading the bot's application description failed: %v", guild.ID, err)
-		}
-	}
-	botUserID := ""
-	if s.State != nil && s.State.User != nil {
-		botUserID = s.State.User.ID
-	}
-	liveAvatarURL := guildMemberAssetURL(guild.ID, botUserID, derefString(liveBot.Avatar), "avatars", 128)
-	liveBannerURL := guildMemberAssetURL(guild.ID, botUserID, derefString(liveBot.Banner), "banners", 1024)
 	migratedLegacy := false
 	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
 		var profile types.DiscordGuildProfile
@@ -323,28 +370,34 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 		// Nothing was ever configured for the bot's name or about text: adopt what Discord already shows, and record
 		// it as applied so it is not sent back.
 		seeded := false
-		if liveBotErr == nil {
-			if profile.Nickname == "" && profile.AppliedAppearance.Nickname == "" && liveNickname != "" {
-				profile.Nickname = liveNickname
-				profile.AppliedAppearance.Nickname = liveNickname
-				seeded = true
-			}
-			if profile.Bio == "" && profile.AppliedAppearance.Bio == "" && liveBio != "" {
-				profile.Bio = liveBio
-				profile.AppliedAppearance.Bio = liveBio
-				seeded = true
-			}
-			if liveAvatarURL != "" && profile.AppliedAppearance.Avatar == "" && profile.BotIconURL == "" {
-				profile.BotIconMode = "custom"
-				profile.BotIconURL = liveAvatarURL
-				profile.AppliedAppearance.Avatar = liveAvatarURL
-				seeded = true
-			}
-			if liveBannerURL != "" && profile.AppliedAppearance.Banner == "" && profile.BotBannerURL == "" {
-				profile.BotBannerMode = "custom"
-				profile.BotBannerURL = liveBannerURL
-				profile.AppliedAppearance.Banner = liveBannerURL
-				seeded = true
+		needsNickname := profile.Nickname == "" && profile.AppliedAppearance.Nickname == ""
+		needsBio := profile.Bio == "" && profile.AppliedAppearance.Bio == ""
+		needsAvatar := profile.AppliedAppearance.Avatar == "" && profile.BotIconURL == ""
+		needsBanner := profile.AppliedAppearance.Banner == "" && profile.BotBannerURL == ""
+		if needsNickname || needsBio || needsAvatar || needsBanner {
+			if live, ok := readBotLiveProfile(s, guild.ID); ok {
+				if needsNickname && live.nickname != "" {
+					profile.Nickname = live.nickname
+					profile.AppliedAppearance.Nickname = live.nickname
+					seeded = true
+				}
+				if needsBio && live.bio != "" {
+					profile.Bio = live.bio
+					profile.AppliedAppearance.Bio = live.bio
+					seeded = true
+				}
+				if needsAvatar && live.avatarURL != "" {
+					profile.BotIconMode = "custom"
+					profile.BotIconURL = live.avatarURL
+					profile.AppliedAppearance.Avatar = live.avatarURL
+					seeded = true
+				}
+				if needsBanner && live.bannerURL != "" {
+					profile.BotBannerMode = "custom"
+					profile.BotBannerURL = live.bannerURL
+					profile.AppliedAppearance.Banner = live.bannerURL
+					seeded = true
+				}
 			}
 		}
 		changed := legacyChanged || seeded ||
