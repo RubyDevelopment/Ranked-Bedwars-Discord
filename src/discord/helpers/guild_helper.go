@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"slices"
 	"strings"
@@ -267,12 +268,26 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 	}
 	// Best effort: a failed lookup only means the dashboard keeps showing its saved values.
 	liveBot, liveBotErr := fetchLiveBotMember(guild.ID)
+	if liveBotErr != nil {
+		log.Printf("guild %s: reading the bot's server profile over REST failed: %v", guild.ID, liveBotErr)
+		// Without the REST token the gateway still knows the bot's nickname, avatar and banner (not its bio).
+		if s.State != nil && s.State.User != nil {
+			if member, err := s.GuildMember(guild.ID, s.State.User.ID); err == nil && member != nil {
+				liveBot = liveBotMember{Nick: &member.Nick, Avatar: &member.Avatar, Banner: &member.Banner}
+				liveBotErr = nil
+			} else if err != nil {
+				log.Printf("guild %s: reading the bot's member record failed: %v", guild.ID, err)
+			}
+		}
+	}
 	liveNickname := strings.TrimSpace(derefString(liveBot.Nick))
 	liveBio := strings.TrimSpace(derefString(liveBot.Bio))
 	if liveBotErr == nil && liveBio == "" {
 		// No server-specific bio: Discord shows the bot's application description instead.
 		if description, err := fetchBotApplicationDescription(); err == nil {
 			liveBio = description
+		} else {
+			log.Printf("guild %s: reading the bot's application description failed: %v", guild.ID, err)
 		}
 	}
 	botUserID := ""
@@ -323,11 +338,6 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 				profile.BotIconMode = "custom"
 				profile.BotIconURL = liveAvatarURL
 				profile.AppliedAppearance.Avatar = liveAvatarURL
-				seeded = true
-			}
-			liveAppearance := types.SyncedBotAppearance{Nickname: liveNickname, Bio: liveBio, Avatar: liveAvatarURL, Banner: liveBannerURL}
-			if profile.LiveAppearance != liveAppearance {
-				profile.LiveAppearance = liveAppearance
 				seeded = true
 			}
 			if liveBannerURL != "" && profile.AppliedAppearance.Banner == "" && profile.BotBannerURL == "" {

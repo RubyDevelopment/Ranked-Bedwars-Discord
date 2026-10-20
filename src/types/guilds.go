@@ -28,7 +28,6 @@ type DiscordGuildProfile struct {
 	BotBannerURL      string              `json:"bot_banner_url"`
 	Bio               string              `json:"bio"`
 	AppliedAppearance SyncedBotAppearance `json:"applied_appearance,omitempty"`
-	LiveAppearance    SyncedBotAppearance `json:"live_appearance,omitempty"`
 	BlockedAvatarURL  string              `json:"blocked_avatar_url,omitempty"`
 	BlockedBannerURL  string              `json:"blocked_banner_url,omitempty"`
 	IconURL           string              `json:"icon_url,omitempty"`
