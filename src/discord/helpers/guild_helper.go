@@ -182,6 +182,32 @@ func discordGuildAssetURL(guildID, hash, asset string, size int) string {
 	return fmt.Sprintf("https://cdn.discordapp.com/%s/%s/%s.%s?size=%d", asset, guildID, hash, extension, size)
 }
 
+// liveBotMember is what Discord currently shows for the bot itself in a guild.
+type liveBotMember struct {
+	Nick *string `json:"nick"`
+	Bio  *string `json:"bio"`
+}
+
+// fetchLiveBotMember reads the bot's own nickname and bio in a guild, so the dashboard can show what is
+// actually set on the bot instead of an empty form the first time it is opened.
+func fetchLiveBotMember(guildID string) (liveBotMember, error) {
+	var member liveBotMember
+	api, err := discordRestAPI()
+	if err != nil {
+		return member, err
+	}
+	endpoint := fmt.Sprintf("%s/guilds/%s/members/@me", api.baseURL, guildID)
+	err = api.makeRequest("GET", endpoint, nil, &member)
+	return member, err
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
 // syncGuildDiscordProfile stores the server's live branding independently from
 // bot-specific overrides. Legacy asset fields are migrated without losing custom URLs.
 func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error {
@@ -209,6 +235,10 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 		ServerBannerURL: discordGuildAssetURL(guild.ID, guild.Banner, "banners", 1024),
 		MemberCount:     memberCount,
 	}
+	// Best effort: a failed lookup only means the dashboard keeps showing its saved values.
+	liveBot, liveBotErr := fetchLiveBotMember(guild.ID)
+	liveNickname := strings.TrimSpace(derefString(liveBot.Nick))
+	liveBio := strings.TrimSpace(derefString(liveBot.Bio))
 	migratedLegacy := false
 	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
 		var profile types.DiscordGuildProfile
@@ -233,7 +263,22 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 		if nextProfile.MemberCount <= 0 {
 			nextProfile.MemberCount = profile.MemberCount
 		}
-		changed := legacyChanged ||
+		// Nothing was ever configured for the bot's name or about text: adopt what Discord already shows, and record
+		// it as applied so it is not sent back.
+		seeded := false
+		if liveBotErr == nil {
+			if profile.Nickname == "" && profile.AppliedAppearance.Nickname == "" && liveNickname != "" {
+				profile.Nickname = liveNickname
+				profile.AppliedAppearance.Nickname = liveNickname
+				seeded = true
+			}
+			if profile.Bio == "" && profile.AppliedAppearance.Bio == "" && liveBio != "" {
+				profile.Bio = liveBio
+				profile.AppliedAppearance.Bio = liveBio
+				seeded = true
+			}
+		}
+		changed := legacyChanged || seeded ||
 			profileMigration ||
 			profile.ServerIconURL != nextProfile.ServerIconURL ||
 			profile.ServerBannerURL != nextProfile.ServerBannerURL ||
