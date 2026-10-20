@@ -325,6 +325,11 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 				profile.AppliedAppearance.Avatar = liveAvatarURL
 				seeded = true
 			}
+			liveAppearance := types.SyncedBotAppearance{Nickname: liveNickname, Bio: liveBio, Avatar: liveAvatarURL, Banner: liveBannerURL}
+			if profile.LiveAppearance != liveAppearance {
+				profile.LiveAppearance = liveAppearance
+				seeded = true
+			}
 			if liveBannerURL != "" && profile.AppliedAppearance.Banner == "" && profile.BotBannerURL == "" {
 				profile.BotBannerMode = "custom"
 				profile.BotBannerURL = liveBannerURL
