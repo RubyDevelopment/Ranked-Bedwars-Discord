@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
@@ -184,8 +184,38 @@ func discordGuildAssetURL(guildID, hash, asset string, size int) string {
 
 // liveBotMember is what Discord currently shows for the bot itself in a guild.
 type liveBotMember struct {
-	Nick *string `json:"nick"`
-	Bio  *string `json:"bio"`
+	Nick   *string `json:"nick"`
+	Bio    *string `json:"bio"`
+	Avatar *string `json:"avatar"`
+	Banner *string `json:"banner"`
+}
+
+// fetchBotApplicationDescription reads the bot's application description, which Discord shows as the bot's
+// "About me" in every server where it has no server-specific bio.
+func fetchBotApplicationDescription() (string, error) {
+	api, err := discordRestAPI()
+	if err != nil {
+		return "", err
+	}
+	var application struct {
+		Description string `json:"description"`
+	}
+	if err := api.makeRequest("GET", api.baseURL+"/applications/@me", nil, &application); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(application.Description), nil
+}
+
+// guildMemberAssetURL is the CDN address of a server-specific avatar or banner of a member.
+func guildMemberAssetURL(guildID, userID, hash, asset string, size int) string {
+	if hash == "" || userID == "" {
+		return ""
+	}
+	extension := "png"
+	if strings.HasPrefix(hash, "a_") {
+		extension = "gif"
+	}
+	return fmt.Sprintf("https://cdn.discordapp.com/guilds/%s/users/%s/%s/%s.%s?size=%d", guildID, userID, asset, hash, extension, size)
 }
 
 // fetchLiveBotMember reads the bot's own nickname and bio in a guild, so the dashboard can show what is
@@ -239,6 +269,18 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 	liveBot, liveBotErr := fetchLiveBotMember(guild.ID)
 	liveNickname := strings.TrimSpace(derefString(liveBot.Nick))
 	liveBio := strings.TrimSpace(derefString(liveBot.Bio))
+	if liveBotErr == nil && liveBio == "" {
+		// No server-specific bio: Discord shows the bot's application description instead.
+		if description, err := fetchBotApplicationDescription(); err == nil {
+			liveBio = description
+		}
+	}
+	botUserID := ""
+	if s.State != nil && s.State.User != nil {
+		botUserID = s.State.User.ID
+	}
+	liveAvatarURL := guildMemberAssetURL(guild.ID, botUserID, derefString(liveBot.Avatar), "avatars", 128)
+	liveBannerURL := guildMemberAssetURL(guild.ID, botUserID, derefString(liveBot.Banner), "banners", 1024)
 	migratedLegacy := false
 	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guild.ID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
 		var profile types.DiscordGuildProfile
@@ -275,6 +317,18 @@ func syncGuildDiscordProfile(s *discordgo.Session, guild *discordgo.Guild) error
 			if profile.Bio == "" && profile.AppliedAppearance.Bio == "" && liveBio != "" {
 				profile.Bio = liveBio
 				profile.AppliedAppearance.Bio = liveBio
+				seeded = true
+			}
+			if liveAvatarURL != "" && profile.AppliedAppearance.Avatar == "" && profile.BotIconURL == "" {
+				profile.BotIconMode = "custom"
+				profile.BotIconURL = liveAvatarURL
+				profile.AppliedAppearance.Avatar = liveAvatarURL
+				seeded = true
+			}
+			if liveBannerURL != "" && profile.AppliedAppearance.Banner == "" && profile.BotBannerURL == "" {
+				profile.BotBannerMode = "custom"
+				profile.BotBannerURL = liveBannerURL
+				profile.AppliedAppearance.Banner = liveBannerURL
 				seeded = true
 			}
 		}
