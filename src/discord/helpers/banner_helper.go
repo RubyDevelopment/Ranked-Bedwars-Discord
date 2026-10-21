@@ -47,8 +47,8 @@ import (
 	"golang.org/x/image/font/gofont/gosmallcapsitalic"
 	_ "golang.org/x/image/webp"
 
+	"ranked-bedwars/src/config"
 	"ranked-bedwars/src/database"
-	"ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/types"
 )
 

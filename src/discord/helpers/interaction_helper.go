@@ -16,6 +16,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
+	apputil "ranked-bedwars/src/utility"
 )
 
 // ============================================================================
@@ -58,7 +59,7 @@ func EditInteractionEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	if sent, err := sendCustomResponse(s, i, emb); sent {
 		return nil
 	} else if err != nil {
-		logger.Warn(fmt.Sprintf("custom response for %q in %s failed, using the built-in embed: %v", emb.Title, i.GuildID, err))
+		apputil.DiscordLogger.Warn(fmt.Sprintf("custom response for %q in %s failed, using the built-in embed: %v", emb.Title, i.GuildID, err))
 	}
 	if IsPrefixInteraction(i) {
 		return sendPrefixReply(s, i, "", []*discordgo.MessageEmbed{emb})

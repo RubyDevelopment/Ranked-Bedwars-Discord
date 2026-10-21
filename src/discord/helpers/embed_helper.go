@@ -386,10 +386,10 @@ func addOriginalParts(vars map[string]string, key string, emb *discordgo.Message
 		return
 	}
 	for i, v := range extractParts(entry.Title, emb.Title) {
-		vars["response.title_"+itoa(i+1)] = v
+		vars["response.title_"+strconv.Itoa(i+1)] = v
 	}
 	for i, v := range extractParts(entry.Description, emb.Description) {
-		vars["response.value_"+itoa(i+1)] = v
+		vars["response.value_"+strconv.Itoa(i+1)] = v
 	}
 }
 

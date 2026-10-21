@@ -240,7 +240,7 @@ type botLiveProfile struct {
 var (
 	liveProfileMu      sync.Mutex
 	liveProfileChecked = map[string]cachedLiveProfile{} // guild -> last lookup, so a sync does not ask Discord every time
-	liveProfileLogged  = map[string]bool{}      // guild+problem -> already reported
+	liveProfileLogged  = map[string]bool{}              // guild+problem -> already reported
 )
 
 type cachedLiveProfile struct {

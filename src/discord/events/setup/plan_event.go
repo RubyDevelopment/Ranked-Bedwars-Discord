@@ -1,4 +1,4 @@
-package events
+package setup
 
 import (
 	"ranked-bedwars/src/discord/helpers"

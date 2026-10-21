@@ -1,4 +1,4 @@
-package events
+package punishments
 
 import (
 	"github.com/bwmarrin/discordgo"
