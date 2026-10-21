@@ -169,6 +169,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	}); err != nil {
 		return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(spec.Action))
 	}
+	TrackPunishmentExpiry(i.GuildID, expiresAt)
 
 	// 8. Apply Discord Action
 	applied := false
@@ -417,32 +418,45 @@ var restrictionRoles = map[string]restrictionRole{
 	"restrict": {"server_vc_mute", "vc_muted_role"},
 }
 
-// StartPunishmentExpiry starts the sweep that ends timed punishments in every guild the session is in; the ready event calls it.
+// punishmentWatch sweeps only guilds that have a timed punishment outstanding. TrackPunishmentExpiry adds a guild when
+// one is created; a sweep drops it once none is left.
+var punishmentWatch = newGuildWatch("PunishmentExpiry", punishmentSweepEvery, func(guildID string) bool {
+	s := punishmentSession.Load()
+	if s == nil {
+		return true
+	}
+	expireGuildPunishments(s, guildID)
+	return guildHasTimedPunishments(guildID)
+})
+
+// guildHasTimedPunishments reports whether a punishment of the guild is still waiting to expire (or to be revoked).
+// An error counts as yes, so a database hiccup never drops a guild.
+func guildHasTimedPunishments(guildID string) bool {
+	if upcoming, err := database.Must().Punishments.HasUpcoming(guildID); err != nil || upcoming {
+		return true
+	}
+	left, err := database.Must().Punishments.Expired(guildID, sdk.Page{Limit: 1})
+	return err != nil || len(left.Data) > 0
+}
+
+// TrackPunishmentExpiry starts the expiry sweep for the guild when a just-created punishment carries an expiry.
+func TrackPunishmentExpiry(guildID, expiresAt string) {
+	if expiresAt != "" {
+		punishmentWatch.Track(guildID)
+	}
+}
+
+// StartPunishmentExpiry tracks every guild the session is in that already holds a timed punishment; the ready event
+// calls it. Guilds with none are not swept until one is created.
 func StartPunishmentExpiry(s *discordgo.Session) {
 	punishmentSession.Store(s)
 	punishmentOnce.Do(func() {
-		go func() {
-			for range time.Tick(punishmentSweepEvery) {
-				sweepExpiredPunishments(punishmentSession.Load())
-			}
-		}()
+		ids := make([]string, 0, len(s.State.Guilds))
+		for _, g := range s.State.Guilds {
+			ids = append(ids, g.ID)
+		}
+		go punishmentWatch.Seed(ids, guildHasTimedPunishments)
 	})
-}
-
-func sweepExpiredPunishments(s *discordgo.Session) {
-	if s == nil {
-		return
-	}
-	for _, g := range s.State.Guilds {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					punishmentLogger.Error(fmt.Sprintf("expiry sweep panic in %s: %v", g.ID, r))
-				}
-			}()
-			expireGuildPunishments(s, g.ID)
-		}()
-	}
 }
 
 // expireGuildPunishments revokes every expired punishment of the guild and undoes it on Discord. A revoked one

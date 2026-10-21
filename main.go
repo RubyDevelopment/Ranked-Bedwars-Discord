@@ -10,7 +10,6 @@ import (
 	"github.com/joho/godotenv"
 
 	"ranked-bedwars/src/database"
-	"ranked-bedwars/src/dev"
 	"ranked-bedwars/src/discord"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/utility"
@@ -61,18 +60,6 @@ func (app *Application) Start() error {
 	if err := app.Database.Start(); err != nil {
 		app.Logger.Error("Failed to start Database manager.")
 		return fmt.Errorf("failed to start database manager: %w", err)
-	}
-
-	// Development mode: fill the database with a mock guild and players so nothing has to be set up by hand.
-	if dev.Enabled() {
-		guildID := os.Getenv("DEV_GUILD_ID")
-		if guildID == "" {
-			return fmt.Errorf("DEV_MODE needs DEV_GUILD_ID (the Discord server to test in)")
-		}
-		if err := dev.Seed(guildID, os.Getenv("DEV_USER_ID")); err != nil {
-			return fmt.Errorf("failed to seed mock data: %w", err)
-		}
-		app.Logger.Info("DEV_MODE: seeded mock data for guild " + guildID)
 	}
 
 	// Initialize Discord Manager

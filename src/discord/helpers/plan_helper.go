@@ -195,7 +195,7 @@ func GuildHasFeature(guildID, feature string) bool {
 	return guild.HasFeature(feature, time.Now())
 }
 
-// devMode mirrors dev.Enabled (package dev imports helpers, so it cannot be called from here).
+// devMode is true when DEV_MODE is set: local testing without plan checks.
 func devMode() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("DEV_MODE")))
 	return v == "1" || v == "true" || v == "yes"

@@ -41,21 +41,23 @@ func init() {
 	Elo.SetHooks(deliverDecayNotice, syncRankRoles)
 }
 
-// StartDecaySweeper starts the hourly decay sweep over every guild the session is in; the ready event calls it.
+// decayWatch sweeps only guilds where a player can still decay. A finished game adds a guild; a sweep drops it once
+// decay is off or nobody is left above the floor.
+var decayWatch = newGuildWatch("EloDecay", decaySweepEvery, func(guildID string) bool {
+	Elo.SweepDecay(guildID)
+	return Elo.DecayPending(guildID)
+})
+
+// StartDecaySweeper tracks every guild the session is in that already has players who can decay; the ready event
+// calls it. Guilds with none are not swept until a game finishes there.
 func StartDecaySweeper(s *discordgo.Session) {
 	decaySession.Store(s)
 	decayOnce.Do(func() {
-		Elo.StartSweeper(context.Background(), decaySweepEvery, func() []string {
-			cur := decaySession.Load()
-			if cur == nil {
-				return nil
-			}
-			ids := make([]string, 0, len(cur.State.Guilds))
-			for _, g := range cur.State.Guilds {
-				ids = append(ids, g.ID)
-			}
-			return ids
-		})
+		ids := make([]string, 0, len(s.State.Guilds))
+		for _, g := range s.State.Guilds {
+			ids = append(ids, g.ID)
+		}
+		go decayWatch.Seed(ids, Elo.DecayPending)
 	})
 }
 
@@ -1011,6 +1013,7 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 // hook. Call it after CompleteGame; failures are logged, not fatal, since the
 // ELO itself is already saved and SyncRank can repair a rank later.
 func (m *EloManager) ApplyRanks(actor, guildID string, results []EloResult) {
+	decayWatch.Track(guildID)
 	for _, r := range results {
 		if _, err := m.SyncRank(actor, guildID, r.UserID); err != nil {
 			m.logf("rank sync %s/%s: %v", guildID, r.UserID, err)
@@ -1497,31 +1500,26 @@ func (m *EloManager) autoDecay(guildID, userID string, cfg DecayConfig, ranks []
 	return true
 }
 
-// StartSweeper runs SweepDecay for every guild each interval (default hourly)
-// until ctx ends. A panic in one guild's sweep is logged and skipped.
-func (m *EloManager) StartSweeper(ctx context.Context, interval time.Duration, guilds func() []string) {
-	if interval <= 0 {
-		interval = defaultDecaySweepTick
-	}
-	go func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				for _, g := range guilds() {
-					func() {
-						defer func() {
-							if r := recover(); r != nil {
-								m.logf("decay sweep panic in %s: %v", g, r)
-							}
-						}()
-						m.SweepDecay(g)
-					}()
-				}
-			}
+// DecayPending reports whether any player of the guild could still decay: decay is on for some rule set and a
+// player who has played sits above that rule's floor. An error counts as yes, so a hiccup never drops a guild.
+func (m *EloManager) DecayPending(guildID string) bool {
+	enabled := false
+	for _, cfg := range m.decayConfigs(guildID) {
+		if cfg.Enabled && cfg.InactivityDays > 0 {
+			enabled = true
 		}
-	}()
+	}
+	if !enabled {
+		return false
+	}
+	rows, err := m.api().DecayCandidates(guildID, 0)
+	if err != nil {
+		return true
+	}
+	for _, row := range rows {
+		if cfg := m.decayFor(guildID, row.LastPlayedMode); cfg.Enabled && cfg.InactivityDays > 0 && row.Elo > cfg.DecayFloor {
+			return true
+		}
+	}
+	return false
 }

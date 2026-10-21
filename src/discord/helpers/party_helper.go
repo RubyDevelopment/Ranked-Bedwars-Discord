@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -431,18 +430,22 @@ func init() {
 	Parties.SetNotify(deliverPartyNotice)
 }
 
-// StartPartySweeper starts the minute-by-minute sweep that disbands idle parties and expires invites in every guild
-// the session is in; the ready event calls it.
+// partyWatch sweeps only guilds that have an active party. Create and Invite add a guild; a sweep drops it once
+// no party is left.
+var partyWatch = newGuildWatch("PartyManager", time.Minute, func(guildID string) bool {
+	return Parties.sweepPending(guildID)
+})
+
+// StartPartySweeper tracks every guild the session is in that already has an active party; the ready event calls
+// it. Guilds with none are not swept until a party is created.
 func StartPartySweeper(s *discordgo.Session) {
 	BotSession.Store(s)
 	partySweepOnce.Do(func() {
-		Parties.StartSweeper(context.Background(), time.Minute, func() []string {
-			ids := make([]string, 0, len(s.State.Guilds))
-			for _, g := range s.State.Guilds {
-				ids = append(ids, g.ID)
-			}
-			return ids
-		})
+		ids := make([]string, 0, len(s.State.Guilds))
+		for _, g := range s.State.Guilds {
+			ids = append(ids, g.ID)
+		}
+		go partyWatch.Seed(ids, Parties.hasParties)
 	})
 }
 
@@ -996,6 +999,7 @@ func (m *PartyManager) Create(guildID, leaderID string) (*Party, error) {
 	if err != nil {
 		return nil, partyErr(err)
 	}
+	partyWatch.Track(guildID)
 	return partyFromView(v), nil
 }
 
@@ -1039,6 +1043,7 @@ func (m *PartyManager) Invite(guildID, inviterID, targetID string) (party *Party
 		return nil, false, partyErr(err)
 	}
 	m.invalidate(guildID)
+	partyWatch.Track(guildID)
 	v, err := m.api().Get(guildID, cur.ID)
 	if err != nil {
 		return nil, autoCreated, err
@@ -1260,33 +1265,16 @@ func (m *PartyManager) anyInGame(guildID string, members []string) bool {
 	return false
 }
 
-// StartSweeper runs Sweep for every guild guilds() returns, every interval
-// (default 1 min), until ctx is cancelled.
-func (m *PartyManager) StartSweeper(ctx context.Context, interval time.Duration, guilds func() []string) {
-	if interval <= 0 {
-		interval = time.Minute
-	}
-	go func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				for _, g := range guilds() {
-					func() {
-						defer func() {
-							if r := recover(); r != nil {
-								appLog.EngineLogger.Error(fmt.Sprintf("[PartyManager] sweep panic in %s: %v", g, r))
-							}
-						}()
-						m.Sweep(g)
-					}()
-				}
-			}
-		}
-	}()
+// hasParties reports whether the guild has an active party. An error counts as yes, so a hiccup never drops a guild.
+func (m *PartyManager) hasParties(guildID string) bool {
+	parties, err := m.api().ListActive(guildID, time.Time{})
+	return err != nil || len(parties) > 0
+}
+
+// sweepPending runs Sweep and reports whether the guild still has parties (and so invites) to watch.
+func (m *PartyManager) sweepPending(guildID string) bool {
+	m.Sweep(guildID)
+	return m.hasParties(guildID)
 }
 
 // ============================================================================

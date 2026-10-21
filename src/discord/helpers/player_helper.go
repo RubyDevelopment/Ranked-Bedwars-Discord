@@ -154,6 +154,7 @@ func EnforceAccountAge(s *discordgo.Session, guildID string, user *discordgo.Use
 		appLogf("account age: ban %s in guild %s: %v", user.ID, guildID, err)
 		return ""
 	}
+	TrackPunishmentExpiry(guildID, expires)
 	return denialMessage(cfg, user.ID, expiresAt)
 }
 
