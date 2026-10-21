@@ -202,7 +202,6 @@ func (b *EngineBridge) Listen(ctx context.Context, addr, secret string) error {
 		defer cancel()
 		_ = srv.Shutdown(shutdown)
 	}()
-	b.logf("listening on %s", addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

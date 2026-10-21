@@ -841,11 +841,8 @@ func HandleGuildJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 	// Skip automatic setup during initial startup (handled by ready event)
 	// Only run setup for guilds joined after startup
 	if !initialSetupComplete {
-		logger.Info(fmt.Sprintf("Skipping initial guild setup for %s (%s) - will be handled by ready event", g.Guild.Name, g.Guild.ID))
 		return
 	}
-
-	logger.Info(fmt.Sprintf("Bot joined guild %s (%s), running automatic setup", g.Guild.Name, g.Guild.ID))
 
 	result, err := EnsureGuildSetup(s, g.Guild.ID)
 	if err != nil {
@@ -859,8 +856,6 @@ func HandleGuildJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 		notifyUnassignedGuild(s, g.Guild.ID, logger)
 	}
 
-	logger.Info(fmt.Sprintf("Automatic guild setup completed for %s (%s) - GuildCreated: %v, ConfigCreated: %v, SnapshotCreated: %v, SnapshotSynced: %v, MetaCreated: %v, GameConfigCreated: %v",
-		g.Guild.Name, g.Guild.ID, result.GuildCreated, result.ConfigCreated, result.SnapshotCreated, result.SnapshotSynced, result.MetaCreated, result.GameConfigCreated))
 }
 
 // HandleGuildUpdate refreshes branding after Discord changes a guild's icon or banner.
