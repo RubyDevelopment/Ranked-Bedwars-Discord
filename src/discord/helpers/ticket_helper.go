@@ -141,7 +141,7 @@ func (st *TicketStore) Update(actorID, guildID string, fn func(ip *types.Interac
 	if err := fn(ip); err != nil {
 		return err
 	}
-	_, err = database.Must().GuildConfig.SaveField(actorID, guildID, interactivePanelsField, ip)
+	err = database.Must().GuildConfig.SaveField(actorID, guildID, interactivePanelsField, ip)
 	return err
 }
 

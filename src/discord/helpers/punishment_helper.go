@@ -533,7 +533,7 @@ func logPunishmentExpiry(s *discordgo.Session, guildID, command, userID string, 
 	if command == "" {
 		return
 	}
-	channelID, err := RequirementSlotID(guildID, command, types.ReqChannel, types.StaffCommandLogsKey)
+	channelID, err := RequirementSlotID(guildID, command, types.ReqChannel, types.CommandLogsKey)
 	if err != nil || channelID == "" {
 		return
 	}

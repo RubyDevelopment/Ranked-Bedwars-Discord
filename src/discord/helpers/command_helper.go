@@ -91,18 +91,18 @@ func RunCommandPipeline(s *discordgo.Session, i *discordgo.InteractionCreate, cm
 
 	if IsPrefixInteraction(i) {
 		err := executePrefixCommand(s, i, cmd)
-		logModerationIfOK(s, i, cmd, userID, err)
+		logCommandIfOK(s, i, cmd, userID, err)
 		return err
 	}
 
 	err := executeSlashCommand(s, i, cmd)
-	logModerationIfOK(s, i, cmd, userID, err)
+	logCommandIfOK(s, i, cmd, userID, err)
 	return err
 }
 
-func logModerationIfOK(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command, userID string, err error) {
-	if err == nil && cmd.Category == "staff" {
-		logModerationUsage(s, i, cmd, userID)
+func logCommandIfOK(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command, userID string, err error) {
+	if err == nil {
+		logCommandUsage(s, i, cmd, userID)
 	}
 }
 
@@ -311,13 +311,17 @@ func messageFlags(ephemeral bool) discordgo.MessageFlags {
 // Guild Registration & Validation
 // ============================================================================
 
+// guildLookupCache keeps registered guilds for a few seconds: every command looks its guild up, and only a definitive
+// not-found must stay uncached so a guild that has just been set up is seen at once.
+var guildLookupCache = newTTLCache[*models.GuildsModel](10 * time.Second)
+
 func lookupGuildBySnowflake(guildID string) (*models.GuildsModel, error) {
 	svc := database.Get()
 	if guildID == "" || svc == nil {
 		return nil, errGuildNotRegistered
 	}
 
-	guild, err := svc.Guild.Get(guildID)
+	guild, err := guildLookupCache.get(guildID, func() (*models.GuildsModel, error) { return svc.Guild.Get(guildID) })
 	if err != nil {
 		if sdk.IsNotFound(err) {
 			return nil, errGuildNotRegistered
@@ -348,6 +352,23 @@ func defaultGuildSettings() types.GuildSettings {
 // guild fetch and one config fetch, however many pipeline stages end up using
 // the result. Call it once per interaction, not once per stage.
 func LoadGuildContext(guildID string) GuildContext {
+	// The config route accepts the snowflake directly (an unregistered guild yields 404 -> defaults), so the two
+	// reads do not depend on each other and run side by side.
+	var (
+		config *models.GuildConfigsModel
+		cfgErr error
+		done   = make(chan struct{})
+	)
+	svc := database.Get()
+	if svc == nil || guildID == "" {
+		close(done)
+	} else {
+		go func() {
+			defer close(done)
+			config, cfgErr = svc.GuildConfig.Get(guildID)
+		}()
+	}
+
 	guild, err := lookupGuildBySnowflake(guildID)
 	registered := true
 	if err != nil {
@@ -355,12 +376,10 @@ func LoadGuildContext(guildID string) GuildContext {
 		guild = nil
 	}
 
-	svc := database.Get()
+	<-done
 	if svc == nil || guildID == "" {
 		return GuildContext{Guild: guild, Registered: registered, Settings: defaultGuildSettings()}
 	}
-	// The config route accepts the snowflake directly; an unregistered guild yields 404 -> defaults.
-	config, cfgErr := svc.GuildConfig.Get(guildID)
 	if cfgErr != nil || config == nil {
 		return GuildContext{Guild: guild, Registered: registered, Settings: defaultGuildSettings()}
 	}
@@ -921,9 +940,9 @@ func RunSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 	_ = RunCommandPipeline(s, i, cmd, gc, PipelineOptions{SkipGuildRegistration: cmd.SkipGuildCheck})
 }
 
-// logModerationUsage posts the command, its options and the moderator to the optional staff_command_logs channel.
-func logModerationUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command, userID string) {
-	channelID, err := RequirementSlotID(i.GuildID, cmd.Name, types.ReqChannel, types.StaffCommandLogsKey)
+// logCommandUsage posts the command, its options and the moderator to the optional command_logs channel.
+func logCommandUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command, userID string) {
+	channelID, err := RequirementSlotID(i.GuildID, cmd.Name, types.ReqChannel, types.CommandLogsKey)
 	if err != nil || channelID == "" {
 		return
 	}
@@ -939,7 +958,7 @@ func logModerationUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cm
 		Title:       "/" + cmd.Name,
 		Description: strings.Join(args, "\n"),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Moderator", Value: "<@" + userID + ">", Inline: true},
+			{Name: "User", Value: "<@" + userID + ">", Inline: true},
 			{Name: "Channel", Value: "<#" + i.ChannelID + ">", Inline: true},
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
@@ -1063,7 +1082,7 @@ func LogCommandResult(s *discordgo.Session, guildID, cmdName, actorID string, em
 	logged.Fields = append(append([]*discordgo.MessageEmbedField{}, embed.Fields...), &discordgo.MessageEmbedField{Name: "Moderator", Value: "<@" + actorID + ">", Inline: true})
 	sent := map[string]bool{}
 	for key, slot := range slots {
-		if key == types.StaffCommandLogsKey || slot.ID == "" || sent[slot.ID] {
+		if key == types.CommandLogsKey || slot.ID == "" || sent[slot.ID] {
 			continue
 		}
 		sent[slot.ID] = true
@@ -1103,6 +1122,7 @@ func RegisterCommand(cmd *types.Command) {
 		}
 	}
 
+	EnsureCommandLogs(cmd)
 	prepareCommandData(cmd)
 	CommandRegistry = append(CommandRegistry, cmd)
 }
@@ -1702,4 +1722,11 @@ func roleGateFor(settings types.GuildSettings, commandName string) roleGate {
 		gate.staffID = settings.Commands[commandName].RequiredRoles[types.StaffRoleKey].ID
 	}
 	return gate
+}
+
+// EnsureCommandLogs gives the command the optional command_logs channel requirement every command shares.
+func EnsureCommandLogs(cmd *types.Command) {
+	if !types.HasRequirementKey(cmd.Requirements, types.ReqChannel, types.CommandLogsKey) {
+		cmd.Requirements = append(cmd.Requirements[:len(cmd.Requirements):len(cmd.Requirements)], types.Requirement{Type: types.ReqChannel, Key: types.CommandLogsKey, Optional: true})
+	}
 }

@@ -255,7 +255,7 @@ func executeConfigBotCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 		if n := utf8.RuneCountInString(prefix); n < 1 || n > 5 {
 			return helpers.EditInteractionEmbed(s, i, serverConfigInvalidPrefixEmbed())
 		}
-		if _, err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "prefix", prefix); err != nil {
+		if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "prefix", prefix); err != nil {
 			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
 		}
 		return helpers.EditInteractionEmbed(s, i, serverConfigPrefixUpdatedEmbed(prefix))
@@ -264,11 +264,11 @@ func executeConfigBotCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 		enabled := helpers.SubOptionBool(options, "enabled")
 		switch target {
 		case "prefix":
-			if _, err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_prefix_enabled", enabled); err != nil {
+			if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_prefix_enabled", enabled); err != nil {
 				return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
 			}
 		case "slash":
-			if _, err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_slash_enabled", enabled); err != nil {
+			if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_slash_enabled", enabled); err != nil {
 				return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
 			}
 		default:

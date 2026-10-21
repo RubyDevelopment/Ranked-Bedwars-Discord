@@ -3,6 +3,7 @@ package general
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -180,28 +181,36 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 		}
 	}
 
-	// Check eligibility of each member
-	var eligible, blocked []string
-	for _, userID := range vcMembers {
+	// Check eligibility of each member. The two lookups per member run side by side across members; the lines keep
+	// the channel's order.
+	verdicts := make([]string, len(vcMembers)) // "" = eligible, otherwise the line explaining why not
+	var wg sync.WaitGroup
+	for n, userID := range vcMembers {
 		if helpers.Games.InGame(guildID, userID) {
-			blocked = append(blocked, fmt.Sprintf("> <@%s> — currently in a game", userID))
+			verdicts[n] = fmt.Sprintf("> <@%s> — currently in a game", userID)
 			continue
 		}
-
-		// Check if registered
-		player, err := database.Must().Player.Get(guildID, userID)
-		if err != nil {
-			blocked = append(blocked, fmt.Sprintf("> <@%s> — not registered", userID))
-			continue
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			player, err := database.Must().Player.Get(guildID, userID)
+			if err != nil {
+				verdicts[n] = fmt.Sprintf("> <@%s> — not registered", userID)
+				return
+			}
+			if hasQueueRestriction(guildID, sdk.UintToString(player.Player.ID)) {
+				verdicts[n] = fmt.Sprintf("> <@%s> — has active restriction", userID)
+			}
+		}()
+	}
+	wg.Wait()
+	var eligible, blocked []string
+	for n, userID := range vcMembers {
+		if verdicts[n] != "" {
+			blocked = append(blocked, verdicts[n])
+		} else {
+			eligible = append(eligible, userID)
 		}
-
-		// Check for queue restrictions
-		if hasQueueRestriction(guildID, sdk.UintToString(player.Player.ID)) {
-			blocked = append(blocked, fmt.Sprintf("> <@%s> — has active restriction", userID))
-			continue
-		}
-
-		eligible = append(eligible, userID)
 	}
 
 	// Calculate required slots

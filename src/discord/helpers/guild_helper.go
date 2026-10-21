@@ -49,7 +49,7 @@ func SaveLFGConfig(actorID, guildID string, lfg *LFGConfig) error {
 	if lfg == nil {
 		return fmt.Errorf("lfg config is nil")
 	}
-	_, err := database.Must().GuildConfig.SaveField(actorID, guildID, "lfg", lfg)
+	err := database.Must().GuildConfig.SaveField(actorID, guildID, "lfg", lfg)
 	return err
 }
 
@@ -464,7 +464,7 @@ func ensureGuildInvite(s *discordgo.Session, guildID string) error {
 		if err != nil {
 			return err
 		}
-		_, err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, "invite_code", inv.Code)
+		err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, "invite_code", inv.Code)
 		return err
 	}
 	return fmt.Errorf("no channel the bot can create an invite in")
@@ -479,7 +479,7 @@ func ensureGuildInvite(s *discordgo.Session, guildID string) error {
 // entry of a renamed command moves to its new name (keeping the admin's settings), and an entry of a command that
 // no longer exists is removed. Custom commands (made on the dashboard, they carry a builder) are never removed.
 func SeedCommandConfigs(guildID string) error {
-	config, err := database.Must().GuildConfig.Get(guildID)
+	config, err := database.Must().GuildConfig.GetFresh(guildID)
 	if err != nil {
 		return err
 	}
@@ -488,7 +488,7 @@ func SeedCommandConfigs(guildID string) error {
 	if !reconcileCommandConfigs(existing, CommandRegistry) {
 		return nil
 	}
-	_, err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, "commands", existing)
+	err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, "commands", existing)
 	return err
 }
 
@@ -681,7 +681,7 @@ func RequirementSlotID(guildID, cmdName string, reqType types.RequirementType, k
 // resolves a missing requirement inline (see requirement_fix.go's
 // HandleRequirementFixSelect) or explicitly via /config role|channel|category set.
 func SetRequirementSlotID(actor, guildID, cmdName string, reqType types.RequirementType, key, id string) error {
-	config, err := database.Must().GuildConfig.Get(guildID)
+	config, err := database.Must().GuildConfig.GetFresh(guildID)
 	if err != nil {
 		return err
 	}
@@ -694,7 +694,7 @@ func SetRequirementSlotID(actor, guildID, cmdName string, reqType types.Requirem
 		return fmt.Errorf("unsupported requirement type %q", reqType)
 	}
 
-	_, err = database.Must().GuildConfig.SaveField(actor, guildID, "commands", commandsMap)
+	err = database.Must().GuildConfig.SaveField(actor, guildID, "commands", commandsMap)
 	return err
 }
 

@@ -76,7 +76,7 @@ func SeedEventConfigs(guildID string) error {
 		return nil
 	}
 
-	if _, err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, eventConfigField, existing); err != nil {
+	if err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, eventConfigField, existing); err != nil {
 		return err
 	}
 	InvalidateEventConfig(guildID)

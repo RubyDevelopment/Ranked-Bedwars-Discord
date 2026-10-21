@@ -129,8 +129,8 @@ type Requirement struct {
 	Validate func(s *discordgo.Session, i *discordgo.InteractionCreate) bool `json:"-"`
 }
 
-// StaffCommandLogsKey is the optional channel requirement every staff command shares: each successful use is logged there.
-const StaffCommandLogsKey = "staff_command_logs"
+// CommandLogsKey is the optional channel requirement every command shares: each successful use is logged there.
+const CommandLogsKey = "command_logs"
 
 // ModerationAlertsKey is the optional channel requirement for punishment alerts (expiry, enforcement).
 const ModerationAlertsKey = "moderation_alerts"
@@ -138,7 +138,7 @@ const ModerationAlertsKey = "moderation_alerts"
 // ModerationRequirements is declared by every moderation command. Requirements are identified by type and key, so one
 // assignment of each (/server_config channel|role set) applies to all of them.
 var ModerationRequirements = []Requirement{
-	{Type: ReqChannel, Key: StaffCommandLogsKey, Optional: true},
+	{Type: ReqChannel, Key: CommandLogsKey, Optional: true},
 	{Type: ReqChannel, Key: ModerationAlertsKey, Optional: true},
 	{Type: ReqRole, Key: "staff_role"},
 }
@@ -221,11 +221,9 @@ const (
 	RegisteredRoleKey = "registered_role" // members who have registered (they must hold it to use general commands)
 )
 
-// StaffRequirements is declared by every staff command: only members holding the staff role may run it, and each use is
-// logged to the optional staff command logs channel.
+// StaffRequirements is declared by every staff command: only members holding the staff role may run it.
 var StaffRequirements = []Requirement{
 	{Type: ReqRole, Key: StaffRoleKey},
-	{Type: ReqChannel, Key: StaffCommandLogsKey, Optional: true},
 }
 
 // PunishmentRequirements is declared by a punishment command and by its reversal alike (ban and unban, chat mute and

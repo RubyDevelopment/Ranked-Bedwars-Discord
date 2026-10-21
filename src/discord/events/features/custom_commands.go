@@ -1031,6 +1031,7 @@ func build(name string, c types.CommandConfig, b *builder) *types.Command {
 		cmd.Requirements = append(cmd.Requirements, types.Requirement{Type: types.RequirementType(r.Type), Key: r.Key, Optional: r.Optional})
 	}
 	cmd.Execute = func(s *discordgo.Session, i *discordgo.InteractionCreate) error { return runCustomCommand(s, i, name) }
+	helpers.EnsureCommandLogs(cmd)
 	return cmd
 }
 

@@ -164,7 +164,7 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	vars["season.name"] = season
 	helpers.LeaderboardRowVars(s, i.GuildID, rows, vars)
 	vars["page.number"], vars["page.total"] = fmt.Sprint(page), fmt.Sprint(totalPages)
-	if view, err := database.Must().Player.Get(i.GuildID, invoker.ID); err == nil {
+	if verr == nil {
 		you(s, i.GuildID, invoker, view, seasonID, vars)
 	}
 
