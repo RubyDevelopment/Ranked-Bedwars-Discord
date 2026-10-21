@@ -1,4 +1,4 @@
-package admin
+package staff
 
 import (
 	"fmt"
@@ -31,10 +31,11 @@ func init() {
 
 // ServerClearCommand Clears and purges messages from a channel based on specified filter criteria.
 var ServerClearCommand = &types.Command{
-	Name:        "clear",
-	Description: "Clears and purges messages from a channel based on specified filter criteria.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "clear",
+	Requirements: types.StaffRequirements,
+	Description:  "Clears and purges messages from a channel based on specified filter criteria.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.ManageMessagesPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

@@ -17,8 +17,5 @@ var QueueEvent = &types.Event{
 	Type:        "voice_state_update",
 	Once:        false,
 	Disabled:    false,
-	Requirements: []types.Requirement{
-		{Type: types.ReqRole, Key: helpers.QueueRoleBanned, Optional: true},
-	},
-	Execute: helpers.HandleQueue,
+	Execute:     helpers.HandleQueue,
 }

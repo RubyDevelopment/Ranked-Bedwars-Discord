@@ -921,9 +921,9 @@ func RunSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 	_ = RunCommandPipeline(s, i, cmd, gc, PipelineOptions{SkipGuildRegistration: cmd.SkipGuildCheck})
 }
 
-// logModerationUsage posts the command, its options and the moderator to the optional moderation_command_logs channel.
+// logModerationUsage posts the command, its options and the moderator to the optional staff_command_logs channel.
 func logModerationUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command, userID string) {
-	channelID, err := RequirementSlotID(i.GuildID, cmd.Name, types.ReqChannel, types.ModerationLogsKey)
+	channelID, err := RequirementSlotID(i.GuildID, cmd.Name, types.ReqChannel, types.StaffCommandLogsKey)
 	if err != nil || channelID == "" {
 		return
 	}
@@ -1063,7 +1063,7 @@ func LogCommandResult(s *discordgo.Session, guildID, cmdName, actorID string, em
 	logged.Fields = append(append([]*discordgo.MessageEmbedField{}, embed.Fields...), &discordgo.MessageEmbedField{Name: "Moderator", Value: "<@" + actorID + ">", Inline: true})
 	sent := map[string]bool{}
 	for key, slot := range slots {
-		if key == types.ModerationLogsKey || slot.ID == "" || sent[slot.ID] {
+		if key == types.StaffCommandLogsKey || slot.ID == "" || sent[slot.ID] {
 			continue
 		}
 		sent[slot.ID] = true
@@ -1696,7 +1696,8 @@ func roleGateFor(settings types.GuildSettings, commandName string) roleGate {
 		return gate
 	}
 	gate := roleGate{openByDefault: cmd.Category == "general"}
-	if types.HasRequirementKey(cmd.Requirements, types.ReqRole, types.StaffRoleKey) {
+	// Every command in the staff category needs the staff role, whether or not it still declares the requirement.
+	if cmd.Category == "staff" || types.HasRequirementKey(cmd.Requirements, types.ReqRole, types.StaffRoleKey) {
 		gate.staff = true
 		gate.staffID = settings.Commands[commandName].RequiredRoles[types.StaffRoleKey].ID
 	}

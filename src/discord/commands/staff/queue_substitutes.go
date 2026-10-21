@@ -25,8 +25,8 @@ func init() {
 // QueueSubstitutesCommand swaps a player in a running hosted game for a substitute on the same team.
 var QueueSubstitutesCommand = &types.Command{
 	Name:         "substitute",
+	Requirements: types.StaffRequirements,
 	Description:  "Swaps a player in a hosted game for a substitute on the same team.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{

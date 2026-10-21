@@ -24,8 +24,8 @@ func init() {
 // QueueUnbanCommand removes a player's active queue ban.
 var QueueUnbanCommand = &types.Command{
 	Name:          "queueunban",
+	Requirements:  types.PunishmentRequirements("queue_ban_logs", "queue_banned_role"),
 	Description:   "Removes a queue ban from a player.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}, {Type: types.ReqRole, Key: "queue_banned_role"}},
 	PrefixAliases: []string{"qunban"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

@@ -129,8 +129,8 @@ type Requirement struct {
 	Validate func(s *discordgo.Session, i *discordgo.InteractionCreate) bool `json:"-"`
 }
 
-// ModerationLogsKey is the optional channel requirement every moderation command shares: each use is logged there.
-const ModerationLogsKey = "moderation_command_logs"
+// StaffCommandLogsKey is the optional channel requirement every staff command shares: each successful use is logged there.
+const StaffCommandLogsKey = "staff_command_logs"
 
 // ModerationAlertsKey is the optional channel requirement for punishment alerts (expiry, enforcement).
 const ModerationAlertsKey = "moderation_alerts"
@@ -138,7 +138,7 @@ const ModerationAlertsKey = "moderation_alerts"
 // ModerationRequirements is declared by every moderation command. Requirements are identified by type and key, so one
 // assignment of each (/server_config channel|role set) applies to all of them.
 var ModerationRequirements = []Requirement{
-	{Type: ReqChannel, Key: ModerationLogsKey, Optional: true},
+	{Type: ReqChannel, Key: StaffCommandLogsKey, Optional: true},
 	{Type: ReqChannel, Key: ModerationAlertsKey, Optional: true},
 	{Type: ReqRole, Key: "staff_role"},
 }
@@ -221,6 +221,25 @@ const (
 	RegisteredRoleKey = "registered_role" // members who have registered (they must hold it to use general commands)
 )
 
+// StaffRequirements is declared by every staff command: only members holding the staff role may run it, and each use is
+// logged to the optional staff command logs channel.
+var StaffRequirements = []Requirement{
+	{Type: ReqRole, Key: StaffRoleKey},
+	{Type: ReqChannel, Key: StaffCommandLogsKey, Optional: true},
+}
+
+// PunishmentRequirements is declared by a punishment command and by its reversal alike (ban and unban, chat mute and
+// unmute, ...): the staff role, the punishment's own log channel and the roles it hands out and takes back. Requirements
+// are identified by type and key, so one assignment of each applies to every command that declares it. Strikes pass the
+// queue-banned role as well, as they queue-ban.
+func PunishmentRequirements(logsKey string, roleKeys ...string) []Requirement {
+	reqs := append(append([]Requirement{}, StaffRequirements...), Requirement{Type: ReqChannel, Key: logsKey, Optional: true})
+	for _, key := range roleKeys {
+		reqs = append(reqs, Requirement{Type: ReqRole, Key: key, Grants: true})
+	}
+	return reqs
+}
+
 // GeneralRequirements is declared by every general (player facing) command: anyone may use it, but only registered members.
 var GeneralRequirements = []Requirement{
 	{Type: ReqRole, Key: RegisteredRoleKey},
@@ -252,7 +271,7 @@ func RequiresRole(reqs []Requirement, key string) bool {
 	return false
 }
 
-// StaffRegistrationRequirements is ModerationRequirements plus the registered role the command manages.
+// StaffRegistrationRequirements is StaffRequirements plus the registered role the command manages.
 func StaffRegistrationRequirements() []Requirement {
-	return append(append([]Requirement{}, ModerationRequirements...), RegistrationRequirements...)
+	return append(append([]Requirement{}, StaffRequirements...), RegistrationRequirements...)
 }

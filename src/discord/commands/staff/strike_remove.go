@@ -27,8 +27,8 @@ func init() {
 // StrikeRemoveCommand voids a player's most recent strike, or a specific one by ID.
 var StrikeRemoveCommand = &types.Command{
 	Name:         "unstrike",
+	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role"),
 	Description:  "Removes a specific strike entry from a player's record.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}, {Type: types.ReqRole, Key: "queue_banned_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

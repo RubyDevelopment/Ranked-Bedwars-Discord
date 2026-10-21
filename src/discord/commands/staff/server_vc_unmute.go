@@ -24,8 +24,8 @@ func init() {
 // ServerVcUnmuteCommand removes a player's voice server-mute.
 var ServerVcUnmuteCommand = &types.Command{
 	Name:         "vcunmute",
+	Requirements: types.PunishmentRequirements("vc_mute_logs", "vc_muted_role"),
 	Description:  "Removes a voice channel server-mute from a player.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}, {Type: types.ReqRole, Key: "vc_muted_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

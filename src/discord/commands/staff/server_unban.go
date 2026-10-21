@@ -31,8 +31,8 @@ func init() {
 // ServerUnbanCommand removes a Discord guild ban by user ID.
 var ServerUnbanCommand = &types.Command{
 	Name:         "unban",
+	Requirements: types.PunishmentRequirements("server_ban_logs"),
 	Description:  "Revokes a guild-wide ban by user ID.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

@@ -28,8 +28,8 @@ func init() {
 // PlayerForceNicknameCommand force-sets or removes a target player's in-game nickname.
 var PlayerForceNicknameCommand = &types.Command{
 	Name:          "forcenickname",
-	Description:   "Force-sets or removes a player's in-game Minecraft nickname.",
 	Requirements:  types.StaffRegistrationRequirements(),
+	Description:   "Force-sets or removes a player's in-game Minecraft nickname.",
 	PrefixAliases: []string{"fnickname"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

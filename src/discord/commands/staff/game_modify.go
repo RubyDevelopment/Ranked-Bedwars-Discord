@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
@@ -28,8 +28,8 @@ func init() {
 // GameModifyCommand manually adjusts one of a player's seasonal stats.
 var GameModifyCommand = &types.Command{
 	Name:         "modify",
+	Requirements: types.StaffRequirements,
 	Description:  "Manually adjusts a player's seasonal statistics.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

@@ -24,8 +24,8 @@ func init() {
 // ServerVcMuteCommand server-mutes a player in voice channels.
 var ServerVcMuteCommand = &types.Command{
 	Name:         "vcmute",
+	Requirements: types.PunishmentRequirements("vc_mute_logs", "vc_muted_role"),
 	Description:  "Server-mutes a player in voice channels.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}, {Type: types.ReqRole, Key: "vc_muted_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

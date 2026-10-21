@@ -26,8 +26,8 @@ func init() {
 // GameScoreCommand scores a game in progress by marking the winning team.
 var GameScoreCommand = &types.Command{
 	Name:         "score",
+	Requirements: types.StaffRequirements,
 	Description:  "Scores a game in progress by marking the winning team.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

@@ -28,8 +28,8 @@ func init() {
 // PlayerNicknameCommand Updates or syncs your display nickname across the platform.
 var PlayerNicknameCommand = &types.Command{
 	Name:          "nickname",
-	Description:   "Updates or syncs your display nickname across the platform.",
 	Requirements:  types.GeneralRequirements,
+	Description:   "Updates or syncs your display nickname across the platform.",
 	PrefixAliases: []string{"nick"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

@@ -25,8 +25,8 @@ func init() {
 // GameUnvoidCommand restores a voided game.
 var GameUnvoidCommand = &types.Command{
 	Name:          "unvoid",
+	Requirements:  types.StaffRequirements,
 	Description:   "Restores a previously voided game.",
-	Requirements:  []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	PrefixAliases: []string{"uvg", "uv"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,

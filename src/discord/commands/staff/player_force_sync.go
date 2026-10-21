@@ -28,8 +28,8 @@ func init() {
 // PlayerForceSyncCommand force-synchronizes a target player's registered role, rank role, and nickname.
 var PlayerForceSyncCommand = &types.Command{
 	Name:          "forcesync",
-	Description:   "Force-synchronizes a player's registered role, rank role, and nickname with the guild.",
 	Requirements:  types.StaffRegistrationRequirements(),
+	Description:   "Force-synchronizes a player's registered role, rank role, and nickname with the guild.",
 	PrefixAliases: []string{"fsync"},
 	Ephemeral:     true,
 	Cooldown:      5 * time.Second,

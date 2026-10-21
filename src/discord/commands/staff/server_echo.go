@@ -1,4 +1,4 @@
-package admin
+package staff
 
 import (
 	"fmt"
@@ -28,10 +28,11 @@ func init() {
 
 // ServerEchoCommand Broadcasts an official announcement or echo message into a target channel.
 var ServerEchoCommand = &types.Command{
-	Name:        "echo",
-	Description: "Broadcasts an official announcement or echo message into a target channel.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "echo",
+	Requirements: types.StaffRequirements,
+	Description:  "Broadcasts an official announcement or echo message into a target channel.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.ManageMessagesPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

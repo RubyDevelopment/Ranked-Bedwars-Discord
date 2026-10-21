@@ -31,6 +31,7 @@ var ServerSetupCommand = &types.Command{
 	Ephemeral:      true,
 	Cooldown:       5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
+		DefaultMemberPermissions: &adminPermissions,
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "init",

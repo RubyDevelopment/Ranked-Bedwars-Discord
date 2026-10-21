@@ -1,4 +1,4 @@
-package admin
+package staff
 
 import (
 	"fmt"
@@ -31,10 +31,11 @@ func init() {
 
 // ServerRoleCommand Configures automated role assignments, permissions, and synchronization rules.
 var ServerRoleCommand = &types.Command{
-	Name:        "role",
-	Description: "Configures automated role assignments, permissions, and synchronization rules.",
-	Ephemeral:   true,
-	Cooldown:    3 * time.Second,
+	Name:         "role",
+	Requirements: types.StaffRequirements,
+	Description:  "Configures automated role assignments, permissions, and synchronization rules.",
+	Ephemeral:    true,
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.ManageRolesPermission(),
 		Options: []*discordgo.ApplicationCommandOption{

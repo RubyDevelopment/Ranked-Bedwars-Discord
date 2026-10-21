@@ -27,8 +27,8 @@ func init() {
 // and claim, close, leaderboard and log tools for staff.
 var TicketManageCommand = &types.Command{
 	Name:         "ticket",
+	Requirements: types.StaffRequirements,
 	Description:  "Manages the support ticket system: panels, claims, members, and logs.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{

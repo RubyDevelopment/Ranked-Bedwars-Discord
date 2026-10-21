@@ -27,8 +27,8 @@ func init() {
 // GameLossCommand removes loss-equivalent ELO from a registered player without recording a game.
 var GameLossCommand = &types.Command{
 	Name:         "loss",
+	Requirements: types.StaffRequirements,
 	Description:  "Removes loss-equivalent ELO from a registered player without recording a game.",
-	Requirements: []types.Requirement{{Type: types.ReqRole, Key: "staff_role"}},
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
