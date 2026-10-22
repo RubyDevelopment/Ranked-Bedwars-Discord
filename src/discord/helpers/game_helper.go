@@ -94,6 +94,9 @@ func createGameChannels(s *discordgo.Session, g Game) (GameChannels, error) {
 		}
 	}
 	cfg := queue.GameChannels
+	if strings.Contains(cfg.TextNameTemplate+queue.VoiceTeamTemplate, "{total_game}") {
+		g.Total = guildGameTotal(g.GuildID)
+	}
 
 	// Voice channels (and the text channel in "channel" mode) live in this category.
 	category := firstNonEmpty(cfg.CategoryID, queue.CategoryID, g.QueueCategoryID)
@@ -204,11 +207,33 @@ func deleteGameChannels(s *discordgo.Session, ch GameChannels) {
 // Helpers
 // ============================================================================
 
-// expandGameName fills {game}, {mode} and {team} in a name template.
+// expandGameName fills a channel name template: {game} and {season_game} (the game's number in its season),
+// {total_game} (its number among every game the guild has played), {game_id} (the game's unique id), {mode} and {team}.
 func expandGameName(template string, g Game, team string) string {
 	return truncateName(strings.NewReplacer(
-		"{game}", strconv.Itoa(g.Number), "{mode}", g.Mode.Name, "{team}", team,
+		"{game}", strconv.Itoa(g.Number), "{season_game}", strconv.Itoa(g.Number), "{total_game}", strconv.Itoa(g.Total),
+		"{game_id}", strconv.FormatUint(uint64(g.ID), 10), "{mode}", g.Mode.Name, "{team}", team,
 	).Replace(template), 100)
+}
+
+// guildGameTotal counts every game the guild has recorded, across seasons (the new game included). It pages through
+// the guild's games, so it is only asked when a name template uses {total_game}.
+func guildGameTotal(guildID string) int {
+	svc := database.Get()
+	if svc == nil {
+		return 0
+	}
+	total := 0
+	for off := 0; ; off += 100 {
+		page, err := svc.Client().ListGames(context.Background(), guildID, sdk.Q("limit", 100, "offset", off))
+		if err != nil {
+			return total
+		}
+		total += len(page.Data)
+		if len(page.Data) < 100 {
+			return total
+		}
+	}
 }
 
 // slugify makes a Discord text channel name: lowercase, spaces as dashes.
@@ -2059,7 +2084,8 @@ func mapValues(m map[string]string) []string {
 // Game is a snapshot of a match; the manager hands out copies.
 type Game struct {
 	ID       uint         `json:"id"`
-	Number   int          `json:"number"`
+	Number   int          `json:"number"`          // within its season
+	Total    int          `json:"total,omitempty"` // among all the guild's games; only filled in when a channel name asks for it
 	GuildID  string       `json:"guild_id"`
 	SeasonID uint         `json:"season_id"`
 	Mode     types.Mode   `json:"mode"`

@@ -87,7 +87,7 @@ type GameChannelsConfig struct {
 	PrivateThreads   *bool    `json:"private_threads,omitempty"` // nil = private
 	AutoArchiveMins  int      `json:"auto_archive_minutes,omitempty"`
 	ExtraRoleIDs     []string `json:"extra_role_ids,omitempty"`     // roles that can also see the game channels
-	TextNameTemplate string   `json:"text_name_template,omitempty"` // {game}, {mode}; empty = "game-{game}"
+	TextNameTemplate string   `json:"text_name_template,omitempty"` // {game}, {season_game}, {total_game}, {game_id}, {mode}; empty = "game-{game}"
 }
 
 // IsThread reports whether the game chat is a thread.

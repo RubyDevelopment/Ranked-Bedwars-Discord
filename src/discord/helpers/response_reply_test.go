@@ -41,3 +41,12 @@ func TestDisabledRuleFallsThrough(t *testing.T) {
 		t.Errorf("resolved %+v", rule)
 	}
 }
+
+// Channel names can use the game's season number, its number among all the guild's games, and its unique id.
+func TestExpandGameNameNumbers(t *testing.T) {
+	g := Game{ID: 91, Number: 4, Total: 212, Mode: types.Mode{Name: "Solo"}}
+	got := expandGameName("g{game}-s{season_game}-t{total_game}-id{game_id}-{mode}", g, "")
+	if got != "g4-s4-t212-id91-Solo" {
+		t.Errorf("got %q", got)
+	}
+}
