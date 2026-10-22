@@ -38,4 +38,5 @@ logs/
 # Local SQLite database
 data/
 
+.env*
 .old/

@@ -89,6 +89,13 @@ type engineInbound struct {
 	Lines    []GameChatLine `json:"lines"`
 	Missing  []string       `json:"missing"`
 
+	// chat.line / chat.bots: live chat for the dashboard
+	GuildID string   `json:"guild_id"`
+	Text    string   `json:"text"`
+	Motd    string   `json:"motd"`
+	At      int64    `json:"at"`
+	Bots    []string `json:"bots"`
+
 	// verify.result
 	RequestID string `json:"request_id"`
 	Status    string `json:"status"`
@@ -195,6 +202,7 @@ func (b *EngineBridge) Listen(ctx context.Context, addr, secret string) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/engine/ws", b.serveWS)
+	mux.Handle("/live/chat", LiveChat) // the dashboard's live bot chat (LIVE_CHAT_SECRET)
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -227,6 +235,7 @@ func (b *EngineBridge) serveWS(w http.ResponseWriter, r *http.Request) {
 		_ = old.Close() // a restarted engine replaces its stale connection
 	}
 	b.logf("engine connected")
+	LiveChat.engineUp()
 
 	stop := make(chan struct{})
 	go b.ping(conn, stop)
@@ -241,6 +250,7 @@ func (b *EngineBridge) serveWS(w http.ResponseWriter, r *http.Request) {
 		b.mu.Unlock()
 		if current {
 			b.logf("engine disconnected")
+			LiveChat.engineDown()
 			b.engineLost()
 		}
 	}()
@@ -550,6 +560,12 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		if err := Games.BeginMatch(msg.GameID); err != nil && !errors.Is(err, ErrWrongState) {
 			b.logf("begin match %d: %v", msg.GameID, err)
 		}
+
+	case "chat.line":
+		LiveChat.Line(msg.GuildID, msg.Bot, msg.Text, msg.Motd, msg.At)
+
+	case "chat.bots":
+		LiveChat.Bots(msg.GuildID, msg.Bots)
 
 	case "game.chat":
 		Games.StashChat(msg.GameID, msg.Lines)
