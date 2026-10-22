@@ -1,6 +1,60 @@
 {
 	"commands": [
 		{
+			"name": "ban",
+			"responses": [
+				{
+					"key": "ban.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "ban.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "ban.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "ban.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/player_punishments` for details."
+				},
+				{
+					"key": "ban.invalid-duration",
+					"slug": "invalid-duration",
+					"title": "Invalid Duration",
+					"look": "error",
+					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
+				},
+				{
+					"key": "ban.hierarchy-error",
+					"slug": "hierarchy-error",
+					"title": "Hierarchy Error",
+					"look": "error",
+					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
+				},
+				{
+					"key": "ban.server-ban-applied",
+					"slug": "server-ban-applied",
+					"title": "Server Ban Applied",
+					"look": "success",
+					"description": "Successfully recorded the server ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe member was banned from the Discord guild."
+				}
+			]
+		},
+		{
 			"name": "bots",
 			"responses": [
 				{
@@ -728,6 +782,111 @@
 					"title": "Game Force Voided",
 					"look": "success",
 					"description": "Game **#…** has been force voided. This action has been logged for staff review.\n\n\u003e **Reason:** …"
+				},
+				{
+					"key": "forcevoid.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "forcevoid.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "forcevoid.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "forcevoid.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "forcevoid.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "forcevoid.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "forcevoid.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "forcevoid.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "forcevoid.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "forcevoid.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "forcevoid.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "forcevoid.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "forcevoid.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "forcevoid.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "forcevoid.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -794,6 +953,46 @@
 					"look": "info",
 					"description": "\u003e **Mode:** `…`\n\u003e **State:** `…`\n\u003e **Map:** `…`\n\u003e **Ranks:** …\n\u003e **Stats:** …\n\u003e **Hosted:** …\n\u003e **By:** \u003c@…\u003e",
 					"has_fields": true
+				}
+			]
+		},
+		{
+			"name": "kick",
+			"responses": [
+				{
+					"key": "kick.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "kick.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "kick.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "kick.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/player_punishments` for details."
+				},
+				{
+					"key": "kick.kick-applied",
+					"slug": "kick-applied",
+					"title": "Kick Applied",
+					"look": "success",
+					"description": "Successfully recorded the kick. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Reason:** …\n\nThe member was removed from the Discord guild."
 				}
 			]
 		},
@@ -1004,6 +1203,60 @@
 			]
 		},
 		{
+			"name": "mute",
+			"responses": [
+				{
+					"key": "mute.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "mute.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "mute.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "mute.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/player_punishments` for details."
+				},
+				{
+					"key": "mute.invalid-duration",
+					"slug": "invalid-duration",
+					"title": "Invalid Duration",
+					"look": "error",
+					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
+				},
+				{
+					"key": "mute.hierarchy-error",
+					"slug": "hierarchy-error",
+					"title": "Hierarchy Error",
+					"look": "error",
+					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
+				},
+				{
+					"key": "mute.chat-mute-applied",
+					"slug": "chat-mute-applied",
+					"title": "Chat Mute Applied",
+					"look": "success",
+					"description": "Successfully recorded the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …"
+				}
+			]
+		},
+		{
 			"name": "nickname",
 			"responses": [
 				{
@@ -1094,6 +1347,236 @@
 					"title": "Game Partially Voided",
 					"look": "success",
 					"description": "Game **#…** has been partially voided. The winning team's stats are preserved. This action has been logged for staff review.\n\n\u003e **Affected Players:** …"
+				},
+				{
+					"key": "partialvoid.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "partialvoid.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "partialvoid.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "partialvoid.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "partialvoid.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "partialvoid.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "partialvoid.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "partialvoid.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "partialvoid.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "partialvoid.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "partialvoid.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "partialvoid.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "partialvoid.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "partialvoid.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "partialvoid.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
+				}
+			]
+		},
+		{
+			"name": "party",
+			"responses": [
+				{
+					"key": "party.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing your party request. Please try again later or contact support."
+				},
+				{
+					"key": "party.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "You must specify a valid subcommand. Select one from the command options."
+				},
+				{
+					"key": "party.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You are not registered. Run `/player_register` to link a Minecraft account first."
+				},
+				{
+					"key": "party.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "You must select a player to invite. Use the user selection menu to choose a registered player."
+				},
+				{
+					"key": "party.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot invite bot accounts to a party. Please select a registered player."
+				},
+				{
+					"key": "party.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "\u003c@…\u003e is not registered in this guild. Ask them to run `/player_register` to link their Minecraft account before inviting them to a party."
+				},
+				{
+					"key": "party.party-created",
+					"slug": "party-created",
+					"title": "Party Created",
+					"look": "success",
+					"description": "Your party is ready! Invite players with `/party_group invite` to build your team.\n\n\u003e **Leader:** You\n\u003e **Members:** 1/4\n\u003e **Invites:** Open\n\u003e **Disbands After:** … minutes of inactivity"
+				},
+				{
+					"key": "party.invitation-declined",
+					"slug": "invitation-declined",
+					"title": "Invitation Declined",
+					"look": "info",
+					"description": "You declined the party invitation. If you change your mind, ask the leader to send you a new invitation."
+				},
+				{
+					"key": "party.party-joined",
+					"slug": "party-joined",
+					"title": "Party Joined",
+					"look": "success",
+					"description": "You successfully joined \u003c@…\u003e's party!\n\n\u003e **Party Size:** …/…\n\u003e **Leader:** \u003c@…\u003e\n\nYou can now queue together for matches."
+				},
+				{
+					"key": "party.left-party",
+					"slug": "left-party",
+					"title": "Left Party",
+					"look": "success",
+					"description": "You have successfully left the party. You can create a new party with `/party_group create` or join another party by accepting an invitation."
+				},
+				{
+					"key": "party.player-removed",
+					"slug": "player-removed",
+					"title": "Player Removed",
+					"look": "success",
+					"description": "\u003c@…\u003e has been removed from your party. You can invite a new player to fill the slot with `/party_group invite`."
+				},
+				{
+					"key": "party.leadership-transferred",
+					"slug": "leadership-transferred",
+					"title": "Leadership Transferred",
+					"look": "success",
+					"description": "You have successfully transferred party leadership to \u003c@…\u003e. They are now responsible for managing the party."
+				},
+				{
+					"key": "party.party-disbanded",
+					"slug": "party-disbanded",
+					"title": "Party Disbanded",
+					"look": "success",
+					"description": "Your party has been successfully disbanded. All members have been notified.\n\nYou can create a new party at any time with `/party_group create`."
+				},
+				{
+					"key": "party.invites-open",
+					"slug": "invites-open",
+					"title": "Invites Open",
+					"look": "success",
+					"description": "Party invites have been reopened. Players can now be invited to your party using `/party_group invite`."
+				},
+				{
+					"key": "party.invites-closed",
+					"slug": "invites-closed",
+					"title": "Invites Closed",
+					"look": "success",
+					"description": "Party invites have been paused. No new players can be invited until you reopen invites with `/party_group invites`."
+				},
+				{
+					"key": "party.not-in-a-party",
+					"slug": "not-in-a-party",
+					"title": "Not in a Party",
+					"look": "error",
+					"description": "You are not currently in a party. Create a new party with `/party_group create` or accept a pending invitation from another player."
+				},
+				{
+					"key": "party.party-information",
+					"slug": "party-information",
+					"title": "Party Information",
+					"look": "info",
+					"description": "View the current party details for \u003c@…\u003e.",
+					"has_fields": true
 				}
 			]
 		},
@@ -1148,6 +1631,97 @@
 					"title": "Player Picked",
 					"look": "success",
 					"description": "Successfully drafted the player onto the team.\n\n\u003e **Player:** `…`\n\u003e **Captain:** \u003c@…\u003e"
+				},
+				{
+					"key": "pick.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "That game could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "pick.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "pick.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "pick.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "pick.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "pick.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "pick.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "pick.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "pick.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "pick.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "pick.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "pick.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "pick.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -1277,6 +1851,60 @@
 			]
 		},
 		{
+			"name": "queueban",
+			"responses": [
+				{
+					"key": "queueban.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "queueban.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "queueban.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "queueban.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/player_punishments` for details."
+				},
+				{
+					"key": "queueban.invalid-duration",
+					"slug": "invalid-duration",
+					"title": "Invalid Duration",
+					"look": "error",
+					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
+				},
+				{
+					"key": "queueban.hierarchy-error",
+					"slug": "hierarchy-error",
+					"title": "Hierarchy Error",
+					"look": "error",
+					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
+				},
+				{
+					"key": "queueban.queue-ban-applied",
+					"slug": "queue-ban-applied",
+					"title": "Queue Ban Applied",
+					"look": "success",
+					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …"
+				}
+			]
+		},
+		{
 			"name": "queues",
 			"responses": [
 				{
@@ -1328,6 +1956,46 @@
 					"title": "Queue Status · …",
 					"look": "info",
 					"has_fields": true
+				}
+			]
+		},
+		{
+			"name": "queueunban",
+			"responses": [
+				{
+					"key": "queueunban.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to …. Select a member from the command options."
+				},
+				{
+					"key": "queueunban.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
+				},
+				{
+					"key": "queueunban.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "queueunban.punishment-not-active",
+					"slug": "punishment-not-active",
+					"title": "Punishment Not Active",
+					"look": "error",
+					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+				},
+				{
+					"key": "queueunban.queue-ban-removed",
+					"slug": "queue-ban-removed",
+					"title": "Queue Ban Removed",
+					"look": "success",
+					"description": "Successfully removed the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
 				}
 			]
 		},
@@ -1515,6 +2183,111 @@
 					"title": "Game Rescored",
 					"look": "success",
 					"description": "Game **#…** has been rescored. This action has been logged for staff review.\n\n\u003e **Winners:** …\n\u003e **Losers:** …\n\u003e **MVP:** \u003c@…\u003e"
+				},
+				{
+					"key": "rescore.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "rescore.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "rescore.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "rescore.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "rescore.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "rescore.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "rescore.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "rescore.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "rescore.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "rescore.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "rescore.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "rescore.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "rescore.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "rescore.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "rescore.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -1616,6 +2389,111 @@
 					"title": "Game Scored",
 					"look": "success",
 					"description": "Game **#…** has been scored. This action has been logged for staff review.\n\n\u003e **Winning Team:** `…`\n\u003e **Winners:** …\n\u003e **Losers:** …"
+				},
+				{
+					"key": "score.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "score.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "score.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "score.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "score.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "score.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "score.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "score.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "score.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "score.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "score.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "score.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "score.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "score.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "score.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -1960,6 +2838,104 @@
 					"title": "Casual Match Result Recorded",
 					"look": "success",
 					"description": "Your win screenshot for game **#…** has been recorded and scored.\n\n\u003e **Your Team:** `…`\n\u003e **Proof:** …"
+				},
+				{
+					"key": "submit.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "That game could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "submit.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "submit.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "submit.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "submit.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "submit.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "submit.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "submit.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "submit.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "submit.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "submit.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "submit.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "submit.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "submit.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -1986,6 +2962,111 @@
 					"title": "Substitute Assigned",
 					"look": "success",
 					"description": "Successfully swapped the players. This action has been logged for staff review.\n\n\u003e **Game:** `#…`\n\u003e **Leaving:** \u003c@…\u003e\n\u003e **Substitute:** \u003c@…\u003e"
+				},
+				{
+					"key": "substitute.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "substitute.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "substitute.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "substitute.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "substitute.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "substitute.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "substitute.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "substitute.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "substitute.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "substitute.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "substitute.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "substitute.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "substitute.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "substitute.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "substitute.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -2038,6 +3119,27 @@
 					"title": "Invalid Subcommand",
 					"look": "error",
 					"description": "That is not a valid ticket action. Choose one of `panel`, `leaderboard`, `stats`, `logs`, `claim`, `close`, `add`, or `remove`."
+				},
+				{
+					"key": "ticket.not-a-ticket",
+					"slug": "not-a-ticket",
+					"title": "Not A Ticket",
+					"look": "error",
+					"description": "This command must be run inside an open ticket thread."
+				},
+				{
+					"key": "ticket.panel-not-found",
+					"slug": "panel-not-found",
+					"title": "Panel Not Found",
+					"look": "error",
+					"description": "The panel for this ticket no longer exists. Ask an administrator to check `/ticket_manage panel`."
+				},
+				{
+					"key": "ticket.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred. Please try again later or contact support."
 				}
 			]
 		},
@@ -2070,6 +3172,46 @@
 					"slug": "server-unban-applied",
 					"title": "Server Unban Applied",
 					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "unmute",
+			"responses": [
+				{
+					"key": "unmute.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to …. Select a member from the command options."
+				},
+				{
+					"key": "unmute.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
+				},
+				{
+					"key": "unmute.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "unmute.punishment-not-active",
+					"slug": "punishment-not-active",
+					"title": "Punishment Not Active",
+					"look": "error",
+					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+				},
+				{
+					"key": "unmute.chat-mute-removed",
+					"slug": "chat-mute-removed",
+					"title": "Chat Mute Removed",
+					"look": "success",
+					"description": "Successfully removed the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
 				}
 			]
 		},
@@ -2183,6 +3325,151 @@
 					"title": "Game Restored",
 					"look": "success",
 					"description": "Game **#…** has been restored from its voided state. This action has been logged for staff review.\n\n\u003e **Players Restored:** `…`"
+				},
+				{
+					"key": "unvoid.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "unvoid.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "unvoid.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "unvoid.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "unvoid.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "unvoid.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "unvoid.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "unvoid.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "unvoid.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "unvoid.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "unvoid.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "unvoid.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "unvoid.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "unvoid.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "unvoid.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
+				}
+			]
+		},
+		{
+			"name": "unwarn",
+			"responses": [
+				{
+					"key": "unwarn.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to …. Select a member from the command options."
+				},
+				{
+					"key": "unwarn.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
+				},
+				{
+					"key": "unwarn.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "unwarn.punishment-not-active",
+					"slug": "punishment-not-active",
+					"title": "Punishment Not Active",
+					"look": "error",
+					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+				},
+				{
+					"key": "unwarn.warning-removed",
+					"slug": "warning-removed",
+					"title": "Warning Removed",
+					"look": "success",
+					"description": "Successfully removed the warning. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
 				}
 			]
 		},
@@ -2229,6 +3516,107 @@
 					"title": "Stats Restored",
 					"look": "success",
 					"description": "Successfully undid the wipe. This action has been logged for staff review.\n\n\u003e **Player:** `…`\n\u003e **Restored:** …\n\u003e **ELO:** `…`\n\u003e **Rank:** `…`\n\u003e **Wipe ID:** `…`"
+				}
+			]
+		},
+		{
+			"name": "vcmute",
+			"responses": [
+				{
+					"key": "vcmute.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "vcmute.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "vcmute.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "vcmute.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/player_punishments` for details."
+				},
+				{
+					"key": "vcmute.invalid-duration",
+					"slug": "invalid-duration",
+					"title": "Invalid Duration",
+					"look": "error",
+					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
+				},
+				{
+					"key": "vcmute.member-not-found",
+					"slug": "member-not-found",
+					"title": "Member Not Found",
+					"look": "error",
+					"description": "That user is not currently in this server. They must be in the server to apply a …."
+				},
+				{
+					"key": "vcmute.hierarchy-error",
+					"slug": "hierarchy-error",
+					"title": "Hierarchy Error",
+					"look": "error",
+					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
+				},
+				{
+					"key": "vcmute.voice-mute-applied",
+					"slug": "voice-mute-applied",
+					"title": "Voice Mute Applied",
+					"look": "success",
+					"description": "Successfully recorded the voice mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe member is now server-muted in voice channels."
+				}
+			]
+		},
+		{
+			"name": "vcunmute",
+			"responses": [
+				{
+					"key": "vcunmute.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to …. Select a member from the command options."
+				},
+				{
+					"key": "vcunmute.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
+				},
+				{
+					"key": "vcunmute.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "vcunmute.punishment-not-active",
+					"slug": "punishment-not-active",
+					"title": "Punishment Not Active",
+					"look": "error",
+					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+				},
+				{
+					"key": "vcunmute.voice-mute-removed",
+					"slug": "voice-mute-removed",
+					"title": "Voice Mute Removed",
+					"look": "success",
+					"description": "Successfully removed the voice mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
 				}
 			]
 		},
@@ -2319,6 +3707,151 @@
 					"title": "Game Voided",
 					"look": "success",
 					"description": "Game **#…** has been voided. No ELO or stats were recorded."
+				},
+				{
+					"key": "void.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "That game could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "void.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "void.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "void.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "void.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "void.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "void.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "void.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "void.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "void.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "void.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "void.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "void.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "void.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "void.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
+				}
+			]
+		},
+		{
+			"name": "warn",
+			"responses": [
+				{
+					"key": "warn.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "warn.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "warn.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "warn.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/player_punishments` for details."
+				},
+				{
+					"key": "warn.warning-issued",
+					"slug": "warning-issued",
+					"title": "Warning Issued",
+					"look": "success",
+					"description": "Successfully recorded the warning. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Reason:** …"
 				}
 			]
 		},

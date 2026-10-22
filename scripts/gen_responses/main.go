@@ -119,6 +119,14 @@ func main() {
 		add(name, scan(fn, fn))
 	}
 
+	add("party", partyResponses(root, fset))
+	for _, c := range sharedResponses(root, fset, files) {
+		add(c.name, c.responses)
+	}
+	for _, c := range punishmentResponses(root, fset, files) {
+		add(c.name, c.responses)
+	}
+
 	out := struct {
 		Commands []command `json:"commands"`
 	}{}
@@ -199,6 +207,14 @@ func scan(root ast.Node, fn *ast.FuncDecl) []response {
 	ast.Inspect(root, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
+			if ident(x.Fun) == "gameErrorEmbed" && len(x.Args) == 2 { // game_helper.go's error shorthand: gameErrorEmbed(title, text)
+				title, ok1 := strLit(x.Args[0])
+				text, ok2 := strLit(x.Args[1])
+				if ok1 && ok2 {
+					out = append(out, response{Title: title, Look: "error", Description: text, Slug: slug(title)})
+				}
+				return true
+			}
 			if ident(x.Fun) != "Preset" || len(x.Args) != 2 {
 				return true
 			}
@@ -270,12 +286,18 @@ func build(lit *ast.CompositeLit, look string, fn *ast.FuncDecl) (response, bool
 	return r, true
 }
 
+// subst gives the parameters of a shared builder the values one command passes it (see punishmentResponses).
+var subst map[string]string
+
 // resolve is the string an expression holds when it is a literal, or a variable assigned exactly one literal.
 func resolve(e ast.Expr, fn *ast.FuncDecl) (string, bool) {
 	if s, ok := strLit(e); ok {
 		return s, true
 	}
 	name := ident(e)
+	if v, ok := subst[name]; ok && name != "" {
+		return v, true
+	}
 	if name == "" || fn == nil {
 		return "", false
 	}
@@ -347,4 +369,168 @@ func slug(title string) string {
 		return s
 	}
 	return "response"
+}
+
+// partyResponses are the embeds /party answers with. They live in event_embeds.go (the party section), so only the
+// ones party_group.go sends as the command's answer count (the others are alerts sent to other players).
+func partyResponses(root string, fset *token.FileSet) []response {
+	src, err := os.ReadFile(filepath.Join(root, "src/discord/commands/general/party_group.go"))
+	check(err)
+	answers := map[string]bool{}
+	for _, m := range regexp.MustCompile(`EditInteractionEmbed\(s, i, helpers\.(\w+)\(`).FindAllStringSubmatch(string(src), -1) {
+		answers[m[1]] = true
+	}
+	f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers/event_embeds.go"), nil, 0)
+	check(err)
+	var out []response
+	for _, d := range f.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && answers[fn.Name.Name] {
+			out = append(out, scan(fn, fn)...)
+		}
+	}
+	return out
+}
+
+type commandResponses struct {
+	name      string
+	responses []response
+}
+
+// punishmentResponses expands the shared punishment builders (punishment_helper.go, event_embeds.go) once per command
+// that applies or reverses a punishment, with that command's ApplySpec / RevokeSpec wording. Keep the two "applied" and
+// "removed" texts in step with punishmentAppliedEmbed and punishmentRevokedEmbed (a test in helpers checks one).
+func punishmentResponses(root string, fset *token.FileSet, files []string) []commandResponses {
+	funcs := map[string]*ast.FuncDecl{}
+	for _, name := range []string{"punishment_helper.go", "event_embeds.go"} {
+		f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers", name), nil, 0)
+		check(err)
+		for _, d := range f.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok {
+				funcs[fn.Name.Name] = fn
+			}
+		}
+	}
+	use := func(args map[string]string, names ...string) []response {
+		subst = args
+		defer func() { subst = nil }()
+		var out []response
+		for _, n := range names {
+			if fn := funcs[n]; fn != nil {
+				out = append(out, scan(fn, fn)...)
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: builder %s not found\n", n)
+			}
+		}
+		return out
+	}
+
+	var out []commandResponses
+	for _, path := range files {
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		check(err)
+		cmds := commandNames(f)
+		if len(cmds) == 0 {
+			continue
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			lit, ok := n.(*ast.CompositeLit)
+			if !ok || !(isSel(lit.Type, "helpers", "ApplySpec") || isSel(lit.Type, "helpers", "RevokeSpec")) {
+				return true
+			}
+			spec := map[string]string{}
+			for _, el := range lit.Elts {
+				if kv, ok := el.(*ast.KeyValueExpr); ok {
+					if v, ok := strLit(kv.Value); ok {
+						spec[ident(kv.Key)] = v
+					} else {
+						spec[ident(kv.Key)] = ident(kv.Value) // true / false
+					}
+				}
+			}
+			var rs []response
+			if isSel(lit.Type, "helpers", "ApplySpec") {
+				a := map[string]string{"action": spec["Action"], "adjective": spec["Adjective"]}
+				names := []string{"punishmentSelfTargetEmbed", "punishmentBotTargetEmbed", "punishmentReasonRequiredEmbed", "unexpectedErrorPunishmentEmbed", "punishmentAlreadyActiveEmbed"}
+				if spec["Duration"] == "true" {
+					names = append(names, "punishmentInvalidDurationEmbed")
+				}
+				if spec["RequireMember"] == "true" {
+					names = append(names, "punishmentMemberNotFoundEmbed")
+				}
+				if spec["SkipHierarchy"] != "true" {
+					names = append(names, "punishmentHierarchyEmbed")
+				}
+				rs = use(a, names...)
+				desc := "Successfully recorded " + spec["Summary"] + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + "> (**" + changing + "**)\n"
+				if spec["Duration"] == "true" {
+					desc += "> **Duration:** `" + changing + "`\n"
+				}
+				desc += "> **Reason:** " + changing
+				if spec["AppliedNote"] != "" {
+					desc += "\n\n" + spec["AppliedNote"]
+				}
+				rs = append(rs, response{Title: spec["Title"], Look: "success", Description: desc, Slug: slug(spec["Title"])})
+			} else {
+				lower := strings.ToLower(spec["Action"])
+				a := map[string]string{"action": lower, "adjective": spec["Adjective"]}
+				rs = use(a, "punishmentInvalidTargetEmbed", "PunishmentPlayerNotFoundEmbed", "unexpectedErrorPunishmentEmbed", "punishmentNotActiveEmbed")
+				title := spec["Action"] + " Removed"
+				rs = append(rs, response{Title: title, Look: "success", Slug: slug(title),
+					Description: "Successfully removed the " + lower + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + ">\n> **Reason:** " + changing})
+			}
+			out = append(out, commandResponses{cmds[0], rs})
+			return true
+		})
+	}
+	return out
+}
+
+// sharedBuilders are helper embeds several commands answer with: a command whose file calls the key gets the builders'
+// responses (the game and ticket error shorthands that pick an embed from an error).
+var sharedBuilders = map[string][]string{
+	"GameActionErrorEmbed":    {"GameActionErrorEmbed"},
+	"TicketContextErrorEmbed": {"ticketNotInChannelEmbed", "ticketPanelMissingEmbed", "UnexpectedErrorTicketEmbed"},
+}
+
+func sharedResponses(root string, fset *token.FileSet, files []string) []commandResponses {
+	funcs := map[string]*ast.FuncDecl{}
+	helpers, _ := filepath.Glob(filepath.Join(root, "src/discord/helpers/*.go"))
+	for _, path := range helpers {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		check(err)
+		for _, d := range f.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil {
+				funcs[fn.Name.Name] = fn
+			}
+		}
+	}
+	var out []commandResponses
+	for _, path := range files {
+		src, err := os.ReadFile(path)
+		check(err)
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		check(err)
+		cmds := commandNames(f)
+		if len(cmds) == 0 {
+			continue
+		}
+		for call, builders := range sharedBuilders {
+			if !strings.Contains(string(src), "helpers."+call+"(") {
+				continue
+			}
+			var rs []response
+			for _, name := range builders {
+				if fn := funcs[name]; fn != nil {
+					rs = append(rs, scan(fn, fn)...)
+				} else {
+					fmt.Fprintf(os.Stderr, "warning: builder %s not found\n", name)
+				}
+			}
+			out = append(out, commandResponses{cmds[0], rs})
+		}
+	}
+	return out
 }
