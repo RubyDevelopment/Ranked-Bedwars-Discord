@@ -2,6 +2,7 @@ package staff
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -98,6 +99,7 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	currentElo := previousElo
 	totalEloGain := 0
 	winDetails := make([]string, 0, winCount)
+	perkMultiplier := helpers.Elo.PerkMultiplier(i.GuildID, target.ID) // same win gain as a scored game
 
 	for winIdx := 0; winIdx < winCount; winIdx++ {
 		// Get the rank before applying this win
@@ -106,6 +108,7 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 		if currentRank != nil && currentRank.KFactorWin > 0 {
 			kFactor = currentRank.KFactorWin
 		}
+		kFactor = int(math.Round(float64(kFactor) * perkMultiplier))
 
 		// Calculate ELO after this win
 		newElo := currentElo + kFactor

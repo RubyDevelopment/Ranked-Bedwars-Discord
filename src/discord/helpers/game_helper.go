@@ -3744,11 +3744,44 @@ func (m *GameManager) storedGame(guildID string, id uint) (*models.GamesModel, e
 // reverseStored reverses a completed game's results for playerIDs (nil = all)
 // and repairs everything derived from them.
 func (m *GameManager) reverseStored(actor, guildID string, rec *models.GamesModel, playerIDs []uint) error {
+	holders := m.startingGrantHolders(guildID, rec, playerIDs)
 	if _, err := m.api().ReverseGame(actor, guildID, rec.ID, playerIDs, false); err != nil {
 		return fmt.Errorf("reverse results: %w", err)
 	}
+	m.deps.Elo.ReopenStartingGrants(actor, guildID, holders)
 	m.afterReverse(actor, guildID, rec.ID, playerIDs)
 	return nil
+}
+
+// startingGrantHolders lists the players (Discord IDs) whose starting-ELO grant was paid by this game's scoring.
+// Call it BEFORE ReverseGame: the reversal takes the grant's ELO back (it is part of the game's change) but leaves
+// the claim flag set, so without ReopenStartingGrants the player would lose the grant for good (a rescore would
+// not repay it and /claimelo would refuse). A grant claimed by /claimelo comes before the game ended, so it is
+// told apart by its timestamp (RecordStartingGrants stamps it right after the game completes).
+func (m *GameManager) startingGrantHolders(guildID string, rec *models.GamesModel, playerIDs []uint) []string {
+	if rec.EndedAt == nil {
+		return nil
+	}
+	rows, err := m.api().Participants(guildID, rec.ID)
+	if err != nil {
+		m.logf("load participants of game %d: %v", rec.ID, err)
+		return nil
+	}
+	var out []string
+	for _, p := range rows {
+		if p.Scoring != "ranked" || len(playerIDs) > 0 && !slices.Contains(playerIDs, p.PlayerID) {
+			continue
+		}
+		uid, err := m.api().UserID(guildID, p.PlayerID)
+		if err != nil {
+			continue
+		}
+		st, err := m.deps.Elo.api().Stats(guildID, uid)
+		if err == nil && st.StartingEloClaimed && st.StartingEloClaimedAt != nil && !st.StartingEloClaimedAt.Before(*rec.EndedAt) {
+			out = append(out, uid)
+		}
+	}
+	return out
 }
 
 // afterReverse repairs what ReverseGame can't: the rank names / roles of the players whose ELO changed.
@@ -3931,9 +3964,11 @@ func (m *GameManager) Rescore(actor, guildID string, id uint, winningTeam, mvp s
 	if err != nil {
 		return ScoreResult{}, err
 	}
+	holders := m.startingGrantHolders(guildID, rec, nil)
 	if _, err := m.api().ReverseGame(actor, guildID, id, nil, true); err != nil {
 		return ScoreResult{}, fmt.Errorf("reverse results: %w", err)
 	}
+	m.deps.Elo.ReopenStartingGrants(actor, guildID, holders)
 	m.afterReverse(actor, guildID, id, nil)
 	res, err := m.commitStored(actor, g, team, mvp)
 	if err != nil {
@@ -3975,9 +4010,11 @@ func (m *GameManager) PartialVoid(actor, guildID string, id uint, winningTeam st
 	if len(ids) == 0 {
 		return nil, ErrUnknownTeam
 	}
+	holders := m.startingGrantHolders(guildID, rec, ids)
 	if _, err := m.api().ReverseGame(actor, guildID, id, ids, false); err != nil {
 		return nil, fmt.Errorf("reverse results: %w", err)
 	}
+	m.deps.Elo.ReopenStartingGrants(actor, guildID, holders)
 	m.afterReverse(actor, guildID, id, ids)
 	return losers, nil
 }

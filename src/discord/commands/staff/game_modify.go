@@ -197,7 +197,7 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	} else {
 		delta := value
 		if subcommand == "remove" {
-			delta = -value
+			delta = -min(value, max(currentVal, 0)) // counters never go below zero
 		}
 		updated, err := database.Must().Stats.Increment(actor, i.GuildID, pid, seasonID, map[string]int{statKey: delta})
 		if err != nil {

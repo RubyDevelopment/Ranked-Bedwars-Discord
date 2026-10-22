@@ -1282,6 +1282,28 @@ func clearedClaim() map[string]any {
 	}
 }
 
+// ReopenStartingGrants makes the starting grant claimable (and payable by the next ranked game) again for players
+// whose first game was just reversed; see GameManager.startingGrantHolders.
+func (m *EloManager) ReopenStartingGrants(actor, guildID string, userIDs []string) {
+	for _, userID := range userIDs {
+		func() {
+			defer m.lock(guildID, userID)()
+			st, err := m.api().Stats(guildID, userID)
+			if err == nil {
+				_, err = m.api().Patch(actor, guildID, userID, st.SeasonID, clearedClaim())
+			}
+			if err != nil {
+				m.logf("reopen starting grant for %s/%s: %v", guildID, userID, err)
+			}
+		}()
+	}
+}
+
+// PerkMultiplier is the win-gain multiplier of the player's best perk (1 = none), for staff /win grants.
+func (m *EloManager) PerkMultiplier(guildID, userID string) float64 {
+	return m.perks(guildID, userID).Multiplier()
+}
+
 // RecordStartingGrants stores the claim record for players whose first ranked
 // game paid them the starting grant. Call it after CompleteGame; failures are
 // logged, not fatal, since the ELO itself is already saved.
