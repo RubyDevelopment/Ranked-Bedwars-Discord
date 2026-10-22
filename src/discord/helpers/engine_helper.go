@@ -96,6 +96,11 @@ type engineInbound struct {
 	At      int64    `json:"at"`
 	Bots    []string `json:"bots"`
 
+	// bot.event / bot.result: the live console (see chat_stream_helper.go)
+	Data  json.RawMessage `json:"data"`
+	OK    bool            `json:"ok"`
+	Error string          `json:"error"`
+
 	// verify.result
 	RequestID string `json:"request_id"`
 	Status    string `json:"status"`
@@ -202,7 +207,8 @@ func (b *EngineBridge) Listen(ctx context.Context, addr, secret string) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/engine/ws", b.serveWS)
-	mux.Handle("/live/chat", LiveChat) // the dashboard's live bot chat (LIVE_CHAT_SECRET)
+	mux.Handle("/live/chat", LiveChat)                     // the dashboard's live bot chat (LIVE_CHAT_SECRET)
+	mux.HandleFunc("/live/control", LiveChat.ServeControl) // the dashboard's live console: actions on a bot (same secret)
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -566,6 +572,12 @@ func (b *EngineBridge) handle(msg engineInbound) {
 
 	case "chat.bots":
 		LiveChat.Bots(msg.GuildID, msg.Bots)
+
+	case "bot.event":
+		LiveChat.Event(msg.GuildID, msg.Bot, msg.Kind, msg.At, msg.Data)
+
+	case "bot.result":
+		LiveChat.Result(msg.RequestID, controlResult{OK: msg.OK, Bot: msg.Bot, Data: msg.Data, Error: msg.Error})
 
 	case "game.chat":
 		Games.StashChat(msg.GameID, msg.Lines)

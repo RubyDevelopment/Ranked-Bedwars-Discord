@@ -1,9 +1,12 @@
 package helpers
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -47,11 +50,12 @@ type chatViewer struct {
 type ChatStream struct {
 	mu      sync.Mutex
 	viewers map[*chatViewer]struct{}
-	bots    map[string][]string // guild -> the bots the engine says are on a server
+	bots    map[string][]string           // guild -> the bots the engine says are on a server
+	pending map[string]chan controlResult // live console actions waiting for the engine's bot.result, by request id
 }
 
 // LiveChat is the process-wide stream.
-var LiveChat = &ChatStream{viewers: map[*chatViewer]struct{}{}, bots: map[string][]string{}}
+var LiveChat = &ChatStream{viewers: map[*chatViewer]struct{}{}, bots: map[string][]string{}, pending: map[string]chan controlResult{}}
 
 func (c *ChatStream) emit(v *chatViewer, name string, payload any) {
 	data, err := json.Marshal(payload)
@@ -147,6 +151,16 @@ func (c *ChatStream) Line(guild, bot, text, motd string, at int64) {
 		map[string]any{"bot": bot, "text": text, "motd": motd, "at": at})
 }
 
+// Event delivers one console log entry (a GUI opening, a kick, an action that was run...) to the viewers of that bot.
+func (c *ChatStream) Event(guild, bot, kind string, at int64, data json.RawMessage) {
+	lower := strings.ToLower(bot)
+	if len(data) == 0 {
+		data = json.RawMessage("{}")
+	}
+	c.broadcast(func(v *chatViewer) bool { return v.guild == guild && (v.bot == "" || v.bot == lower) }, "event",
+		map[string]any{"bot": bot, "kind": kind, "at": at, "data": data})
+}
+
 // Bots records which of a guild's bots are on a server and tells that guild's viewers.
 func (c *ChatStream) Bots(guild string, bots []string) {
 	if bots == nil {
@@ -213,4 +227,108 @@ func (c *ChatStream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// ============================================================================
+// Live console: actions on a bot
+// ============================================================================
+
+// A viewer with permission POSTs /live/control {guild, bot, action, params} (through the dashboard's server). The action goes to the
+// engine as bot.control, and the engine's bot.result is the response. Only the actions below are forwarded; the engine checks the
+// params of each (see Ranked-Bedwars-Engine/src/console.js).
+
+const (
+	controlTimeout   = 20 * time.Second
+	controlBodyLimit = 8 << 10
+)
+
+// controlActions are the actions a viewer may ask for.
+var controlActions = map[string]bool{
+	"chat": true, "hotbar.select": true, "hotbar.use": true, "window.click": true, "window.close": true, "window.state": true,
+	"inventory": true, "state": true, "control": true, "control.stop": true, "look": true, "swing": true, "block.use": true,
+	"respawn": true, "connect": true, "disconnect": true,
+}
+
+type controlResult struct {
+	OK    bool            `json:"ok"`
+	Bot   string          `json:"bot,omitempty"`
+	Data  json.RawMessage `json:"data,omitempty"`
+	Error string          `json:"error,omitempty"`
+}
+
+// Result hands the engine's answer to the request waiting for it.
+func (c *ChatStream) Result(requestID string, r controlResult) {
+	c.mu.Lock()
+	ch := c.pending[requestID]
+	c.mu.Unlock()
+	if ch != nil {
+		select {
+		case ch <- r:
+		default:
+		}
+	}
+}
+
+// Control sends an action to the engine and waits for its answer.
+func (c *ChatStream) Control(guild, bot, action string, params json.RawMessage) controlResult {
+	if !Engine.Connected() {
+		return controlResult{Error: "The engine is not connected."}
+	}
+	id := make([]byte, 8)
+	_, _ = rand.Read(id)
+	requestID := hex.EncodeToString(id)
+	ch := make(chan controlResult, 1)
+	c.mu.Lock()
+	c.pending[requestID] = ch
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		delete(c.pending, requestID)
+		c.mu.Unlock()
+	}()
+	if len(params) == 0 {
+		params = json.RawMessage("{}")
+	}
+	if err := Engine.write(map[string]any{"type": "bot.control", "request_id": requestID, "guild_id": guild, "bot": bot, "action": action, "params": params}); err != nil {
+		return controlResult{Error: "Could not reach the engine."}
+	}
+	select {
+	case r := <-ch:
+		return r
+	case <-time.After(controlTimeout):
+		return controlResult{Error: "The engine did not answer in time."}
+	}
+}
+
+// ServeControl is POST /live/control, guarded by the same LIVE_CHAT_SECRET as the chat stream.
+func (c *ChatStream) ServeControl(w http.ResponseWriter, r *http.Request) {
+	secret := os.Getenv("LIVE_CHAT_SECRET")
+	if secret == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	given := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if subtle.ConstantTimeCompare([]byte(given), []byte(secret)) != 1 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var body struct {
+		Guild  string          `json:"guild"`
+		Bot    string          `json:"bot"`
+		Action string          `json:"action"`
+		Params json.RawMessage `json:"params"`
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, controlBodyLimit))
+	if err != nil || json.Unmarshal(raw, &body) != nil || !chatGuildID.MatchString(body.Guild) || len(strings.TrimSpace(body.Bot)) > 32 || !controlActions[body.Action] {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	result := c.Control(body.Guild, strings.TrimSpace(body.Bot), body.Action, body.Params)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(result)
 }
