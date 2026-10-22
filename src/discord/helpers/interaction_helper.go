@@ -39,6 +39,9 @@ var (
 
 // Respond handles both prefix and slash command responses.
 func Respond(s *discordgo.Session, i *discordgo.InteractionCreate, resp *discordgo.InteractionResponse) error {
+	if resp != nil && resp.Data != nil {
+		WithGuildFooterIcon(s, i, resp.Data.Embeds...)
+	}
 	if IsPrefixInteraction(i) {
 		if resp == nil || resp.Data == nil {
 			return nil
@@ -55,6 +58,7 @@ func Respond(s *discordgo.Session, i *discordgo.InteractionCreate, resp *discord
 
 // EditInteractionEmbed edits an interaction response with an embed.
 func EditInteractionEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed) error {
+	WithGuildFooterIcon(s, i, emb)
 	// A guild can answer with one of its saved messages instead (see response_override.go); any failure keeps the built-in embed.
 	if sent, err := sendCustomResponse(s, i, emb); sent {
 		return nil
@@ -76,6 +80,9 @@ func EditInteractionEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 // EditInteractionResponse edits an interaction response.
 func EditInteractionResponse(s *discordgo.Session, i *discordgo.InteractionCreate, edit *discordgo.WebhookEdit) error {
+	if edit != nil && edit.Embeds != nil {
+		WithGuildFooterIcon(s, i, *edit.Embeds...)
+	}
 	if IsPrefixInteraction(i) {
 		var embeds []*discordgo.MessageEmbed
 		if edit != nil && edit.Embeds != nil {
@@ -93,6 +100,7 @@ func EditInteractionResponse(s *discordgo.Session, i *discordgo.InteractionCreat
 
 // EditInteractionComponents edits an interaction response with embed and components.
 func EditInteractionComponents(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
+	WithGuildFooterIcon(s, i, emb)
 	if sent, err := sendCustomResponse(s, i, emb, components...); sent {
 		return nil
 	} else if err != nil {

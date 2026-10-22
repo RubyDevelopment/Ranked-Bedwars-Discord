@@ -560,7 +560,7 @@ func responseVars(vars map[string]string, command, sub, slug, look string, emb *
 	v["response.title"], v["response.description"] = emb.Title, emb.Description
 	v["response.color"] = HexColorString(emb.Color)
 	if emb.Footer != nil {
-		v["response.footer"] = emb.Footer.Text
+		v["response.footer"], v["response.footer_icon"] = emb.Footer.Text, emb.Footer.IconURL
 	}
 	if emb.Author != nil {
 		v["response.author"] = emb.Author.Name
@@ -581,6 +581,28 @@ func responseVars(vars map[string]string, command, sub, slug, look string, emb *
 	v["response.fields"] = layout.Render(names, values)
 	addOriginalParts(v, command+"."+slug, emb)
 	return v
+}
+
+// WithGuildFooterIcon gives each embed that has a footer the server's icon as its footer icon, unless it already has
+// one: every command answer then carries the server's icon without each builder having to know the guild.
+func WithGuildFooterIcon(s *discordgo.Session, i *discordgo.InteractionCreate, embeds ...*discordgo.MessageEmbed) {
+	if s == nil || s.State == nil || i == nil || i.Interaction == nil || i.GuildID == "" {
+		return
+	}
+	var icon string
+	for _, emb := range embeds {
+		if emb == nil || emb.Footer == nil || emb.Footer.IconURL != "" {
+			continue
+		}
+		if icon == "" {
+			g, err := s.State.Guild(i.GuildID)
+			if err != nil || g == nil || g.Icon == "" {
+				return
+			}
+			icon = g.IconURL("128")
+		}
+		emb.Footer.IconURL = icon
+	}
 }
 
 // HexColorString formats an embed colour as #rrggbb.
