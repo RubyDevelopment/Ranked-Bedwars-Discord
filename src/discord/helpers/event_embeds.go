@@ -40,7 +40,7 @@ func PartyInvalidSubcommandEmbed() *discordgo.MessageEmbed {
 func PartyRegistrationRequiredEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Registration Required",
-		Description: "You are not registered. Run `/player_register` to link a Minecraft account first.",
+		Description: "You are not registered. Run `/register` to link a Minecraft account first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -64,7 +64,7 @@ func PartyBotTargetEmbed() *discordgo.MessageEmbed {
 func PartyTargetNotRegisteredEmbed(user *discordgo.User) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: fmt.Sprintf("<@%s> is not registered in this guild. Ask them to run `/player_register` to link their Minecraft account before inviting them to a party.", user.ID),
+		Description: fmt.Sprintf("<@%s> is not registered in this guild. Ask them to run `/register` to link their Minecraft account before inviting them to a party.", user.ID),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -72,7 +72,7 @@ func PartyTargetNotRegisteredEmbed(user *discordgo.User) *discordgo.MessageEmbed
 func PartyCreatedEmbed(inactivity int) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Party Created",
-		Description: fmt.Sprintf("Your party is ready! Invite players with `/party_group invite` to build your team.\n\n> **Leader:** You\n> **Members:** 1/4\n> **Invites:** Open\n> **Disbands After:** %d minutes of inactivity", inactivity),
+		Description: fmt.Sprintf("Your party is ready! Invite players with `/party invite` to build your team.\n\n> **Leader:** You\n> **Members:** 1/4\n> **Invites:** Open\n> **Disbands After:** %d minutes of inactivity", inactivity),
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -88,7 +88,7 @@ func PartyInviteSentEmbed(head, body string) *discordgo.MessageEmbed {
 func PartyInviteSentNoAlertEmbed(head, body string) *discordgo.MessageEmbed {
 	return Preset("caution", types.PresetOptions{
 		Title:       head,
-		Description: body + "\n\n> **Note:** I couldn't post the invitation to the party alerts channel. Ask the player to run `/party_group accept` with you as the leader to join manually.",
+		Description: body + "\n\n> **Note:** I couldn't post the invitation to the party alerts channel. Ask the player to run `/party accept` with you as the leader to join manually.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -139,7 +139,7 @@ func PartyJoinedEmbed(leaderID string, members, maxSize int) *discordgo.MessageE
 func PartyLeftEmbed() *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Left Party",
-		Description: "You have successfully left the party. You can create a new party with `/party_group create` or join another party by accepting an invitation.",
+		Description: "You have successfully left the party. You can create a new party with `/party create` or join another party by accepting an invitation.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -147,7 +147,7 @@ func PartyLeftEmbed() *discordgo.MessageEmbed {
 func PartyPlayerLeftEmbed(userID string) *discordgo.MessageEmbed {
 	return Preset("info", types.PresetOptions{
 		Title:       "Player Left",
-		Description: fmt.Sprintf("<@%s> has left your party. You can invite a new player to fill the slot with `/party_group invite`.", userID),
+		Description: fmt.Sprintf("<@%s> has left your party. You can invite a new player to fill the slot with `/party invite`.", userID),
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -155,7 +155,7 @@ func PartyPlayerLeftEmbed(userID string) *discordgo.MessageEmbed {
 func PartyPlayerKickedEmbed(targetID string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Player Removed",
-		Description: fmt.Sprintf("<@%s> has been removed from your party. You can invite a new player to fill the slot with `/party_group invite`.", targetID),
+		Description: fmt.Sprintf("<@%s> has been removed from your party. You can invite a new player to fill the slot with `/party invite`.", targetID),
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -179,7 +179,7 @@ func PartyLeadershipTransferredToLeaderEmbed(targetID string) *discordgo.Message
 func PartyDisbandedEmbed() *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Party Disbanded",
-		Description: "Your party has been successfully disbanded. All members have been notified.\n\nYou can create a new party at any time with `/party_group create`.",
+		Description: "Your party has been successfully disbanded. All members have been notified.\n\nYou can create a new party at any time with `/party create`.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -187,7 +187,7 @@ func PartyDisbandedEmbed() *discordgo.MessageEmbed {
 func PartyInvitesOpenedEmbed() *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Invites Open",
-		Description: "Party invites have been reopened. Players can now be invited to your party using `/party_group invite`.",
+		Description: "Party invites have been reopened. Players can now be invited to your party using `/party invite`.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -195,7 +195,7 @@ func PartyInvitesOpenedEmbed() *discordgo.MessageEmbed {
 func PartyInvitesClosedEmbed() *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Invites Closed",
-		Description: "Party invites have been paused. No new players can be invited until you reopen invites with `/party_group invites`.",
+		Description: "Party invites have been paused. No new players can be invited until you reopen invites with `/party invites`.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -203,7 +203,7 @@ func PartyInvitesClosedEmbed() *discordgo.MessageEmbed {
 func PartyNotInPartyEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Not in a Party",
-		Description: "You are not currently in a party. Create a new party with `/party_group create` or accept a pending invitation from another player.",
+		Description: "You are not currently in a party. Create a new party with `/party create` or accept a pending invitation from another player.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -211,7 +211,7 @@ func PartyNotInPartyEmbed() *discordgo.MessageEmbed {
 func PartyTargetNotInPartyEmbed(userID string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Not in a Party",
-		Description: fmt.Sprintf("<@%s> is not currently in a party. They can create one with `/party_group create` or may have pending invitations to accept.", userID),
+		Description: fmt.Sprintf("<@%s> is not currently in a party. They can create one with `/party create` or may have pending invitations to accept.", userID),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -227,7 +227,7 @@ func partyPlayerJoinedEmbed(userID string, members, maxSize int) *discordgo.Mess
 func partyDisbandedByLeaderEmbed() *discordgo.MessageEmbed {
 	return Preset("info", types.PresetOptions{
 		Title:       "Party Disbanded",
-		Description: "The party leader has disbanded the party. You can create a new party with `/party_group create` at any time.",
+		Description: "The party leader has disbanded the party. You can create a new party with `/party create` at any time.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -235,7 +235,7 @@ func partyDisbandedByLeaderEmbed() *discordgo.MessageEmbed {
 func partyDisbandedLastMemberEmbed() *discordgo.MessageEmbed {
 	return Preset("info", types.PresetOptions{
 		Title:       "Party Disbanded",
-		Description: "Your party has been disbanded because all other members have left. You can create a new party with `/party_group create` at any time.",
+		Description: "Your party has been disbanded because all other members have left. You can create a new party with `/party create` at any time.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -243,7 +243,7 @@ func partyDisbandedLastMemberEmbed() *discordgo.MessageEmbed {
 func partyDisbandedInactivityEmbed() *discordgo.MessageEmbed {
 	return Preset("info", types.PresetOptions{
 		Title:       "Party Disbanded",
-		Description: "Your party has been disbanded due to inactivity. Parties automatically disband after a period of no activity. You can create a new party with `/party_group create` at any time.",
+		Description: "Your party has been disbanded due to inactivity. Parties automatically disband after a period of no activity. You can create a new party with `/party create` at any time.",
 		Thumbnail:   ThumbPlayers,
 	})
 }
@@ -259,7 +259,7 @@ func partyDisbandedSystemOffEmbed() *discordgo.MessageEmbed {
 func partyKickedEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Removed from Party",
-		Description: "You have been removed from the party by its leader. You can create a new party with `/party_group create` or accept invitations from other players.",
+		Description: "You have been removed from the party by its leader. You can create a new party with `/party create` or accept invitations from other players.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -354,7 +354,7 @@ func PunishmentPlayerNotFoundEmbed() *discordgo.MessageEmbed {
 func punishmentAlreadyActiveEmbed(adjective string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Punishment Already Active",
-		Description: fmt.Sprintf("That player is already **%s**. Check `/player_punishments` for details.", adjective),
+		Description: fmt.Sprintf("That player is already **%s**. Check `/punishments` for details.", adjective),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -362,7 +362,7 @@ func punishmentAlreadyActiveEmbed(adjective string) *discordgo.MessageEmbed {
 func punishmentNotActiveEmbed(adjective string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Punishment Not Active",
-		Description: fmt.Sprintf("That player is not currently **%s**. Verify their status with `/player_punishments`.", adjective),
+		Description: fmt.Sprintf("That player is not currently **%s**. Verify their status with `/punishments`.", adjective),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -627,7 +627,7 @@ func ticketNotInChannelEmbed() *discordgo.MessageEmbed {
 func ticketPanelMissingEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Panel Not Found",
-		Description: "The panel for this ticket no longer exists. Ask an administrator to check `/ticket_manage panel`.",
+		Description: "The panel for this ticket no longer exists. Ask an administrator to check `/ticket panel`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -814,7 +814,7 @@ func optionalAvailableEmbed(cmdName string, optional []types.Requirement) *disco
 	for _, req := range optional {
 		description += fmt.Sprintf("- %s: %s\n", req.Type, req.Key)
 	}
-	description += "\nWould you like to configure them now, or skip for now? You're able to configure these at any time using `/server_config`."
+	description += "\nWould you like to configure them now, or skip for now? You're able to configure these at any time using `/config`."
 	return Preset("caution", types.PresetOptions{
 		Title:       "Optional Configuration Available",
 		Description: description,
@@ -825,7 +825,7 @@ func optionalAvailableEmbed(cmdName string, optional []types.Requirement) *disco
 func configurationCompleteEmbed(cmdName string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Configuration Complete",
-		Description: fmt.Sprintf("`%s` is ready to use. Please re-run the command. You're able to configure it further at any time using `/server_config`.", cmdName),
+		Description: fmt.Sprintf("`%s` is ready to use. Please re-run the command. You're able to configure it further at any time using `/config`.", cmdName),
 		Thumbnail:   ThumbTada,
 	})
 }
@@ -876,7 +876,7 @@ var statusFields = []embedField{
 var teamStatusField = embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}
 
 var submitYourWin = thumb(tpl("info", "Submit Your Win",
-	"When your match ends, send a **screenshot of the win screen** in this channel.\n\nYou can submit **3 minutes** after the match starts.\n\nRun **`/game_submit`** and attach the image, or send **`=submit`** with the screenshot attached to the same message."), ThumbSprout)
+	"When your match ends, send a **screenshot of the win screen** in this channel.\n\nYou can submit **3 minutes** after the match starts.\n\nRun **`/submit`** and attach the image, or send **`=submit`** with the screenshot attached to the same message."), ThumbSprout)
 
 // The defaults are the old bot's embeds, word for word. Embeds the old bot never had are switched off.
 var defaultEmbeds = map[string]embedTemplate{
@@ -890,7 +890,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	"botConnecting":    off(tpl("pending", "Host Joining", "`{bot}` is joining the server to host your match.")),
 	"privateGameReady": off(tpl("info", "Private Game Ready", "`{bot}` opened the private game. Party invites are next.")),
 	"partyInvitation": thumb(tpl("pending", "Party Invitation",
-		"The host is sending party invites now. Accept the in-game invite to join.\n\n**Not getting an invite?**\n1. Make sure your status is **Online**.\n2. Make sure **Party Invites** are **Enabled**.\n3. Make sure you are using the correct username.\n\nYou can also join manually with `/party_group join {bot}`.",
+		"The host is sending party invites now. Accept the in-game invite to join.\n\n**Not getting an invite?**\n1. Make sure your status is **Online**.\n2. Make sure **Party Invites** are **Enabled**.\n3. Make sure you are using the correct username.\n\nYou can also join manually with `/party join {bot}`.",
 		append([]embedField{
 			{Name: "Host", Value: "`{bot}`", Inline: true},
 			{Name: "Ending", Value: "<t:{endsAt}:R>", Inline: true},

@@ -29,7 +29,7 @@
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
-					"description": "That player is already **…**. Check `/player_punishments` for details."
+					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
 					"key": "ban.invalid-duration",
@@ -156,7 +156,7 @@
 					"slug": "not-registered",
 					"title": "Not Registered",
 					"look": "error",
-					"description": "You must register with `/player_register` before claiming ELO."
+					"description": "You must register with `/register` before claiming ELO."
 				},
 				{
 					"key": "claim.no-active-season",
@@ -244,14 +244,14 @@
 					"slug": "no-active-punishments",
 					"title": "No Active Punishments",
 					"look": "error",
-					"description": "This player has no active punishments to clear. Their history can be reviewed with `/player_punishments`."
+					"description": "This player has no active punishments to clear. Their history can be reviewed with `/punishments`."
 				},
 				{
 					"key": "clearpunishment.punishment-not-found",
 					"slug": "punishment-not-found",
 					"title": "Punishment Not Found",
 					"look": "error",
-					"description": "No punishment with that ID exists for this player in this guild. Double-check the ID from `/player_punishments`."
+					"description": "No punishment with that ID exists for this player in this guild. Double-check the ID from `/punishments`."
 				},
 				{
 					"key": "clearpunishment.punishment-cleared",
@@ -310,7 +310,7 @@
 					"slug": "command-not-set-up",
 					"title": "Command Not Set Up",
 					"look": "error",
-					"description": "**…** has no configuration yet. Run `/server_config setup` first."
+					"description": "**…** has no configuration yet. Run `/config setup` first."
 				},
 				{
 					"key": "config.unknown-requirement-key",
@@ -344,7 +344,7 @@
 					"slug": "unknown-subcommand",
 					"title": "Unknown Subcommand",
 					"look": "error",
-					"description": "Unknown config route `… …`. Use `/server_config` without arguments to see available options."
+					"description": "Unknown config route `… …`. Use `/config` without arguments to see available options."
 				},
 				{
 					"key": "config.invalid-key",
@@ -411,7 +411,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+					"description": "That player is not registered in this guild. Register with `/register` to link a Minecraft account first."
 				},
 				{
 					"key": "decays.no-active-season",
@@ -505,14 +505,14 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register them with `/player_force_register` first."
+					"description": "That player is not registered in this guild. Register them with `/forceregister` first."
 				},
 				{
 					"key": "forcenickname.profile-not-found",
 					"slug": "profile-not-found",
 					"title": "Profile Not Found",
 					"look": "error",
-					"description": "That player's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists."
+					"description": "That player's guild profile could not be found. Run `/forcesync` or contact staff if the issue persists."
 				},
 				{
 					"key": "forcenickname.no-nickname-set",
@@ -648,7 +648,7 @@
 					"slug": "profile-not-found",
 					"title": "Profile Not Found",
 					"look": "error",
-					"description": "That player's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists."
+					"description": "That player's guild profile could not be found. Run `/forcesync` or contact staff if the issue persists."
 				},
 				{
 					"key": "forcerename.already-linked",
@@ -695,7 +695,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register them with `/player_force_register` first."
+					"description": "That player is not registered in this guild. Register them with `/forceregister` first."
 				},
 				{
 					"key": "forcesync.member-not-found",
@@ -716,7 +716,7 @@
 					"slug": "profile-force-synchronized",
 					"title": "Profile Force-Synchronized",
 					"look": "success",
-					"description": "Successfully refreshed the player's roles and nickname. Run `/player_force_sync` again anytime their roles or nickname need refreshing.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Username:** `…`\n\n…"
+					"description": "Successfully refreshed the player's roles and nickname. Run `/forcesync` again anytime their roles or nickname need refreshing.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Username:** `…`\n\n…"
 				}
 			]
 		},
@@ -749,7 +749,7 @@
 					"slug": "profile-not-found",
 					"title": "Profile Not Found",
 					"look": "error",
-					"description": "The source user's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists."
+					"description": "The source user's guild profile could not be found. Run `/forcesync` or contact staff if the issue persists."
 				},
 				{
 					"key": "forcetransfer.already-registered",
@@ -912,7 +912,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+					"description": "That player is not registered in this guild. Register with `/register` to link a Minecraft account first."
 				},
 				{
 					"key": "games.no-active-season",
@@ -937,14 +937,14 @@
 					"slug": "hosted-game-not-found",
 					"title": "Hosted Game Not Found",
 					"look": "error",
-					"description": "No live hosted game **#…** was found. Use `/game_host list` to see the running ones."
+					"description": "No live hosted game **#…** was found. Use `/host list` to see the running ones."
 				},
 				{
 					"key": "host.hosted-games",
 					"slug": "hosted-games",
 					"title": "Hosted Games",
 					"look": "info",
-					"description": "No hosted games are running. Start one with `/game_host create`."
+					"description": "No hosted games are running. Start one with `/host create`."
 				},
 				{
 					"key": "host.hosted-game",
@@ -985,7 +985,7 @@
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
-					"description": "That player is already **…**. Check `/player_punishments` for details."
+					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
 					"key": "kick.kick-applied",
@@ -1065,7 +1065,7 @@
 					"slug": "registration-required",
 					"title": "Registration Required",
 					"look": "error",
-					"description": "You must register with the ranked system to use the looking-for-group feature. Use `/player_register` to link your account and track your seasonal progress."
+					"description": "You must register with the ranked system to use the looking-for-group feature. Use `/register` to link your account and track your seasonal progress."
 				},
 				{
 					"key": "lfg.lfg-posted",
@@ -1105,7 +1105,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register them with `/player_force_register` before removing ELO."
+					"description": "That player is not registered in this guild. Register them with `/forceregister` before removing ELO."
 				},
 				{
 					"key": "loss.no-active-season",
@@ -1184,7 +1184,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register them with `/player_force_register` before modifying their statistics."
+					"description": "That player is not registered in this guild. Register them with `/forceregister` before modifying their statistics."
 				},
 				{
 					"key": "modify.no-active-season",
@@ -1231,7 +1231,7 @@
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
-					"description": "That player is already **…**. Check `/player_punishments` for details."
+					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
 					"key": "mute.invalid-duration",
@@ -1271,14 +1271,14 @@
 					"slug": "registration-required",
 					"title": "Registration Required",
 					"look": "error",
-					"description": "You must register before setting a nickname. Run `/player_register` to link your Minecraft account first."
+					"description": "You must register before setting a nickname. Run `/register` to link your Minecraft account first."
 				},
 				{
 					"key": "nickname.no-nickname-set",
 					"slug": "no-nickname-set",
 					"title": "No Nickname Set",
 					"look": "error",
-					"description": "It looks like you do not have an active nickname to remove. Provide a nickname with `/player_nickname` to assign one first."
+					"description": "It looks like you do not have an active nickname to remove. Provide a nickname with `/nickname` to assign one first."
 				},
 				{
 					"key": "nickname.invalid-nickname",
@@ -1477,7 +1477,7 @@
 					"slug": "registration-required",
 					"title": "Registration Required",
 					"look": "error",
-					"description": "You are not registered. Run `/player_register` to link a Minecraft account first."
+					"description": "You are not registered. Run `/register` to link a Minecraft account first."
 				},
 				{
 					"key": "party.player-not-found",
@@ -1498,14 +1498,14 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "\u003c@…\u003e is not registered in this guild. Ask them to run `/player_register` to link their Minecraft account before inviting them to a party."
+					"description": "\u003c@…\u003e is not registered in this guild. Ask them to run `/register` to link their Minecraft account before inviting them to a party."
 				},
 				{
 					"key": "party.party-created",
 					"slug": "party-created",
 					"title": "Party Created",
 					"look": "success",
-					"description": "Your party is ready! Invite players with `/party_group invite` to build your team.\n\n\u003e **Leader:** You\n\u003e **Members:** 1/4\n\u003e **Invites:** Open\n\u003e **Disbands After:** … minutes of inactivity"
+					"description": "Your party is ready! Invite players with `/party invite` to build your team.\n\n\u003e **Leader:** You\n\u003e **Members:** 1/4\n\u003e **Invites:** Open\n\u003e **Disbands After:** … minutes of inactivity"
 				},
 				{
 					"key": "party.invitation-declined",
@@ -1526,14 +1526,14 @@
 					"slug": "left-party",
 					"title": "Left Party",
 					"look": "success",
-					"description": "You have successfully left the party. You can create a new party with `/party_group create` or join another party by accepting an invitation."
+					"description": "You have successfully left the party. You can create a new party with `/party create` or join another party by accepting an invitation."
 				},
 				{
 					"key": "party.player-removed",
 					"slug": "player-removed",
 					"title": "Player Removed",
 					"look": "success",
-					"description": "\u003c@…\u003e has been removed from your party. You can invite a new player to fill the slot with `/party_group invite`."
+					"description": "\u003c@…\u003e has been removed from your party. You can invite a new player to fill the slot with `/party invite`."
 				},
 				{
 					"key": "party.leadership-transferred",
@@ -1547,28 +1547,28 @@
 					"slug": "party-disbanded",
 					"title": "Party Disbanded",
 					"look": "success",
-					"description": "Your party has been successfully disbanded. All members have been notified.\n\nYou can create a new party at any time with `/party_group create`."
+					"description": "Your party has been successfully disbanded. All members have been notified.\n\nYou can create a new party at any time with `/party create`."
 				},
 				{
 					"key": "party.invites-open",
 					"slug": "invites-open",
 					"title": "Invites Open",
 					"look": "success",
-					"description": "Party invites have been reopened. Players can now be invited to your party using `/party_group invite`."
+					"description": "Party invites have been reopened. Players can now be invited to your party using `/party invite`."
 				},
 				{
 					"key": "party.invites-closed",
 					"slug": "invites-closed",
 					"title": "Invites Closed",
 					"look": "success",
-					"description": "Party invites have been paused. No new players can be invited until you reopen invites with `/party_group invites`."
+					"description": "Party invites have been paused. No new players can be invited until you reopen invites with `/party invites`."
 				},
 				{
 					"key": "party.not-in-a-party",
 					"slug": "not-in-a-party",
 					"title": "Not in a Party",
 					"look": "error",
-					"description": "You are not currently in a party. Create a new party with `/party_group create` or accept a pending invitation from another player."
+					"description": "You are not currently in a party. Create a new party with `/party create` or accept a pending invitation from another player."
 				},
 				{
 					"key": "party.party-information",
@@ -1759,7 +1759,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. They must run `/player_register` before a profile is available."
+					"description": "That player is not registered in this guild. They must run `/register` before a profile is available."
 				},
 				{
 					"key": "profile.profile-hidden",
@@ -1773,7 +1773,7 @@
 					"slug": "player-profile",
 					"title": "Player Profile — …",
 					"look": "info",
-					"description": "…\n\nUse `/player_stats` for a full seasonal breakdown."
+					"description": "…\n\nUse `/stats` for a full seasonal breakdown."
 				}
 			]
 		},
@@ -1799,7 +1799,7 @@
 					"slug": "invalid-subcommand",
 					"title": "Invalid Subcommand",
 					"look": "error",
-					"description": "Use `/game_pugs list` or `/game_pugs vote`."
+					"description": "Use `/pugs list` or `/pugs vote`."
 				}
 			]
 		},
@@ -1825,7 +1825,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+					"description": "That player is not registered in this guild. Register with `/register` to link a Minecraft account first."
 				},
 				{
 					"key": "punishments.history-clear",
@@ -1879,7 +1879,7 @@
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
-					"description": "That player is already **…**. Check `/player_punishments` for details."
+					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
 					"key": "queueban.invalid-duration",
@@ -1988,7 +1988,7 @@
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
-					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+					"description": "That player is not currently **…**. Verify their status with `/punishments`."
 				},
 				{
 					"key": "queueunban.queue-ban-removed",
@@ -2053,7 +2053,7 @@
 					"slug": "already-registered",
 					"title": "Already Registered",
 					"look": "error",
-					"description": "You are already registered as **…**. Use `/player_rename` to change your username."
+					"description": "You are already registered as **…**. Use `/rename` to change your username."
 				},
 				{
 					"key": "register.verification-unavailable",
@@ -2100,7 +2100,7 @@
 					"slug": "registration-required",
 					"title": "Registration Required",
 					"look": "error",
-					"description": "You must register before you can rename your linked account. Run `/player_register` to link your Minecraft account first."
+					"description": "You must register before you can rename your linked account. Run `/register` to link your Minecraft account first."
 				},
 				{
 					"key": "rename.profile-not-found",
@@ -2175,7 +2175,7 @@
 					"slug": "invalid-state",
 					"title": "Invalid State",
 					"look": "error",
-					"description": "Game **#…** has not finished yet. Only completed or voided games can be rescored; use `/game_score` for games that are still in progress."
+					"description": "Game **#…** has not finished yet. Only completed or voided games can be rescored; use `/score` for games that are still in progress."
 				},
 				{
 					"key": "rescore.game-rescored",
@@ -2334,7 +2334,7 @@
 					"slug": "role-not-assigned",
 					"title": "Role Not Assigned",
 					"look": "error",
-					"description": "\u003c@…\u003e does not currently have the **…** role. Use `/server_role list` to view their current roles."
+					"description": "\u003c@…\u003e does not currently have the **…** role. Use `/role list` to view their current roles."
 				},
 				{
 					"key": "role.role-updated",
@@ -2355,7 +2355,7 @@
 					"slug": "roles",
 					"title": "Roles — …",
 					"look": "success",
-					"description": "…\n\nUse `/server_role add` or `/server_role remove` to manage roles."
+					"description": "…\n\nUse `/role add` or `/role remove` to manage roles."
 				},
 				{
 					"key": "role.role-synchronization-started",
@@ -2537,14 +2537,14 @@
 					"slug": "invalid-subcommand",
 					"title": "Invalid Subcommand",
 					"look": "error",
-					"description": "Use `/player_settings view` or `/player_settings toggle`."
+					"description": "Use `/settings view` or `/settings toggle`."
 				},
 				{
 					"key": "settings.registration-required",
 					"slug": "registration-required",
 					"title": "Registration Required",
 					"look": "error",
-					"description": "You must register before you can manage your settings. Run `/player_register` to link your Minecraft account first."
+					"description": "You must register before you can manage your settings. Run `/register` to link your Minecraft account first."
 				},
 				{
 					"key": "settings.unknown-setting",
@@ -2558,7 +2558,7 @@
 					"slug": "player-settings",
 					"title": "Player Settings — …",
 					"look": "info",
-					"description": "Your current ranked profile preferences. Use `/player_settings toggle` to change one.",
+					"description": "Your current ranked profile preferences. Use `/settings toggle` to change one.",
 					"has_fields": true
 				},
 				{
@@ -2578,7 +2578,7 @@
 					"slug": "invalid-subcommand",
 					"title": "Invalid Subcommand",
 					"look": "error",
-					"description": "Use `/server_setup init` or `/server_setup sync`."
+					"description": "Use `/setup init` or `/setup sync`."
 				},
 				{
 					"key": "setup.guild-setup-failed",
@@ -2630,7 +2630,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "\u003c@…\u003e is not registered in this guild. They must run `/player_register` before stats are available."
+					"description": "\u003c@…\u003e is not registered in this guild. They must run `/register` before stats are available."
 				},
 				{
 					"key": "stats.stats-private",
@@ -2748,7 +2748,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+					"description": "That player is not registered in this guild. Register with `/register` to link a Minecraft account first."
 				},
 				{
 					"key": "strikes.strikes-clear",
@@ -3085,7 +3085,7 @@
 					"slug": "registration-required",
 					"title": "Registration Required",
 					"look": "error",
-					"description": "You must register before you can refresh your profile. Run `/player_register` to link your Minecraft account first."
+					"description": "You must register before you can refresh your profile. Run `/register` to link your Minecraft account first."
 				},
 				{
 					"key": "sync.member-not-found",
@@ -3132,7 +3132,7 @@
 					"slug": "panel-not-found",
 					"title": "Panel Not Found",
 					"look": "error",
-					"description": "The panel for this ticket no longer exists. Ask an administrator to check `/ticket_manage panel`."
+					"description": "The panel for this ticket no longer exists. Ask an administrator to check `/ticket panel`."
 				},
 				{
 					"key": "ticket.unexpected-error",
@@ -3165,7 +3165,7 @@
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
-					"description": "That player is not currently **server banned**. Verify their status with `/player_punishments`."
+					"description": "That player is not currently **server banned**. Verify their status with `/punishments`."
 				},
 				{
 					"key": "unban.server-unban-applied",
@@ -3204,7 +3204,7 @@
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
-					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+					"description": "That player is not currently **…**. Verify their status with `/punishments`."
 				},
 				{
 					"key": "unmute.chat-mute-removed",
@@ -3277,14 +3277,14 @@
 					"slug": "no-strikes-found",
 					"title": "No Strikes Found",
 					"look": "error",
-					"description": "This player has no active strikes to void. Their strike history can be reviewed with `/strike_list`."
+					"description": "This player has no active strikes to void. Their strike history can be reviewed with `/strikes`."
 				},
 				{
 					"key": "unstrike.strike-not-found",
 					"slug": "strike-not-found",
 					"title": "Strike Not Found",
 					"look": "error",
-					"description": "No strike with that ID exists for this player in this guild. Double-check the ID from `/strike_list`."
+					"description": "No strike with that ID exists for this player in this guild. Double-check the ID from `/strikes`."
 				},
 				{
 					"key": "unstrike.already-voided",
@@ -3462,7 +3462,7 @@
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
-					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+					"description": "That player is not currently **…**. Verify their status with `/punishments`."
 				},
 				{
 					"key": "unwarn.warning-removed",
@@ -3548,7 +3548,7 @@
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
-					"description": "That player is already **…**. Check `/player_punishments` for details."
+					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
 					"key": "vcmute.invalid-duration",
@@ -3609,7 +3609,7 @@
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
-					"description": "That player is not currently **…**. Verify their status with `/player_punishments`."
+					"description": "That player is not currently **…**. Verify their status with `/punishments`."
 				},
 				{
 					"key": "vcunmute.voice-mute-removed",
@@ -3642,7 +3642,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "\u003c@…\u003e is not registered in this guild, so they cannot queue. Register them with `/player_force_register`."
+					"description": "\u003c@…\u003e is not registered in this guild, so they cannot queue. Register them with `/forceregister`."
 				},
 				{
 					"key": "verify.player-verification",
@@ -3844,7 +3844,7 @@
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
-					"description": "That player is already **…**. Check `/player_punishments` for details."
+					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
 					"key": "warn.warning-issued",
@@ -3877,7 +3877,7 @@
 					"slug": "player-not-registered",
 					"title": "Player Not Registered",
 					"look": "error",
-					"description": "That player is not registered in this guild. Register them with `/player_force_register` before granting ELO."
+					"description": "That player is not registered in this guild. Register them with `/forceregister` before granting ELO."
 				},
 				{
 					"key": "win.no-active-season",
@@ -3944,7 +3944,7 @@
 					"slug": "stats-wiped",
 					"title": "Stats Wiped",
 					"look": "success",
-					"description": "Successfully wiped the player's seasonal stats. This action has been logged for staff review. Use `/player_unwipe` to undo it.\n\n\u003e **Player:** `…`\n\u003e **Season:** `…`\n\u003e **Wiped:** …\n\u003e **ELO:** `…` → `…`\n\u003e **Rank:** `…`\n\u003e **Wipe ID:** `…`"
+					"description": "Successfully wiped the player's seasonal stats. This action has been logged for staff review. Use `/unwipe` to undo it.\n\n\u003e **Player:** `…`\n\u003e **Season:** `…`\n\u003e **Wiped:** …\n\u003e **ELO:** `…` → `…`\n\u003e **Rank:** `…`\n\u003e **Wipe ID:** `…`"
 				}
 			]
 		}

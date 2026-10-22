@@ -137,7 +137,7 @@ func executeServerConfigCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	if !helpers.MemberIsAdministrator(s, i) {
 		return helpers.EditInteractionEmbed(s, i, helpers.AccessDeniedEmbed(
 			"Permission Denied",
-			"Only administrators can use `/server_config`.",
+			"Only administrators can use `/config`.",
 		))
 	}
 

@@ -136,7 +136,7 @@ const CommandLogsKey = "command_logs"
 const ModerationAlertsKey = "moderation_alerts"
 
 // ModerationRequirements is declared by every moderation command. Requirements are identified by type and key, so one
-// assignment of each (/server_config channel|role set) applies to all of them.
+// assignment of each (/config channel|role set) applies to all of them.
 var ModerationRequirements = []Requirement{
 	{Type: ReqChannel, Key: CommandLogsKey, Optional: true},
 	{Type: ReqChannel, Key: ModerationAlertsKey, Optional: true},
@@ -215,7 +215,7 @@ type V2Item struct {
 }
 
 // Role requirement keys shared by command groups. Requirements are identified by type and key, so one assignment of each
-// (/server_config role set) applies to every command that declares it.
+// (/config role set) applies to every command that declares it.
 const (
 	StaffRoleKey      = "staff_role"      // members allowed to run staff commands (they must hold it)
 	RegisteredRoleKey = "registered_role" // members who have registered (they must hold it to use general commands)

@@ -195,7 +195,7 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 	if err != nil {
 		if sdk.IsNotFound(err) {
 			ejectFromQueue(s, guildID, userID, "")
-			sendQueueAlert(s, guildID, userID, queueDeniedEmbed("You must be registered to queue. Register with `/player_register` to link a Minecraft account first."))
+			sendQueueAlert(s, guildID, userID, queueDeniedEmbed("You must be registered to queue. Register with `/register` to link a Minecraft account first."))
 			return false
 		}
 		queueLogger.Error(fmt.Sprintf("Failed to load player %s in guild %s: %v", userID, guildID, err))

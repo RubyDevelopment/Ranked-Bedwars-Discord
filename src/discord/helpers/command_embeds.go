@@ -59,7 +59,7 @@ func ServerConfigUnknownCommandEmbed(i *discordgo.InteractionCreate, name string
 func ServerConfigCommandNotSetUpEmbed(i *discordgo.InteractionCreate, name string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Command Not Set Up",
-		Description: fmt.Sprintf("**%s** has no configuration yet. Run `/server_config setup` first.", name),
+		Description: fmt.Sprintf("**%s** has no configuration yet. Run `/config setup` first.", name),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -155,7 +155,7 @@ func ServerConfigRequirementClearedEmbed(i *discordgo.InteractionCreate, resourc
 func ServerConfigUnknownRouteEmbed(i *discordgo.InteractionCreate, group, sub string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unknown Subcommand",
-		Description: fmt.Sprintf("Unknown config route `%s %s`. Use `/server_config` without arguments to see available options.", group, sub),
+		Description: fmt.Sprintf("Unknown config route `%s %s`. Use `/config` without arguments to see available options.", group, sub),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -245,7 +245,7 @@ func SetupResultLines(result *types.SetupResult) []string {
 func ServerSetupInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Subcommand",
-		Description: "Use `/server_setup init` or `/server_setup sync`.",
+		Description: "Use `/setup init` or `/setup sync`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -273,7 +273,7 @@ func ServerSetupSuccessEmbed(i *discordgo.InteractionCreate, result *types.Setup
 		"**What was created:**",
 	}
 	lines = append(lines, SetupResultLines(result)...)
-	lines = append(lines, "", "Use `/server_config` or the web dashboard to assign roles, channels, and bots.")
+	lines = append(lines, "", "Use `/config` or the web dashboard to assign roles, channels, and bots.")
 
 	return Preset("success", types.PresetOptions{
 		Title:       "Guild Setup Complete",
@@ -289,7 +289,7 @@ func ServerSyncSuccessEmbed(i *discordgo.InteractionCreate, result *types.SetupR
 		"**What was synced:**",
 	}
 	lines = append(lines, SetupResultLines(result)...)
-	lines = append(lines, "", "Use `/server_config` or the web dashboard to assign roles, channels, and bots.")
+	lines = append(lines, "", "Use `/config` or the web dashboard to assign roles, channels, and bots.")
 
 	return Preset("success", types.PresetOptions{
 		Title:       "Guild Sync Complete",
@@ -385,7 +385,7 @@ func GameHistoryBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Messag
 func GameHistoryNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
+		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -694,7 +694,7 @@ func PugsInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEm
 func PugsInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Subcommand",
-		Description: "Use `/game_pugs list` or `/game_pugs vote`.",
+		Description: "Use `/pugs list` or `/pugs vote`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -869,7 +869,7 @@ func UnexpectedErrorClaimEloEmbed(i *discordgo.InteractionCreate) *discordgo.Mes
 func ClaimEloNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Not Registered",
-		Description: "You must register with `/player_register` before claiming ELO.",
+		Description: "You must register with `/register` before claiming ELO.",
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -930,7 +930,7 @@ func DecaysBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbe
 func DecaysNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
+		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -974,7 +974,7 @@ func UnexpectedErrorNicknameEmbed(i *discordgo.InteractionCreate) *discordgo.Mes
 func NicknameRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Registration Required",
-		Description: "You must register before setting a nickname. Run `/player_register` to link your Minecraft account first.",
+		Description: "You must register before setting a nickname. Run `/register` to link your Minecraft account first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -982,7 +982,7 @@ func NicknameRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordg
 func NicknameNoneActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Nickname Set",
-		Description: "It looks like you do not have an active nickname to remove. Provide a nickname with `/player_nickname` to assign one first.",
+		Description: "It looks like you do not have an active nickname to remove. Provide a nickname with `/nickname` to assign one first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1081,7 +1081,7 @@ func PlayerProfileBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Mess
 func PlayerProfileNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. They must run `/player_register` before a profile is available.",
+		Description: "That player is not registered in this guild. They must run `/register` before a profile is available.",
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -1146,7 +1146,7 @@ func PlayerProfileOverviewEmbed(i *discordgo.InteractionCreate, user *discordgo.
 
 	return Preset("info", types.PresetOptions{
 		Title:       fmt.Sprintf("Player Profile — %s", config.Username),
-		Description: description + "\n\nUse `/player_stats` for a full seasonal breakdown.",
+		Description: description + "\n\nUse `/stats` for a full seasonal breakdown.",
 		Thumbnail:   MinecraftBustAvatarURL(config.Username),
 	})
 }
@@ -1174,7 +1174,7 @@ func PlayerPunishmentsBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.
 func PlayerPunishmentsNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
+		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -1242,7 +1242,7 @@ func PlayerRegisterConflictEmbed(i *discordgo.InteractionCreate, username string
 func PlayerRegisterAlreadyRegisteredEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Already Registered",
-		Description: fmt.Sprintf("You are already registered as **%s**. Use `/player_rename` to change your username.", username),
+		Description: fmt.Sprintf("You are already registered as **%s**. Use `/rename` to change your username.", username),
 		Thumbnail:   MinecraftBustAvatarURL(username),
 	})
 }
@@ -1316,7 +1316,7 @@ func RegisterCodePromptEmbed(i *discordgo.InteractionCreate, username string, le
 func RegisterUseSlashEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Slash Command Required",
-		Description: "This guild verifies Minecraft accounts with a code, which needs buttons. Please use `/player_register` instead of the prefix command.",
+		Description: "This guild verifies Minecraft accounts with a code, which needs buttons. Please use `/register` instead of the prefix command.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1340,7 +1340,7 @@ func RegisterRateLimitedEmbed(i *discordgo.InteractionCreate, wait time.Duration
 func RegisterNoPendingEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Nothing To Verify",
-		Description: "You have no registration waiting for a code, or it expired. Run `/player_register` to start again.",
+		Description: "You have no registration waiting for a code, or it expired. Run `/register` to start again.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1362,7 +1362,7 @@ func RegisterCodeRejectedEmbed(i *discordgo.InteractionCreate, result CodeResult
 	case CodeLocked:
 		return Preset("error", types.PresetOptions{
 			Title:       "Too Many Attempts",
-			Description: "That was the last attempt. Run `/player_register` again to get a new code.",
+			Description: "That was the last attempt. Run `/register` again to get a new code.",
 			Thumbnail:   ThumbFlag,
 		})
 	}
@@ -1374,10 +1374,10 @@ func RegisterVerifyFailedEmbed(i *discordgo.InteractionCreate, username, status 
 	switch status {
 	case "offline":
 		title = "Join The Server First"
-		description = fmt.Sprintf("**%s** does not appear to be online on the Minecraft server. Join the server, then run `/player_register` again.", username)
+		description = fmt.Sprintf("**%s** does not appear to be online on the Minecraft server. Join the server, then run `/register` again.", username)
 	case "not_joined":
 		title = "Party Invite Not Accepted"
-		description = fmt.Sprintf("A party invite was sent to **%s**, but you did not join it in time. Make sure you are on the server and accept the invite, then run `/player_register` again.", username)
+		description = fmt.Sprintf("A party invite was sent to **%s**, but you did not join it in time. Make sure you are on the server and accept the invite, then run `/register` again.", username)
 	case "no_bot":
 		title = "Verification Busy"
 		description = "Every verification bot is busy right now. Please try again in a minute."
@@ -1400,7 +1400,7 @@ func UnexpectedErrorPlayerRenameEmbed(i *discordgo.InteractionCreate) *discordgo
 func PlayerRenameRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Registration Required",
-		Description: "You must register before you can rename your linked account. Run `/player_register` to link your Minecraft account first.",
+		Description: "You must register before you can rename your linked account. Run `/register` to link your Minecraft account first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1530,7 +1530,7 @@ func UnexpectedErrorPlayerSettingsEmbed(i *discordgo.InteractionCreate) *discord
 func PlayerSettingsInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Subcommand",
-		Description: "Use `/player_settings view` or `/player_settings toggle`.",
+		Description: "Use `/settings view` or `/settings toggle`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1538,7 +1538,7 @@ func PlayerSettingsInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *disco
 func PlayerSettingsRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Registration Required",
-		Description: "You must register before you can manage your settings. Run `/player_register` to link your Minecraft account first.",
+		Description: "You must register before you can manage your settings. Run `/register` to link your Minecraft account first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1554,7 +1554,7 @@ func PlayerSettingsUnknownOptionEmbed(i *discordgo.InteractionCreate) *discordgo
 func PlayerSettingsOverviewEmbed(i *discordgo.InteractionCreate, config *models.PlayerConfigsModel) *discordgo.MessageEmbed {
 	return Preset("info", types.PresetOptions{
 		Title:       fmt.Sprintf("Player Settings — %s", config.Username),
-		Description: "Your current ranked profile preferences. Use `/player_settings toggle` to change one.",
+		Description: "Your current ranked profile preferences. Use `/settings toggle` to change one.",
 		Thumbnail:   MinecraftBustAvatarURL(config.Username),
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: "ELO Visibility", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsEloVisible)), Inline: true},
@@ -1606,7 +1606,7 @@ func PlayerStatsBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Messag
 func PlayerStatsNotRegisteredEmbed(i *discordgo.InteractionCreate, user *discordgo.User) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: fmt.Sprintf("<@%s> is not registered in this guild. They must run `/player_register` before stats are available.", user.ID),
+		Description: fmt.Sprintf("<@%s> is not registered in this guild. They must run `/register` before stats are available.", user.ID),
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -1665,7 +1665,7 @@ func UnexpectedErrorPlayerSyncEmbed(i *discordgo.InteractionCreate) *discordgo.M
 func PlayerSyncRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Registration Required",
-		Description: "You must register before you can refresh your profile. Run `/player_register` to link your Minecraft account first.",
+		Description: "You must register before you can refresh your profile. Run `/register` to link your Minecraft account first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1828,7 +1828,7 @@ func QueueLfgQueuesPausedEmbed(i *discordgo.InteractionCreate) *discordgo.Messag
 func QueueLfgNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Registration Required",
-		Description: "You must register with the ranked system to use the looking-for-group feature. Use `/player_register` to link your account and track your seasonal progress.",
+		Description: "You must register with the ranked system to use the looking-for-group feature. Use `/register` to link your account and track your seasonal progress.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -1994,7 +1994,7 @@ func StrikeListBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Message
 func StrikeListNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
+		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -2097,7 +2097,7 @@ func GameForceVoidSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int, r
 func GameHostNotFoundEmbed(i *discordgo.InteractionCreate, number int) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Hosted Game Not Found",
-		Description: fmt.Sprintf("No live hosted game **#%d** was found. Use `/game_host list` to see the running ones.", number),
+		Description: fmt.Sprintf("No live hosted game **#%d** was found. Use `/host list` to see the running ones.", number),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2106,7 +2106,7 @@ func GameHostListEmbed(i *discordgo.InteractionCreate, games []Game) *discordgo.
 	if len(games) == 0 {
 		return Preset("info", types.PresetOptions{
 			Title:       "Hosted Games",
-			Description: "No hosted games are running. Start one with `/game_host create`.",
+			Description: "No hosted games are running. Start one with `/host create`.",
 			Thumbnail:   ThumbDoubleSwords,
 		})
 	}
@@ -2178,7 +2178,7 @@ func GameLossBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEm
 func GameLossRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` before removing ELO.",
+		Description: "That player is not registered in this guild. Register them with `/forceregister` before removing ELO.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2259,7 +2259,7 @@ func GameModifyUnknownStatEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 func GameModifyRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` before modifying their statistics.",
+		Description: "That player is not registered in this guild. Register them with `/forceregister` before modifying their statistics.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2339,7 +2339,7 @@ func GameRescoreNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *d
 func GameRescoreInvalidStateEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid State",
-		Description: fmt.Sprintf("Game **#%d** has not finished yet. Only completed or voided games can be rescored; use `/game_score` for games that are still in progress.", gameNumber),
+		Description: fmt.Sprintf("Game **#%d** has not finished yet. Only completed or voided games can be rescored; use `/score` for games that are still in progress.", gameNumber),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2454,7 +2454,7 @@ func GameWinBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmb
 func GameWinRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` before granting ELO.",
+		Description: "That player is not registered in this guild. Register them with `/forceregister` before granting ELO.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2511,7 +2511,7 @@ func PlayerForceNicknameInvalidTargetEmbed(i *discordgo.InteractionCreate) *disc
 func PlayerForceNicknameRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` first.",
+		Description: "That player is not registered in this guild. Register them with `/forceregister` first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2519,7 +2519,7 @@ func PlayerForceNicknameRegistrationRequiredEmbed(i *discordgo.InteractionCreate
 func PlayerForceNicknameProfileNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Profile Not Found",
-		Description: "That player's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists.",
+		Description: "That player's guild profile could not be found. Run `/forcesync` or contact staff if the issue persists.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2685,7 +2685,7 @@ func PlayerForceRenameRegistrationRequiredEmbed(i *discordgo.InteractionCreate) 
 func PlayerForceRenameProfileNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Profile Not Found",
-		Description: "That player's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists.",
+		Description: "That player's guild profile could not be found. Run `/forcesync` or contact staff if the issue persists.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2748,7 +2748,7 @@ func PlayerForceSyncBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 func PlayerForceSyncRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` first.",
+		Description: "That player is not registered in this guild. Register them with `/forceregister` first.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -2773,7 +2773,7 @@ func PlayerForceSyncSuccessEmbed(i *discordgo.InteractionCreate, user *discordgo
 	return Preset("success", types.PresetOptions{
 		Title: "Profile Force-Synchronized",
 		Description: fmt.Sprintf(
-			"Successfully refreshed the player's roles and nickname. Run `/player_force_sync` again anytime their roles or nickname need refreshing.\n\n> **User:** <@%s>\n> **Username:** `%s`\n\n%s",
+			"Successfully refreshed the player's roles and nickname. Run `/forcesync` again anytime their roles or nickname need refreshing.\n\n> **User:** <@%s>\n> **Username:** `%s`\n\n%s",
 			user.ID, username, strings.Join(actions, "\n"),
 		),
 		Thumbnail: MinecraftBustAvatarURL(username),
@@ -2819,7 +2819,7 @@ func PlayerForceTransferSourceNotRegisteredEmbed(i *discordgo.InteractionCreate)
 func PlayerForceTransferSourceProfileNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Profile Not Found",
-		Description: "The source user's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists.",
+		Description: "The source user's guild profile could not be found. Run `/forcesync` or contact staff if the issue persists.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3005,7 +3005,7 @@ func PlayerVerifyBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 func PlayerVerifyNotRegisteredEmbed(i *discordgo.InteractionCreate, user *discordgo.User) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
-		Description: fmt.Sprintf("<@%s> is not registered in this guild, so they cannot queue. Register them with `/player_force_register`.", user.ID),
+		Description: fmt.Sprintf("<@%s> is not registered in this guild, so they cannot queue. Register them with `/forceregister`.", user.ID),
 		Thumbnail:   MinecraftBustAvatarURL(""),
 	})
 }
@@ -3112,7 +3112,7 @@ func PlayerWipeSuccessEmbed(i *discordgo.InteractionCreate, username, season str
 	return Preset("success", types.PresetOptions{
 		Title: "Stats Wiped",
 		Description: fmt.Sprintf(
-			"Successfully wiped the player's seasonal stats. This action has been logged for staff review. Use `/player_unwipe` to undo it.\n\n> **Player:** `%s`\n> **Season:** `%s`\n> **Wiped:** %s\n> **ELO:** `%d` → `%d`\n> **Rank:** `%s`\n> **Wipe ID:** `%d`",
+			"Successfully wiped the player's seasonal stats. This action has been logged for staff review. Use `/unwipe` to undo it.\n\n> **Player:** `%s`\n> **Season:** `%s`\n> **Wiped:** %s\n> **ELO:** `%d` → `%d`\n> **Rank:** `%s`\n> **Wipe ID:** `%d`",
 			username, season, scope, r.Wipe.EloBefore, r.Stats.Elo, rank, r.Wipe.ID,
 		),
 		Thumbnail: MinecraftBustAvatarURL(username),
@@ -3150,7 +3150,7 @@ func PunishmentClearBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 func PunishmentClearNoneActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Active Punishments",
-		Description: "This player has no active punishments to clear. Their history can be reviewed with `/player_punishments`.",
+		Description: "This player has no active punishments to clear. Their history can be reviewed with `/punishments`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3158,7 +3158,7 @@ func PunishmentClearNoneActiveEmbed(i *discordgo.InteractionCreate) *discordgo.M
 func PunishmentClearNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Punishment Not Found",
-		Description: "No punishment with that ID exists for this player in this guild. Double-check the ID from `/player_punishments`.",
+		Description: "No punishment with that ID exists for this player in this guild. Double-check the ID from `/punishments`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3370,7 +3370,7 @@ func RoleAlreadyAssignedEmbed(i *discordgo.InteractionCreate, user *discordgo.Us
 func RoleNotAssignedEmbed(i *discordgo.InteractionCreate, user *discordgo.User, roleName string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Role Not Assigned",
-		Description: fmt.Sprintf("<@%s> does not currently have the **%s** role. Use `/server_role list` to view their current roles.", user.ID, roleName),
+		Description: fmt.Sprintf("<@%s> does not currently have the **%s** role. Use `/role list` to view their current roles.", user.ID, roleName),
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3400,7 +3400,7 @@ func RoleMassResultEmbed(i *discordgo.InteractionCreate, roleName, action string
 func RoleListEmbed(i *discordgo.InteractionCreate, user *discordgo.User, roles string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       fmt.Sprintf("Roles — %s", user.Username),
-		Description: roles + "\n\nUse `/server_role add` or `/server_role remove` to manage roles.",
+		Description: roles + "\n\nUse `/role add` or `/role remove` to manage roles.",
 		Thumbnail:   ThumbGuild,
 	})
 }
@@ -3463,7 +3463,7 @@ func ServerUnbanInvalidUserIDEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 func ServerUnbanNotActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Punishment Not Active",
-		Description: "That player is not currently **server banned**. Verify their status with `/player_punishments`.",
+		Description: "That player is not currently **server banned**. Verify their status with `/punishments`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3573,7 +3573,7 @@ func StrikeRemovePlayerNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.
 func StrikeRemoveNoStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Strikes Found",
-		Description: "This player has no active strikes to void. Their strike history can be reviewed with `/strike_list`.",
+		Description: "This player has no active strikes to void. Their strike history can be reviewed with `/strikes`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3581,7 +3581,7 @@ func StrikeRemoveNoStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 func StrikeRemoveNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Strike Not Found",
-		Description: "No strike with that ID exists for this player in this guild. Double-check the ID from `/strike_list`.",
+		Description: "No strike with that ID exists for this player in this guild. Double-check the ID from `/strikes`.",
 		Thumbnail:   ThumbFlag,
 	})
 }
@@ -3672,7 +3672,7 @@ var (
 	// /ranks
 	LayoutRanksProgress    = DefineLayout("ranks.progress", "Your standing, with a rank to go", "**Your ELO:** `{elo}`\n**Your Rank:** `{rank}` **Next Rank:** `{next_rank}` (in `{next_in}` ELO)", "elo", "rank", "next_rank", "next_min_elo", "next_in")
 	LayoutRanksProgressMax = DefineLayout("ranks.progress_max", "Your standing, at the top rank", "**Your ELO:** `{elo}`\n**Your Rank:** `{rank}`\nYou have achieved maximum competitive rank status!", "elo", "rank")
-	LayoutRanksGuest       = DefineLayout("ranks.guest", "Shown to someone not registered", "Use `/player_register` to track your seasonal elo and rank progression!")
+	LayoutRanksGuest       = DefineLayout("ranks.guest", "Shown to someone not registered", "Use `/register` to track your seasonal elo and rank progression!")
 	LayoutRanksHeading     = DefineLayout("ranks.heading", "Heading above the ranks", "__**Available Ranks:**__")
 	LayoutRanksLine        = DefineRepeatedLayout("ranks.line", "One rank", "{role} — ELO: `{min_elo} - {max_elo}` | Win: `+{win}` | Loss: `-{loss}`", "role", "name", "min_elo", "max_elo", "win", "loss")
 	LayoutRanksNoMax       = DefineLayout("ranks.no_max", "Top of the highest rank", "∞")

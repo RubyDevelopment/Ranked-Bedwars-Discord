@@ -289,7 +289,7 @@ func HandleGiveawayEntry(s *discordgo.Session, i *discordgo.InteractionCreate, c
 	if g.RequiredElo > 0 {
 		view, err := database.Must().Player.Get(i.GuildID, userID)
 		if err != nil {
-			say(fmt.Sprintf("You must be registered and have at least **%d ELO** to enter. Register with `/player_register`.", g.RequiredElo))
+			say(fmt.Sprintf("You must be registered and have at least **%d ELO** to enter. Register with `/register`.", g.RequiredElo))
 			return true
 		}
 		_, seasonID, _ := ActiveSeasonKey(i.GuildID)

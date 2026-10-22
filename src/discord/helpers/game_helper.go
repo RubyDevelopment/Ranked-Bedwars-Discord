@@ -4930,7 +4930,7 @@ func (h *HostSession) describe() string {
 	case pageMode:
 		return "Pick the mode this game is played in. Its queue decides where the game's channels are created."
 	case pageOptions:
-		return fmt.Sprintf("**Mode:** `%s`\n\nChoose how many teams play, whether the match counts toward ELO and season stats, and whether the hosting bot runs it. Without the bot, staff finish the game with `/game_host finish`.", mode.Name)
+		return fmt.Sprintf("**Mode:** `%s`\n\nChoose how many teams play, whether the match counts toward ELO and season stats, and whether the hosting bot runs it. Without the bot, staff finish the game with `/host finish`.", mode.Name)
 	case pageTeams:
 		return fmt.Sprintf("Pick a team, then choose its players and, optionally, an existing voice channel for it. Every player must be registered.\n\n%s", h.teamLines())
 	}
@@ -5052,7 +5052,7 @@ func HandleHostGameComponent(s *discordgo.Session, i *discordgo.InteractionCreat
 	user := InteractionUserID(i)
 	switch {
 	case h == nil || time.Since(h.Created) > hostGameSessionTT:
-		respondHostGame(s, i, HostGameErrorEmbed(errors.New("this panel has expired, run `/game_host create` again")), nil)
+		respondHostGame(s, i, HostGameErrorEmbed(errors.New("this panel has expired, run `/host create` again")), nil)
 		return true
 	case user != h.UserID:
 		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "Only the staff member who opened this panel can use it.", Flags: discordgo.MessageFlagsEphemeral}})
@@ -5213,7 +5213,7 @@ func HostGameErrorEmbed(err error) *discordgo.MessageEmbed {
 	case errors.Is(err, ErrGameNotFound):
 		text = "That game isn't running any more."
 	case errors.Is(err, ErrNotCustom):
-		text = "That game wasn't built with `/game_host`."
+		text = "That game wasn't built with `/host`."
 	case errors.Is(err, ErrBotHosted):
 		text = "A bot is hosting that game, so its roster can't be changed."
 	case errors.Is(err, ErrUnknownTeam):

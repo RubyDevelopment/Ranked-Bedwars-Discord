@@ -192,7 +192,7 @@ func GuildNotRegisteredEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       "Guild Not Registered",
-		Description: "It looks like this guild isn't registered with Ranked Bedwars yet. An administrator should run `/server_setup init` to initialize this server.",
+		Description: "It looks like this guild isn't registered with Ranked Bedwars yet. An administrator should run `/setup init` to initialize this server.",
 		Color:       ColorError,
 	}
 }
@@ -271,7 +271,7 @@ func FormatConfigurationErrorAdmin(cmdName string, missing, optional []types.Req
 			description += fmt.Sprintf("- %s: %s\n", req.Type, req.Key)
 		}
 	}
-	description += fmt.Sprintf("\nYou're able to configure these at any time using `/server_config role|channel|category set command:%s`.", cmdName)
+	description += fmt.Sprintf("\nYou're able to configure these at any time using `/config role|channel|category set command:%s`.", cmdName)
 	return description
 }
 

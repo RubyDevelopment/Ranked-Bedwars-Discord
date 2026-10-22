@@ -22,7 +22,7 @@ import (
 )
 
 // Everything behind the ticket system that is not the slash command itself:
-// the ticket buttons (open, claim, close), the `/ticket_manage panel` builder's
+// the ticket buttons (open, claim, close), the `/ticket panel` builder's
 // buttons, selects and modals, and the shared embeds. The "Tickets"
 // event (events/ticket_interaction.go) routes interactions here.
 

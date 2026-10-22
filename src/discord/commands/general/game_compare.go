@@ -180,7 +180,7 @@ func compareSideErrorEmbed(i *discordgo.InteractionCreate, err error, user *disc
 	case errCompareNotRegistered:
 		return helpers.Preset("error", types.PresetOptions{
 			Title:       "Player Not Registered",
-			Description: fmt.Sprintf("<@%s> is not registered in this guild. They must run `/player_register` before they can be compared.", user.ID),
+			Description: fmt.Sprintf("<@%s> is not registered in this guild. They must run `/register` before they can be compared.", user.ID),
 			Thumbnail:   helpers.ThumbFlag,
 		})
 	case errCompareStatsHidden:

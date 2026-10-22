@@ -1128,8 +1128,10 @@ func (d *MessageDoc) Payload(f func(string) string) map[string]any {
 		} else if n, ok := colorInt(e.Color); ok {
 			m["color"] = n
 		}
-		if e.Author.Name != "" {
-			a := map[string]any{"name": f(e.Author.Name)}
+		// Each part is filled first and left out when it comes out empty: a variable like {response.thumbnail} is empty on an
+		// answer that has none, and Discord rejects an empty name or address.
+		if name := f(e.Author.Name); name != "" {
+			a := map[string]any{"name": name}
 			if e.Author.URL != "" {
 				a["url"] = e.Author.URL
 			}
@@ -1138,18 +1140,18 @@ func (d *MessageDoc) Payload(f func(string) string) map[string]any {
 			}
 			m["author"] = a
 		}
-		if e.Footer.Text != "" {
-			ft := map[string]any{"text": f(e.Footer.Text)}
+		if text := f(e.Footer.Text); text != "" {
+			ft := map[string]any{"text": text}
 			if e.Footer.IconURL != "" {
 				ft["icon_url"] = f(e.Footer.IconURL)
 			}
 			m["footer"] = ft
 		}
-		if e.Image != "" {
-			m["image"] = map[string]any{"url": f(e.Image)}
+		if img := f(e.Image); img != "" {
+			m["image"] = map[string]any{"url": img}
 		}
-		if e.Thumbnail != "" {
-			m["thumbnail"] = map[string]any{"url": f(e.Thumbnail)}
+		if thumb := f(e.Thumbnail); thumb != "" {
+			m["thumbnail"] = map[string]any{"url": thumb}
 		}
 		if e.Timestamp {
 			m["timestamp"] = time.Now().UTC().Format(time.RFC3339)

@@ -1495,7 +1495,7 @@ func handleRequirementSelectPick(s *discordgo.Session, i *discordgo.InteractionC
 	}
 
 	if err := SetRequirementSlotID(InteractionUserID(i), i.GuildID, cmdName, current.Type, current.Key, pickedID); err != nil {
-		updateRequirementFixMessage(s, i, ConfigurationErrorEmbed("Could not save that assignment. Please try again or use `/server_config`."), nil)
+		updateRequirementFixMessage(s, i, ConfigurationErrorEmbed("Could not save that assignment. Please try again or use `/config`."), nil)
 		return true
 	}
 
@@ -1663,7 +1663,7 @@ func roleRequirementDenial(s *discordgo.Session, i *discordgo.InteractionCreate,
 		if id != "" && !MemberHasRole(i.Member, id) {
 			return Preset("error", types.PresetOptions{
 				Title:       "Registration Required",
-				Description: "You must be registered to use this command. Run `/player_register` to link your Minecraft account first, or `/player_refresh` if you are already registered.",
+				Description: "You must be registered to use this command. Run `/register` to link your Minecraft account first, or `/player_refresh` if you are already registered.",
 				Thumbnail:   ThumbFlag,
 			})
 		}
