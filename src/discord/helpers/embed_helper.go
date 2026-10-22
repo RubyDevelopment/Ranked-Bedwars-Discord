@@ -327,7 +327,9 @@ func DiscordRelativeTimestamp(t time.Time) string {
 // {{response.value_1}}, {{response.value_2}}... (and {{response.title_1}}... for the title), so a rewritten message
 // keeps the live values.
 
-// responseCatalogJSON is empty until a response catalog is generated again; with no catalog nothing is seeded.
+//go:generate go run ../../../scripts/gen_responses ../../..
+
+//go:embed response_catalog.json
 var responseCatalogJSON []byte
 
 // changingPart marks a value the command fills in. No command source contains the character itself.
@@ -600,8 +602,9 @@ func buildResponsePayload(st *responseState, command, sub string, emb *discordgo
 }
 
 // sendCustomResponse answers with the guild's saved message instead of `emb`, if it set one up. It reports
-// whether it did; on false (or an error) the caller sends the built-in embed.
-func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed) (bool, error) {
+// whether it did; on false (or an error) the caller sends the built-in embed. The answer's own components (pagination
+// buttons, menus) stay on the saved message, below its content.
+func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed, components ...discordgo.MessageComponent) (bool, error) {
 	if i == nil || i.Interaction == nil || i.GuildID == "" || emb == nil {
 		return false, nil
 	}
@@ -624,12 +627,38 @@ func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, em
 	if !ok {
 		return false, nil
 	}
+	if len(components) > 0 {
+		payload["components"] = append(componentList(payload["components"]), componentsAny(components)...)
+	}
 	if prefix {
 		_, err := SendPayload(s, i.ChannelID, payload)
 		return err == nil, err
 	}
 	err := EditOriginalPayload(s, i.Interaction, payload)
 	return err == nil, err
+}
+
+// componentList is a payload's components as a slice that more can be appended to.
+func componentList(v any) []any {
+	switch c := v.(type) {
+	case []map[string]any:
+		out := make([]any, len(c))
+		for n := range c {
+			out[n] = c[n]
+		}
+		return out
+	case []any:
+		return c
+	}
+	return nil
+}
+
+func componentsAny(cs []discordgo.MessageComponent) []any {
+	out := make([]any, len(cs))
+	for n := range cs {
+		out[n] = cs[n]
+	}
+	return out
 }
 
 // ============================================================================

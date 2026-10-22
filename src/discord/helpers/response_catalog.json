@@ -1,0 +1,2419 @@
+{
+	"commands": [
+		{
+			"name": "bots",
+			"responses": [
+				{
+					"key": "bots.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to fetch the registered game bots for this guild. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "bots.no-registered-bots",
+					"slug": "no-registered-bots",
+					"title": "No Registered Bots",
+					"look": "error",
+					"description": "This guild has no registered game bots. If you think this is an error, please contact an administrator for assistance or try again later."
+				}
+			]
+		},
+		{
+			"name": "call",
+			"responses": [
+				{
+					"key": "call.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to add the player to your team voice channel. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "call.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to add to your team voice channel. Select a member from the command options."
+				},
+				{
+					"key": "call.not-in-voice",
+					"slug": "not-in-voice",
+					"title": "Not in Voice",
+					"look": "error",
+					"description": "You must be connected to your team voice channel to use this command. Join it and try again."
+				},
+				{
+					"key": "call.not-in-game",
+					"slug": "not-in-game",
+					"title": "Not in Game",
+					"look": "error",
+					"description": "The voice channel you are in does not belong to an active game. Join your team voice channel and try again."
+				},
+				{
+					"key": "call.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "You are not a participant in this game, so you cannot add players to its voice channels."
+				},
+				{
+					"key": "call.already-in-match",
+					"slug": "already-in-match",
+					"title": "Already in Match",
+					"look": "error",
+					"description": "\u003c@…\u003e is already a participant in this game and cannot be added again."
+				},
+				{
+					"key": "call.wrong-channel",
+					"slug": "wrong-channel",
+					"title": "Wrong Channel",
+					"look": "error",
+					"description": "You are not in your assigned team voice channel. Join it and try again."
+				},
+				{
+					"key": "call.missing-permissions",
+					"slug": "missing-permissions",
+					"title": "Missing Permissions",
+					"look": "error",
+					"description": "The bot does not have permission to manage permissions in this voice channel. Please contact an administrator for assistance."
+				},
+				{
+					"key": "call.voice-access-granted",
+					"slug": "voice-access-granted",
+					"title": "Voice Access Granted",
+					"look": "success",
+					"description": "Successfully added the player to your team voice channel.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Game:** `#…`"
+				}
+			]
+		},
+		{
+			"name": "claim",
+			"responses": [
+				{
+					"key": "claim.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while claiming your starting ELO. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "claim.not-registered",
+					"slug": "not-registered",
+					"title": "Not Registered",
+					"look": "error",
+					"description": "You must register with `/player_register` before claiming ELO."
+				},
+				{
+					"key": "claim.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance."
+				},
+				{
+					"key": "claim.no-starting-elo-perk",
+					"slug": "no-starting-elo-perk",
+					"title": "No Starting ELO Perk",
+					"look": "error",
+					"description": "None of your perks grant starting ELO. Perks come from roles, so check that you hold the role a perk requires."
+				},
+				{
+					"key": "claim.starting-elo-claimed",
+					"slug": "starting-elo-claimed",
+					"title": "Starting ELO Claimed",
+					"look": "success",
+					"description": "**…** received **…** starting ELO.",
+					"has_fields": true
+				}
+			]
+		},
+		{
+			"name": "clear",
+			"responses": [
+				{
+					"key": "clear.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while clearing messages. Please try again later or contact support."
+				},
+				{
+					"key": "clear.missing-permissions",
+					"slug": "missing-permissions",
+					"title": "Missing Permissions",
+					"look": "error",
+					"description": "I do not have permission to manage messages in \u003c#…\u003e. Grant **Manage Messages** to the bot role and try again."
+				},
+				{
+					"key": "clear.no-messages-found",
+					"slug": "no-messages-found",
+					"title": "No Messages Found",
+					"look": "error",
+					"description": "No messages matched your filters in that channel. Adjust the filters or clear a different channel."
+				},
+				{
+					"key": "clear.messages-partially-cleared",
+					"slug": "messages-partially-cleared",
+					"title": "Messages Partially Cleared",
+					"look": "caution",
+					"description": "Successfully removed **…** message(s) from \u003c#…\u003e. **…** message(s) older than 14 days were skipped. Re-run with `override_14days: True` to delete them individually."
+				},
+				{
+					"key": "clear.messages-cleared",
+					"slug": "messages-cleared",
+					"title": "Messages Cleared",
+					"look": "success",
+					"description": "Successfully removed **…** message(s) from \u003c#…\u003e. Deleted messages cannot be recovered."
+				}
+			]
+		},
+		{
+			"name": "clearpunishment",
+			"responses": [
+				{
+					"key": "clearpunishment.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while clearing the punishment. Please try again later or contact support."
+				},
+				{
+					"key": "clearpunishment.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to clear a punishment from. Select a registered player from the command options."
+				},
+				{
+					"key": "clearpunishment.no-active-punishments",
+					"slug": "no-active-punishments",
+					"title": "No Active Punishments",
+					"look": "error",
+					"description": "This player has no active punishments to clear. Their history can be reviewed with `/player_punishments`."
+				},
+				{
+					"key": "clearpunishment.punishment-not-found",
+					"slug": "punishment-not-found",
+					"title": "Punishment Not Found",
+					"look": "error",
+					"description": "No punishment with that ID exists for this player in this guild. Double-check the ID from `/player_punishments`."
+				},
+				{
+					"key": "clearpunishment.punishment-cleared",
+					"slug": "punishment-cleared",
+					"title": "Punishment Cleared",
+					"look": "success",
+					"description": "Successfully removed the punishment record. This action has been logged for staff review.\n\n\u003e **Punishment ID:** `#…`\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`"
+				}
+			]
+		},
+		{
+			"name": "compare",
+			"responses": [
+				{
+					"key": "compare.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to compare these players. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "compare.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify an opponent to compare against. Select a registered player from the command options."
+				},
+				{
+					"key": "compare.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance."
+				}
+			]
+		},
+		{
+			"name": "config",
+			"responses": [
+				{
+					"key": "config.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to update the configuration for this guild. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "config.unknown-command",
+					"slug": "unknown-command",
+					"title": "Unknown Command",
+					"look": "error",
+					"description": "No registered command named **…**."
+				},
+				{
+					"key": "config.command-not-set-up",
+					"slug": "command-not-set-up",
+					"title": "Command Not Set Up",
+					"look": "error",
+					"description": "**…** has no configuration yet. Run `/server_config setup` first."
+				},
+				{
+					"key": "config.unknown-requirement-key",
+					"slug": "unknown-requirement-key",
+					"title": "Unknown Requirement Key",
+					"look": "error"
+				},
+				{
+					"key": "config.requirement-updated",
+					"slug": "requirement-updated",
+					"title": "Requirement Updated",
+					"look": "success",
+					"description": "Successfully updated the command requirement.\n\n\u003e **Command:** `/…`\n\u003e **Key:** `…`\n\u003e **Type:** `…`\n\u003e **Value:** …"
+				},
+				{
+					"key": "config.command-requirement",
+					"slug": "command-requirement",
+					"title": "Command Requirement",
+					"look": "info",
+					"description": "\u003e **Command:** `/…`\n\u003e **Key:** `…`\n\u003e **Type:** `…`\n\u003e **State:** `…`\n\u003e **Value:** …"
+				},
+				{
+					"key": "config.requirement-cleared",
+					"slug": "requirement-cleared",
+					"title": "Requirement Cleared",
+					"look": "success",
+					"description": "Successfully cleared the command requirement.\n\n\u003e **Command:** `/…`\n\u003e **Key:** `…`\n\u003e **Type:** `…`"
+				},
+				{
+					"key": "config.unknown-subcommand",
+					"slug": "unknown-subcommand",
+					"title": "Unknown Subcommand",
+					"look": "error",
+					"description": "Unknown config route `… …`. Use `/server_config` without arguments to see available options."
+				},
+				{
+					"key": "config.invalid-key",
+					"slug": "invalid-key",
+					"title": "Invalid Key",
+					"look": "error",
+					"description": "You must provide a non-empty key."
+				},
+				{
+					"key": "config.missing-value",
+					"slug": "missing-value",
+					"title": "Missing Value",
+					"look": "error",
+					"description": "You must provide a …."
+				},
+				{
+					"key": "config.bot-settings",
+					"slug": "bot-settings",
+					"title": "Bot Settings",
+					"look": "info"
+				},
+				{
+					"key": "config.invalid-prefix",
+					"slug": "invalid-prefix",
+					"title": "Invalid Prefix",
+					"look": "error",
+					"description": "Please provide a valid prefix of 1-5 characters."
+				},
+				{
+					"key": "config.prefix-updated",
+					"slug": "prefix-updated",
+					"title": "Prefix Updated",
+					"look": "success",
+					"description": "Successfully updated the command prefix.\n\n\u003e **Prefix:** `…`"
+				},
+				{
+					"key": "config.bot-setting-updated",
+					"slug": "bot-setting-updated",
+					"title": "Bot Setting Updated",
+					"look": "success",
+					"description": "Successfully updated the command mode.\n\n\u003e **Mode:** `…`\n\u003e **State:** `…`"
+				}
+			]
+		},
+		{
+			"name": "decays",
+			"responses": [
+				{
+					"key": "decays.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while loading the decay history. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "decays.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "Automated bot accounts do not have a decay history. Target a registered player instead."
+				},
+				{
+					"key": "decays.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+				},
+				{
+					"key": "decays.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance."
+				},
+				{
+					"key": "decays.no-decays-found",
+					"slug": "no-decays-found",
+					"title": "No Decays Found",
+					"look": "success",
+					"description": "No ELO decay was found for this player this season. This player has stayed active."
+				},
+				{
+					"key": "decays.decays-empty",
+					"slug": "decays-empty",
+					"title": "Decays Empty",
+					"look": "success",
+					"description": "No ELO decay was found for this player in the last **…**. Try a longer filter or remove it."
+				}
+			]
+		},
+		{
+			"name": "echo",
+			"responses": [
+				{
+					"key": "echo.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the echo command. Please try again later or contact support."
+				},
+				{
+					"key": "echo.message-dispatched",
+					"slug": "message-dispatched",
+					"title": "Message Dispatched",
+					"look": "success",
+					"description": "Your message was sent successfully. The message is now visible in the target channel \u003c#…\u003e."
+				},
+				{
+					"key": "echo.invalid-link",
+					"slug": "invalid-link",
+					"title": "Invalid Link",
+					"look": "error",
+					"description": "That does not look like a valid Discord message link. Right-click a message and choose **Copy Message Link**."
+				},
+				{
+					"key": "echo.restricted-destination",
+					"slug": "restricted-destination",
+					"title": "Restricted Destination",
+					"look": "error",
+					"description": "That message link points outside this server. Only links from this guild can be used."
+				},
+				{
+					"key": "echo.invalid-channel",
+					"slug": "invalid-channel",
+					"title": "Invalid Channel",
+					"look": "error",
+					"description": "The selected channel could not be used. Choose a text channel the bot can access."
+				},
+				{
+					"key": "echo.insufficient-permissions",
+					"slug": "insufficient-permissions",
+					"title": "Insufficient Permissions",
+					"look": "error",
+					"description": "The bot does not have permission to send messages in that channel. Grant **Send Messages** to the bot role and try again."
+				}
+			]
+		},
+		{
+			"name": "forcenickname",
+			"responses": [
+				{
+					"key": "forcenickname.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while force-updating the player's nickname. Please try again later or contact support."
+				},
+				{
+					"key": "forcenickname.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to update. Select a registered player from the command options."
+				},
+				{
+					"key": "forcenickname.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register them with `/player_force_register` first."
+				},
+				{
+					"key": "forcenickname.profile-not-found",
+					"slug": "profile-not-found",
+					"title": "Profile Not Found",
+					"look": "error",
+					"description": "That player's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists."
+				},
+				{
+					"key": "forcenickname.no-nickname-set",
+					"slug": "no-nickname-set",
+					"title": "No Nickname Set",
+					"look": "error",
+					"description": "That player does not have an active nickname to remove. Provide a nickname value to assign one."
+				},
+				{
+					"key": "forcenickname.invalid-nickname",
+					"slug": "invalid-nickname",
+					"title": "Invalid Nickname",
+					"look": "error",
+					"description": "That nickname format is not valid. Nicknames must be 3-16 characters and contain only letters, numbers, and underscores."
+				},
+				{
+					"key": "forcenickname.nickname-already-set",
+					"slug": "nickname-already-set",
+					"title": "Nickname Already Set",
+					"look": "error",
+					"description": "That player's nickname is already set to **…**. No further action is needed."
+				},
+				{
+					"key": "forcenickname.nickname-taken",
+					"slug": "nickname-taken",
+					"title": "Nickname Taken",
+					"look": "error",
+					"description": "The nickname **…** is already in use in this guild. Try a different nickname."
+				},
+				{
+					"key": "forcenickname.nickname-cleared",
+					"slug": "nickname-cleared",
+					"title": "Nickname Cleared",
+					"look": "success",
+					"description": "Successfully cleared the player's in-game nickname.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Username:** `…`"
+				},
+				{
+					"key": "forcenickname.nickname-force-updated",
+					"slug": "nickname-force-updated",
+					"title": "Nickname Force-Updated",
+					"look": "success",
+					"description": "Successfully updated the player's in-game nickname. This change may take a moment to propagate across all systems.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Username:** `…`\n\u003e **Nickname:** `…`"
+				}
+			]
+		},
+		{
+			"name": "forceregister",
+			"responses": [
+				{
+					"key": "forceregister.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the force registration. Please try again later or contact support."
+				},
+				{
+					"key": "forceregister.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a user to register. Select a Discord member from the command options."
+				},
+				{
+					"key": "forceregister.invalid-username",
+					"slug": "invalid-username",
+					"title": "Invalid Username",
+					"look": "error",
+					"description": "That Minecraft username format is not valid. Usernames must be 3-16 characters and contain only letters, numbers, and underscores."
+				},
+				{
+					"key": "forceregister.already-registered",
+					"slug": "already-registered",
+					"title": "Already Registered",
+					"look": "error",
+					"description": "That user is already registered as **…**. No further action is needed."
+				},
+				{
+					"key": "forceregister.no-ranks-configured",
+					"slug": "no-ranks-configured",
+					"title": "No Ranks Configured",
+					"look": "error",
+					"description": "This guild has no ranks configured, so the player cannot be given a starting rank or rank role. Configure at least one rank first."
+				},
+				{
+					"key": "forceregister.username-taken",
+					"slug": "username-taken",
+					"title": "Username Taken",
+					"look": "error",
+					"description": "The username **…** is already linked to another player in this guild."
+				},
+				{
+					"key": "forceregister.force-registration-complete",
+					"slug": "force-registration-complete",
+					"title": "Force Registration Complete",
+					"look": "success",
+					"description": "Successfully linked the player's account. This change may take a moment to propagate across all systems.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Username:** `…`"
+				}
+			]
+		},
+		{
+			"name": "forcerename",
+			"responses": [
+				{
+					"key": "forcerename.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while force-renaming the player. Please try again later or contact support."
+				},
+				{
+					"key": "forcerename.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to rename. Select a registered player from the command options."
+				},
+				{
+					"key": "forcerename.invalid-username",
+					"slug": "invalid-username",
+					"title": "Invalid Username",
+					"look": "error",
+					"description": "That Minecraft username format is not valid. Usernames must be 3-16 characters and contain only letters, numbers, and underscores."
+				},
+				{
+					"key": "forcerename.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players can be force-renamed."
+				},
+				{
+					"key": "forcerename.profile-not-found",
+					"slug": "profile-not-found",
+					"title": "Profile Not Found",
+					"look": "error",
+					"description": "That player's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists."
+				},
+				{
+					"key": "forcerename.already-linked",
+					"slug": "already-linked",
+					"title": "Already Linked",
+					"look": "error",
+					"description": "That account is already linked to **…**. No further action is needed."
+				},
+				{
+					"key": "forcerename.username-taken",
+					"slug": "username-taken",
+					"title": "Username Taken",
+					"look": "error",
+					"description": "The username **…** is already linked to another player in this guild. Try a different username."
+				},
+				{
+					"key": "forcerename.username-force-updated",
+					"slug": "username-force-updated",
+					"title": "Username Force-Updated",
+					"look": "success",
+					"description": "Successfully updated the player's linked username. This change may take a moment to propagate across all systems.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Previous Username:** `…`\n\u003e **New Username:** `…`"
+				}
+			]
+		},
+		{
+			"name": "forcesync",
+			"responses": [
+				{
+					"key": "forcesync.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while force-synchronizing the player's profile. Please try again later or contact support."
+				},
+				{
+					"key": "forcesync.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to sync. Select a registered player from the command options."
+				},
+				{
+					"key": "forcesync.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register them with `/player_force_register` first."
+				},
+				{
+					"key": "forcesync.member-not-found",
+					"slug": "member-not-found",
+					"title": "Member Not Found",
+					"look": "error",
+					"description": "Could not find that player's guild membership to sync. Verify they are still a member of this guild."
+				},
+				{
+					"key": "forcesync.profile-synchronized",
+					"slug": "profile-synchronized",
+					"title": "Profile Synchronized",
+					"look": "success",
+					"description": "The profile for **…** is already up to date. No further changes are needed."
+				},
+				{
+					"key": "forcesync.profile-force-synchronized",
+					"slug": "profile-force-synchronized",
+					"title": "Profile Force-Synchronized",
+					"look": "success",
+					"description": "Successfully refreshed the player's roles and nickname. Run `/player_force_sync` again anytime their roles or nickname need refreshing.\n\n\u003e **User:** \u003c@…\u003e\n\u003e **Username:** `…`\n\n…"
+				}
+			]
+		},
+		{
+			"name": "forcetransfer",
+			"responses": [
+				{
+					"key": "forcetransfer.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while transferring the account link. Please try again later or contact support."
+				},
+				{
+					"key": "forcetransfer.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify both the current linked user and the destination user."
+				},
+				{
+					"key": "forcetransfer.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "The source user is not registered in this guild. Only registered accounts can be transferred."
+				},
+				{
+					"key": "forcetransfer.profile-not-found",
+					"slug": "profile-not-found",
+					"title": "Profile Not Found",
+					"look": "error",
+					"description": "The source user's guild profile could not be found. Run `/player_force_sync` or contact staff if the issue persists."
+				},
+				{
+					"key": "forcetransfer.already-registered",
+					"slug": "already-registered",
+					"title": "Already Registered",
+					"look": "error",
+					"description": "\u003c@…\u003e is already linked to **…**. Unregister them first or choose a different target user."
+				},
+				{
+					"key": "forcetransfer.account-transferred",
+					"slug": "account-transferred",
+					"title": "Account Transferred",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "forcevoid",
+			"responses": [
+				{
+					"key": "forcevoid.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "forcevoid.game-force-voided",
+					"slug": "game-force-voided",
+					"title": "Game Force Voided",
+					"look": "success",
+					"description": "Game **#…** has been force voided. This action has been logged for staff review.\n\n\u003e **Reason:** …"
+				}
+			]
+		},
+		{
+			"name": "games",
+			"responses": [
+				{
+					"key": "games.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while loading the game history. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "games.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "Automated bot accounts do not have a game history. Target a registered player instead."
+				},
+				{
+					"key": "games.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+				},
+				{
+					"key": "games.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance."
+				},
+				{
+					"key": "games.no-games-found",
+					"slug": "no-games-found",
+					"title": "No Games Found",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "host",
+			"responses": [
+				{
+					"key": "host.hosted-game-not-found",
+					"slug": "hosted-game-not-found",
+					"title": "Hosted Game Not Found",
+					"look": "error",
+					"description": "No live hosted game **#…** was found. Use `/game_host list` to see the running ones."
+				},
+				{
+					"key": "host.hosted-games",
+					"slug": "hosted-games",
+					"title": "Hosted Games",
+					"look": "info",
+					"description": "No hosted games are running. Start one with `/game_host create`."
+				},
+				{
+					"key": "host.hosted-game",
+					"slug": "hosted-game",
+					"title": "Hosted Game #…",
+					"look": "info",
+					"description": "\u003e **Mode:** `…`\n\u003e **State:** `…`\n\u003e **Map:** `…`\n\u003e **Ranks:** …\n\u003e **Stats:** …\n\u003e **Hosted:** …\n\u003e **By:** \u003c@…\u003e",
+					"has_fields": true
+				}
+			]
+		},
+		{
+			"name": "leaderboard",
+			"responses": [
+				{
+					"key": "leaderboard.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to fetch the leaderboard for this guild. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "leaderboard.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured."
+				},
+				{
+					"key": "leaderboard.leaderboard",
+					"slug": "leaderboard",
+					"title": "Leaderboard — …",
+					"look": "success",
+					"description": "No players have stats for the active season yet."
+				},
+				{
+					"key": "leaderboard.page-empty",
+					"slug": "page-empty",
+					"title": "Page Empty",
+					"look": "error",
+					"description": "There are no leaderboard entries on page `…`. Try a lower page number."
+				}
+			]
+		},
+		{
+			"name": "lfg",
+			"responses": [
+				{
+					"key": "lfg.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to post your looking-for-group request. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "lfg.invalid-user",
+					"slug": "invalid-user",
+					"title": "Invalid User",
+					"look": "error",
+					"description": "Your user account could not be identified. Please try again later or contact an administrator for assistance."
+				},
+				{
+					"key": "lfg.lfg-not-configured",
+					"slug": "lfg-not-configured",
+					"title": "LFG Not Configured",
+					"look": "error",
+					"description": "The looking-for-group system is not configured in this guild. Please contact an administrator for assistance to configure the LFG channel and role settings."
+				},
+				{
+					"key": "lfg.queues-paused",
+					"slug": "queues-paused",
+					"title": "Queues Paused",
+					"look": "error",
+					"description": "Looking-for-group posting is currently paused by an administrator. Please try again later when queues are reopened."
+				},
+				{
+					"key": "lfg.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You must register with the ranked system to use the looking-for-group feature. Use `/player_register` to link your account and track your seasonal progress."
+				},
+				{
+					"key": "lfg.lfg-posted",
+					"slug": "lfg-posted",
+					"title": "LFG Posted",
+					"look": "success",
+					"description": "Your looking-for-group post has been sent. Good luck finding a game!\n\n\u003e **Player:** `…`\n\u003e **Channel:** \u003c#…\u003e"
+				},
+				{
+					"key": "lfg.looking-for-group",
+					"slug": "looking-for-group",
+					"title": "Looking for Group",
+					"look": "info",
+					"description": "\u003c@…\u003e (**…**) is looking for a ranked game! React or message them to join their party."
+				}
+			]
+		},
+		{
+			"name": "loss",
+			"responses": [
+				{
+					"key": "loss.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while removing ELO from the player. Please try again later or contact support."
+				},
+				{
+					"key": "loss.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to remove ELO from. Select a registered player from the command options."
+				},
+				{
+					"key": "loss.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register them with `/player_force_register` before removing ELO."
+				},
+				{
+					"key": "loss.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. ELO can only be removed during an active season. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "loss.elo-removed",
+					"slug": "elo-removed",
+					"title": "ELO Removed",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "maps",
+			"responses": [
+				{
+					"key": "maps.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to fetch the registered game maps for this guild. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "maps.no-registered-maps",
+					"slug": "no-registered-maps",
+					"title": "No Registered Maps",
+					"look": "error",
+					"description": "This guild has no registered game maps. If you think this is an error, please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "maps.registered-maps",
+					"slug": "registered-maps",
+					"title": "Registered Maps",
+					"look": "success",
+					"description": "View the status of all (…) registered game maps for this guild.\n\n…"
+				}
+			]
+		},
+		{
+			"name": "modify",
+			"responses": [
+				{
+					"key": "modify.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while modifying the player's statistics. Please try again later or contact support."
+				},
+				{
+					"key": "modify.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "You must specify a subcommand: `add`, `remove`, or `set`. Select one from the command options."
+				},
+				{
+					"key": "modify.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to modify. Select a registered player from the command options."
+				},
+				{
+					"key": "modify.unknown-statistic",
+					"slug": "unknown-statistic",
+					"title": "Unknown Statistic",
+					"look": "error",
+					"description": "That is not a valid statistic that can be modified. Please select a valid statistic from the command options."
+				},
+				{
+					"key": "modify.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register them with `/player_force_register` before modifying their statistics."
+				},
+				{
+					"key": "modify.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Statistics can only be modified during an active season. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "modify.statistics-modified",
+					"slug": "statistics-modified",
+					"title": "Statistics Modified",
+					"look": "success",
+					"description": "Successfully adjusted the player's statistics. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Statistic:** `…`\n\u003e **Operation:** `…`\n\u003e **Previous Value:** `…`\n\u003e **New Value:** `…`"
+				}
+			]
+		},
+		{
+			"name": "nickname",
+			"responses": [
+				{
+					"key": "nickname.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to update your nickname. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "nickname.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You must register before setting a nickname. Run `/player_register` to link your Minecraft account first."
+				},
+				{
+					"key": "nickname.no-nickname-set",
+					"slug": "no-nickname-set",
+					"title": "No Nickname Set",
+					"look": "error",
+					"description": "It looks like you do not have an active nickname to remove. Provide a nickname with `/player_nickname` to assign one first."
+				},
+				{
+					"key": "nickname.invalid-nickname",
+					"slug": "invalid-nickname",
+					"title": "Invalid Nickname",
+					"look": "error",
+					"description": "That nickname format is not valid. Nicknames must be 3-16 characters and contain only letters, numbers, and underscores."
+				},
+				{
+					"key": "nickname.nickname-already-set",
+					"slug": "nickname-already-set",
+					"title": "Nickname Already Set",
+					"look": "error",
+					"description": "Your nickname is already set to **…**. No further action is needed."
+				},
+				{
+					"key": "nickname.premium-username",
+					"slug": "premium-username",
+					"title": "Premium Username",
+					"look": "error",
+					"description": "**…** is a premium Minecraft username and cannot be used as a nickname. Choose a different nickname that is not a registered premium name."
+				},
+				{
+					"key": "nickname.nickname-taken",
+					"slug": "nickname-taken",
+					"title": "Nickname Taken",
+					"look": "error",
+					"description": "The nickname **…** is already in use in this guild. Try a different nickname."
+				},
+				{
+					"key": "nickname.verification-unavailable",
+					"slug": "verification-unavailable",
+					"title": "Verification Unavailable",
+					"look": "error",
+					"description": "The … verification service is currently unavailable. Please try again later."
+				},
+				{
+					"key": "nickname.nickname-removed",
+					"slug": "nickname-removed",
+					"title": "Nickname Removed",
+					"look": "success",
+					"description": "Your in-game nickname has been cleared. Use `/player_refresh` to refresh your displayed name."
+				},
+				{
+					"key": "nickname.nickname-updated",
+					"slug": "nickname-updated",
+					"title": "Nickname Updated",
+					"look": "success",
+					"description": "Your in-game nickname has been updated to **…**. Please wait a moment for your displayed name to update."
+				}
+			]
+		},
+		{
+			"name": "partialvoid",
+			"responses": [
+				{
+					"key": "partialvoid.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "partialvoid.game-partially-voided",
+					"slug": "game-partially-voided",
+					"title": "Game Partially Voided",
+					"look": "success",
+					"description": "Game **#…** has been partially voided. The winning team's stats are preserved. This action has been logged for staff review.\n\n\u003e **Affected Players:** …"
+				}
+			]
+		},
+		{
+			"name": "pick",
+			"responses": [
+				{
+					"key": "pick.not-a-game-channel",
+					"slug": "not-a-game-channel",
+					"title": "Not a Game Channel",
+					"look": "error",
+					"description": "This command can only be used in a game text channel. Run it in the text channel of the game you are drafting for."
+				},
+				{
+					"key": "pick.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game. If you think this is an error, please contact an administrator for assistance."
+				},
+				{
+					"key": "pick.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft for this game is already complete. No more players can be picked."
+				},
+				{
+					"key": "pick.missing-option",
+					"slug": "missing-option",
+					"title": "Missing Option",
+					"look": "error",
+					"description": "You must provide either a player mention or a username to pick."
+				},
+				{
+					"key": "pick.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "Could not find a player in the pick pool matching **…**. Check the spelling or mention the player instead."
+				},
+				{
+					"key": "pick.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "The selected player is not in the available pick pool. Choose a player who has not been picked yet."
+				},
+				{
+					"key": "pick.player-picked",
+					"slug": "player-picked",
+					"title": "Player Picked",
+					"look": "success",
+					"description": "Successfully drafted the player onto the team.\n\n\u003e **Player:** `…`\n\u003e **Captain:** \u003c@…\u003e"
+				}
+			]
+		},
+		{
+			"name": "premium",
+			"responses": [
+				{
+					"key": "premium.premium-features",
+					"slug": "premium-features",
+					"title": "Premium Features",
+					"look": "info",
+					"description": "Premium management features are currently under development. Check back soon for subscription benefits, perk overrides, and custom styling options."
+				}
+			]
+		},
+		{
+			"name": "profile",
+			"responses": [
+				{
+					"key": "profile.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while loading the profile. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "profile.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "Automated bot accounts do not have ranked profiles. Target a registered player instead."
+				},
+				{
+					"key": "profile.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must run `/player_register` before a profile is available."
+				},
+				{
+					"key": "profile.profile-hidden",
+					"slug": "profile-hidden",
+					"title": "Profile Hidden",
+					"look": "error",
+					"description": "**…** has chosen to hide their profile from other players. Only they can view their own profile."
+				},
+				{
+					"key": "profile.player-profile",
+					"slug": "player-profile",
+					"title": "Player Profile — …",
+					"look": "info",
+					"description": "…\n\nUse `/player_stats` for a full seasonal breakdown."
+				}
+			]
+		},
+		{
+			"name": "pugs",
+			"responses": [
+				{
+					"key": "pugs.not-yet-implemented",
+					"slug": "not-yet-implemented",
+					"title": "Not Yet Implemented",
+					"look": "error",
+					"description": "The PUGS division list requires additional infrastructure (snapshot system, role management) and is not available yet."
+				},
+				{
+					"key": "pugs.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a real player to vote for. Select a member from the command options."
+				},
+				{
+					"key": "pugs.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "Use `/game_pugs list` or `/game_pugs vote`."
+				}
+			]
+		},
+		{
+			"name": "punishments",
+			"responses": [
+				{
+					"key": "punishments.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while loading the punishment history. Please try again later or contact support."
+				},
+				{
+					"key": "punishments.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "Automated bot accounts do not have a punishment history. Target a registered player instead."
+				},
+				{
+					"key": "punishments.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+				},
+				{
+					"key": "punishments.history-clear",
+					"slug": "history-clear",
+					"title": "History Clear",
+					"look": "success",
+					"description": "No punishment history was found for this player. This player maintains a clean record."
+				},
+				{
+					"key": "punishments.no-active-punishments",
+					"slug": "no-active-punishments",
+					"title": "No Active Punishments",
+					"look": "success",
+					"description": "No active punishments were found for this player. This player maintains a clean record."
+				},
+				{
+					"key": "punishments.history-empty",
+					"slug": "history-empty",
+					"title": "History Empty",
+					"look": "success",
+					"description": "No punishment history was found for this player in the last **…**. Try a longer filter or remove it."
+				}
+			]
+		},
+		{
+			"name": "queues",
+			"responses": [
+				{
+					"key": "queues.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to fetch the game or queue information. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "queues.no-game-or-queue",
+					"slug": "no-game-or-queue",
+					"title": "No Game or Queue",
+					"look": "error",
+					"description": "Use this command in a game text channel to view game stats, or join a queue voice channel to check the queue status."
+				},
+				{
+					"key": "queues.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "queues.not-a-queue-channel",
+					"slug": "not-a-queue-channel",
+					"title": "Not a Queue Channel",
+					"look": "error",
+					"description": "This voice channel is not configured as a queue channel. Join a queue voice channel to check its status."
+				},
+				{
+					"key": "queues.queues-closed",
+					"slug": "queues-closed",
+					"title": "Queues Closed",
+					"look": "error",
+					"description": "Ranked queues are currently **closed** by staff.\n-# Games will not start until queues are opened again."
+				},
+				{
+					"key": "queues.game-stats",
+					"slug": "game-stats",
+					"title": "Game Stats · #…",
+					"look": "info",
+					"description": "\u003e **Mode:** `…`\n\u003e **Season:** `…`",
+					"has_fields": true
+				},
+				{
+					"key": "queues.queue-status",
+					"slug": "queue-status",
+					"title": "Queue Status · …",
+					"look": "info",
+					"has_fields": true
+				}
+			]
+		},
+		{
+			"name": "ranks",
+			"responses": [
+				{
+					"key": "ranks.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to fetch the registered ranks for this guild. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "ranks.no-configured-ranks",
+					"slug": "no-configured-ranks",
+					"title": "No Configured Ranks",
+					"look": "error",
+					"description": "This guild has no configured rank tiers. If you think this is an error, please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "ranks.registered-ranks",
+					"slug": "registered-ranks",
+					"title": "Registered Ranks",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "register",
+			"responses": [
+				{
+					"key": "register.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to process your registration. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "register.registration-unavailable",
+					"slug": "registration-unavailable",
+					"title": "Registration Unavailable",
+					"look": "error",
+					"description": "No ranks have been configured for this guild yet, so you cannot be registered. Please ask an administrator to set up at least one rank."
+				},
+				{
+					"key": "register.username-taken",
+					"slug": "username-taken",
+					"title": "Username Taken",
+					"look": "error",
+					"description": "The username **…** is already linked to another player in this guild. Try a different username or contact staff if this is your account."
+				},
+				{
+					"key": "register.already-registered",
+					"slug": "already-registered",
+					"title": "Already Registered",
+					"look": "error",
+					"description": "You are already registered as **…**. Use `/player_rename` to change your username."
+				},
+				{
+					"key": "register.verification-unavailable",
+					"slug": "verification-unavailable",
+					"title": "Verification Unavailable",
+					"look": "error",
+					"description": "Could not verify that account on **…** right now. Please try again in a few minutes."
+				},
+				{
+					"key": "register.account-not-found",
+					"slug": "account-not-found",
+					"title": "Account Not Found",
+					"look": "error",
+					"description": "Could not find a Minecraft account named **…** on **…**. Double-check the spelling and try again."
+				},
+				{
+					"key": "register.invalid-username",
+					"slug": "invalid-username",
+					"title": "Invalid Username",
+					"look": "error",
+					"description": "That Minecraft username format is not valid. Usernames must be 3-16 characters and contain only letters, numbers, and underscores."
+				},
+				{
+					"key": "register.registration-complete",
+					"slug": "registration-complete",
+					"title": "Registration Complete",
+					"look": "success",
+					"description": "Your Discord account has been successfully linked. Please wait a moment for your roles and display name to update.\n\n\u003e **Username:** `…`"
+				}
+			]
+		},
+		{
+			"name": "rename",
+			"responses": [
+				{
+					"key": "rename.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to update your username. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "rename.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You must register before you can rename your linked account. Run `/player_register` to link your Minecraft account first."
+				},
+				{
+					"key": "rename.profile-not-found",
+					"slug": "profile-not-found",
+					"title": "Profile Not Found",
+					"look": "error",
+					"description": "Your guild player profile could not be found. Try running `/player_refresh` or contact staff if the issue persists."
+				},
+				{
+					"key": "rename.already-linked",
+					"slug": "already-linked",
+					"title": "Already Linked",
+					"look": "error",
+					"description": "Your account is already linked to **…**. No further changes are needed."
+				},
+				{
+					"key": "rename.invalid-username",
+					"slug": "invalid-username",
+					"title": "Invalid Username",
+					"look": "error",
+					"description": "That Minecraft username format is not valid. Usernames must be 3-16 characters and contain only letters, numbers, and underscores."
+				},
+				{
+					"key": "rename.verification-unavailable",
+					"slug": "verification-unavailable",
+					"title": "Verification Unavailable",
+					"look": "error",
+					"description": "Could not verify that account on **…** right now. Please try again in a few minutes."
+				},
+				{
+					"key": "rename.account-not-found",
+					"slug": "account-not-found",
+					"title": "Account Not Found",
+					"look": "error",
+					"description": "Could not find a Minecraft account named **…** on **…**. Double-check the spelling and try again."
+				},
+				{
+					"key": "rename.username-taken",
+					"slug": "username-taken",
+					"title": "Username Taken",
+					"look": "error",
+					"description": "The username **…** is already linked to another player in this guild. Try a different username or contact staff if this is your account."
+				},
+				{
+					"key": "rename.username-updated",
+					"slug": "username-updated",
+					"title": "Username Updated",
+					"look": "success",
+					"description": "Your linked Minecraft username has been updated. Please wait a moment for your display name to update.\n\n\u003e **Previous Username:** `…`\n\u003e **New Username:** `…`"
+				}
+			]
+		},
+		{
+			"name": "rescore",
+			"responses": [
+				{
+					"key": "rescore.invalid-mvp",
+					"slug": "invalid-mvp",
+					"title": "Invalid MVP",
+					"look": "error",
+					"description": "You must specify the MVP of the game. Select a player from the command options."
+				},
+				{
+					"key": "rescore.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "rescore.invalid-state",
+					"slug": "invalid-state",
+					"title": "Invalid State",
+					"look": "error",
+					"description": "Game **#…** has not finished yet. Only completed or voided games can be rescored; use `/game_score` for games that are still in progress."
+				},
+				{
+					"key": "rescore.game-rescored",
+					"slug": "game-rescored",
+					"title": "Game Rescored",
+					"look": "success",
+					"description": "Game **#…** has been rescored. This action has been logged for staff review.\n\n\u003e **Winners:** …\n\u003e **Losers:** …\n\u003e **MVP:** \u003c@…\u003e"
+				}
+			]
+		},
+		{
+			"name": "role",
+			"responses": [
+				{
+					"key": "role.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while modifying member roles. Please try again later or contact support."
+				},
+				{
+					"key": "role.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "That member could not be updated. Verify the user is in this server and try again."
+				},
+				{
+					"key": "role.member-not-found",
+					"slug": "member-not-found",
+					"title": "Member Not Found",
+					"look": "error",
+					"description": "That member is not in this server. They may have left or been removed."
+				},
+				{
+					"key": "role.no-members-found",
+					"slug": "no-members-found",
+					"title": "No Members Found",
+					"look": "error",
+					"description": "You must provide at least one valid user mention, snowflake ID, or target role filter."
+				},
+				{
+					"key": "role.role-already-assigned",
+					"slug": "role-already-assigned",
+					"title": "Role Already Assigned",
+					"look": "error",
+					"description": "\u003c@…\u003e already has the **…** role. No further action is needed."
+				},
+				{
+					"key": "role.role-not-assigned",
+					"slug": "role-not-assigned",
+					"title": "Role Not Assigned",
+					"look": "error",
+					"description": "\u003c@…\u003e does not currently have the **…** role. Use `/server_role list` to view their current roles."
+				},
+				{
+					"key": "role.role-updated",
+					"slug": "role-updated",
+					"title": "Role Updated",
+					"look": "success",
+					"description": "Successfully updated the member's roles. Changes take effect immediately.\n\n\u003e **Role:** `…`\n\u003e **Action:** …\n\u003e **Member:** \u003c@…\u003e"
+				},
+				{
+					"key": "role.bulk-role-update",
+					"slug": "bulk-role-update",
+					"title": "Bulk Role Update",
+					"look": "success",
+					"description": "Completed the bulk role operation. Skipped members may lack permissions or have hierarchy conflicts.\n\n\u003e **Role:** `…`\n\u003e **Action:** …\n\u003e **Updated:** `…` member(s)\n\u003e **Skipped:** `…`"
+				},
+				{
+					"key": "role.roles",
+					"slug": "roles",
+					"title": "Roles — …",
+					"look": "success",
+					"description": "…\n\nUse `/server_role add` or `/server_role remove` to manage roles."
+				},
+				{
+					"key": "role.role-synchronization-started",
+					"slug": "role-synchronization-started",
+					"title": "Role Synchronization Started",
+					"look": "success",
+					"description": "Queued background role synchronization for verified server members."
+				},
+				{
+					"key": "role.role-not-manageable",
+					"slug": "role-not-manageable",
+					"title": "Role Not Manageable",
+					"look": "error",
+					"description": "… Adjust the role hierarchy to resolve this."
+				}
+			]
+		},
+		{
+			"name": "score",
+			"responses": [
+				{
+					"key": "score.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "score.game-scored",
+					"slug": "game-scored",
+					"title": "Game Scored",
+					"look": "success",
+					"description": "Game **#…** has been scored. This action has been logged for staff review.\n\n\u003e **Winning Team:** `…`\n\u003e **Winners:** …\n\u003e **Losers:** …"
+				}
+			]
+		},
+		{
+			"name": "screenshare",
+			"responses": [
+				{
+					"key": "screenshare.screenshare-request-submitted",
+					"slug": "screenshare-request-submitted",
+					"title": "Screenshare Request Submitted",
+					"look": "success"
+				},
+				{
+					"key": "screenshare.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to submit the screenshare request because the database service is unavailable. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "screenshare.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to request a screenshare for. Select a member from the command options."
+				}
+			]
+		},
+		{
+			"name": "settings",
+			"responses": [
+				{
+					"key": "settings.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while updating your settings. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "settings.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "Use `/player_settings view` or `/player_settings toggle`."
+				},
+				{
+					"key": "settings.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You must register before you can manage your settings. Run `/player_register` to link your Minecraft account first."
+				},
+				{
+					"key": "settings.unknown-setting",
+					"slug": "unknown-setting",
+					"title": "Unknown Setting",
+					"look": "error",
+					"description": "That is not a setting you can change. Pick one of the options listed in the command."
+				},
+				{
+					"key": "settings.player-settings",
+					"slug": "player-settings",
+					"title": "Player Settings — …",
+					"look": "info",
+					"description": "Your current ranked profile preferences. Use `/player_settings toggle` to change one.",
+					"has_fields": true
+				},
+				{
+					"key": "settings.setting-updated",
+					"slug": "setting-updated",
+					"title": "Setting Updated",
+					"look": "success",
+					"description": "Successfully updated your settings.\n\n\u003e **Setting:** `…`\n\u003e **State:** `…`"
+				}
+			]
+		},
+		{
+			"name": "setup",
+			"responses": [
+				{
+					"key": "setup.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "Use `/server_setup init` or `/server_setup sync`."
+				},
+				{
+					"key": "setup.guild-setup-failed",
+					"slug": "guild-setup-failed",
+					"title": "Guild Setup Failed",
+					"look": "error",
+					"description": "Could not initialize this guild with Ranked Bedwars: …. Verify the bot has the required permissions and try again."
+				},
+				{
+					"key": "setup.guild-sync-failed",
+					"slug": "guild-sync-failed",
+					"title": "Guild Sync Failed",
+					"look": "error",
+					"description": "Could not sync this guild's data: …. Verify the bot has the required permissions and try again."
+				},
+				{
+					"key": "setup.guild-setup-complete",
+					"slug": "guild-setup-complete",
+					"title": "Guild Setup Complete",
+					"look": "success"
+				},
+				{
+					"key": "setup.guild-sync-complete",
+					"slug": "guild-sync-complete",
+					"title": "Guild Sync Complete",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "stats",
+			"responses": [
+				{
+					"key": "stats.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to fetch the seasonal statistics for this player. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "stats.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a user to view stats for. Select a registered player from the command options."
+				},
+				{
+					"key": "stats.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "\u003c@…\u003e is not registered in this guild. They must run `/player_register` before stats are available."
+				},
+				{
+					"key": "stats.stats-private",
+					"slug": "stats-private",
+					"title": "Stats Private",
+					"look": "error",
+					"description": "\u003c@…\u003e has their stats set to private. Only they can view their own stats."
+				},
+				{
+					"key": "stats.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured for **…**. Please contact an administrator for assistance."
+				},
+				{
+					"key": "stats.player-stats",
+					"slug": "player-stats",
+					"title": "Player Stats — …",
+					"look": "info"
+				}
+			]
+		},
+		{
+			"name": "strike",
+			"responses": [
+				{
+					"key": "strike.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while issuing the strike. Please try again later or contact support."
+				},
+				{
+					"key": "strike.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to strike. Select a registered player from the command options."
+				},
+				{
+					"key": "strike.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a strike. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "strike.strike-issued",
+					"slug": "strike-issued",
+					"title": "Strike Issued",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "strikerequest",
+			"responses": [
+				{
+					"key": "strikerequest.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while submitting the strike review request. Please try again later or contact support."
+				},
+				{
+					"key": "strikerequest.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to request a strike review for. Select a registered player from the command options."
+				},
+				{
+					"key": "strikerequest.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must explain why the strike should be reviewed. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "strikerequest.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players can have a strike review requested."
+				},
+				{
+					"key": "strikerequest.strike-review-requested",
+					"slug": "strike-review-requested",
+					"title": "Strike Review Requested",
+					"look": "success",
+					"description": "Your strike review request has been submitted. Staff will review the strike and respond on this ticket.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Reason:** …"
+				}
+			]
+		},
+		{
+			"name": "strikes",
+			"responses": [
+				{
+					"key": "strikes.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while loading the strike history. Please try again later or contact support."
+				},
+				{
+					"key": "strikes.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "Automated bot accounts do not have a strike history. Target a registered player instead."
+				},
+				{
+					"key": "strikes.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first."
+				},
+				{
+					"key": "strikes.strikes-clear",
+					"slug": "strikes-clear",
+					"title": "Strikes Clear",
+					"look": "success",
+					"description": "No strike history was found for this player. This player maintains a clean record."
+				},
+				{
+					"key": "strikes.strikes-empty",
+					"slug": "strikes-empty",
+					"title": "Strikes Empty",
+					"look": "success",
+					"description": "No strike history was found for this player in the last **…**. Try a longer filter or remove it."
+				}
+			]
+		},
+		{
+			"name": "submit",
+			"responses": [
+				{
+					"key": "submit.not-a-game-channel",
+					"slug": "not-a-game-channel",
+					"title": "Not a Game Channel",
+					"look": "error",
+					"description": "This command can only be used in a game text channel. Run it in the text channel of your match."
+				},
+				{
+					"key": "submit.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "You must be a participant in this game to submit a result."
+				},
+				{
+					"key": "submit.missing-attachment",
+					"slug": "missing-attachment",
+					"title": "Missing Attachment",
+					"look": "error",
+					"description": "You must provide a screenshot of the win screen as an attachment or provide a valid proof URL."
+				},
+				{
+					"key": "submit.invalid-attachment",
+					"slug": "invalid-attachment",
+					"title": "Invalid Attachment",
+					"look": "error",
+					"description": "The attachment must be an image file (PNG, JPG, GIF or WebP)."
+				},
+				{
+					"key": "submit.not-in-progress",
+					"slug": "not-in-progress",
+					"title": "Not In Progress",
+					"look": "error",
+					"description": "This game is not currently in progress, so a result cannot be submitted for it."
+				},
+				{
+					"key": "submit.too-early",
+					"slug": "too-early",
+					"title": "Too Early",
+					"look": "error",
+					"description": "You must wait **…** before submitting a result for this game."
+				},
+				{
+					"key": "submit.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game and is waiting for staff to score it."
+				},
+				{
+					"key": "submit.no-team",
+					"slug": "no-team",
+					"title": "No Team",
+					"look": "error",
+					"description": "You are not assigned to a team in this game, so you cannot submit a result."
+				},
+				{
+					"key": "submit.result-submitted-for-staff-scoring",
+					"slug": "result-submitted-for-staff-scoring",
+					"title": "Result Submitted for Staff Scoring",
+					"look": "success",
+					"description": "Your win screenshot for game **#…** has been submitted. Staff will review and score the match using the screenshot as proof.\n\n\u003e **Your Team:** `…`\n\u003e **Proof:** …"
+				},
+				{
+					"key": "submit.casual-match-result-recorded",
+					"slug": "casual-match-result-recorded",
+					"title": "Casual Match Result Recorded",
+					"look": "success",
+					"description": "Your win screenshot for game **#…** has been recorded and scored.\n\n\u003e **Your Team:** `…`\n\u003e **Proof:** …"
+				}
+			]
+		},
+		{
+			"name": "substitute",
+			"responses": [
+				{
+					"key": "substitute.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify both the player leaving and the substitute taking their place."
+				},
+				{
+					"key": "substitute.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "substitute.substitute-assigned",
+					"slug": "substitute-assigned",
+					"title": "Substitute Assigned",
+					"look": "success",
+					"description": "Successfully swapped the players. This action has been logged for staff review.\n\n\u003e **Game:** `#…`\n\u003e **Leaving:** \u003c@…\u003e\n\u003e **Substitute:** \u003c@…\u003e"
+				}
+			]
+		},
+		{
+			"name": "sync",
+			"responses": [
+				{
+					"key": "sync.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while synchronizing your profile. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "sync.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You must register before you can refresh your profile. Run `/player_register` to link your Minecraft account first."
+				},
+				{
+					"key": "sync.member-not-found",
+					"slug": "member-not-found",
+					"title": "Member Not Found",
+					"look": "error",
+					"description": "Your guild membership could not be found. Verify you are still a member of this guild and try again."
+				},
+				{
+					"key": "sync.profile-synchronized",
+					"slug": "profile-synchronized",
+					"title": "Profile Synchronized",
+					"look": "success",
+					"description": "Your profile for **…** is already up to date. No further changes are needed."
+				},
+				{
+					"key": "sync.account-synchronized",
+					"slug": "account-synchronized",
+					"title": "Account Synchronized",
+					"look": "success",
+					"description": "Successfully refreshed your roles and nickname.\n\n\u003e **Username:** `…`\n\n…"
+				}
+			]
+		},
+		{
+			"name": "ticket",
+			"responses": [
+				{
+					"key": "ticket.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "That is not a valid ticket action. Choose one of `panel`, `leaderboard`, `stats`, `logs`, `claim`, `close`, `add`, or `remove`."
+				}
+			]
+		},
+		{
+			"name": "unban",
+			"responses": [
+				{
+					"key": "unban.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the server unban. Please try again later or contact support."
+				},
+				{
+					"key": "unban.invalid-user-id",
+					"slug": "invalid-user-id",
+					"title": "Invalid User ID",
+					"look": "error",
+					"description": "That is not a valid Discord user ID. Provide the 17-20 digit ID of the user to unban."
+				},
+				{
+					"key": "unban.punishment-not-active",
+					"slug": "punishment-not-active",
+					"title": "Punishment Not Active",
+					"look": "error",
+					"description": "That player is not currently **server banned**. Verify their status with `/player_punishments`."
+				},
+				{
+					"key": "unban.server-unban-applied",
+					"slug": "server-unban-applied",
+					"title": "Server Unban Applied",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "unregister",
+			"responses": [
+				{
+					"key": "unregister.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while unregistering the player. Please try again later or contact support."
+				},
+				{
+					"key": "unregister.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to unregister. Select a registered player from the command options."
+				},
+				{
+					"key": "unregister.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players can be unregistered."
+				},
+				{
+					"key": "unregister.player-unregistered",
+					"slug": "player-unregistered",
+					"title": "Player Unregistered",
+					"look": "success",
+					"description": "Successfully removed the player's registration. Their seasonal stats and profile data for this guild have been cleared.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Username:** `…`"
+				}
+			]
+		},
+		{
+			"name": "unstrike",
+			"responses": [
+				{
+					"key": "unstrike.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while voiding the strike. Please try again later or contact support."
+				},
+				{
+					"key": "unstrike.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to remove a strike from. Select a registered player from the command options."
+				},
+				{
+					"key": "unstrike.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players can receive strikes."
+				},
+				{
+					"key": "unstrike.no-strikes-found",
+					"slug": "no-strikes-found",
+					"title": "No Strikes Found",
+					"look": "error",
+					"description": "This player has no active strikes to void. Their strike history can be reviewed with `/strike_list`."
+				},
+				{
+					"key": "unstrike.strike-not-found",
+					"slug": "strike-not-found",
+					"title": "Strike Not Found",
+					"look": "error",
+					"description": "No strike with that ID exists for this player in this guild. Double-check the ID from `/strike_list`."
+				},
+				{
+					"key": "unstrike.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That strike has already been voided. No further action is needed."
+				},
+				{
+					"key": "unstrike.strike-voided",
+					"slug": "strike-voided",
+					"title": "Strike Voided",
+					"look": "success",
+					"description": "Successfully voided the strike. This action has been logged for staff review.\n\n\u003e **Strike ID:** `#…`\n\u003e **Player:** \u003c@…\u003e (**…**)"
+				}
+			]
+		},
+		{
+			"name": "unvoid",
+			"responses": [
+				{
+					"key": "unvoid.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "unvoid.game-not-voided",
+					"slug": "game-not-voided",
+					"title": "Game Not Voided",
+					"look": "error",
+					"description": "Game **#…** has not been voided, so there is nothing to restore."
+				},
+				{
+					"key": "unvoid.game-restored",
+					"slug": "game-restored",
+					"title": "Game Restored",
+					"look": "success",
+					"description": "Game **#…** has been restored from its voided state. This action has been logged for staff review.\n\n\u003e **Players Restored:** `…`"
+				}
+			]
+		},
+		{
+			"name": "unwipe",
+			"responses": [
+				{
+					"key": "unwipe.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while restoring the stats. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "unwipe.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to unwipe. Select a registered player from the command options."
+				},
+				{
+					"key": "unwipe.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players can have stats restored."
+				},
+				{
+					"key": "unwipe.no-wipe-found",
+					"slug": "no-wipe-found",
+					"title": "No Wipe Found",
+					"look": "error"
+				},
+				{
+					"key": "unwipe.already-restored",
+					"slug": "already-restored",
+					"title": "Already Restored",
+					"look": "error",
+					"description": "Wipe **…** of **…** was already undone."
+				},
+				{
+					"key": "unwipe.stats-restored",
+					"slug": "stats-restored",
+					"title": "Stats Restored",
+					"look": "success",
+					"description": "Successfully undid the wipe. This action has been logged for staff review.\n\n\u003e **Player:** `…`\n\u003e **Restored:** …\n\u003e **ELO:** `…`\n\u003e **Rank:** `…`\n\u003e **Wipe ID:** `…`"
+				}
+			]
+		},
+		{
+			"name": "verify",
+			"responses": [
+				{
+					"key": "verify.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while verifying the player. Please try again later or contact support."
+				},
+				{
+					"key": "verify.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to verify. Select a Discord member from the command options."
+				},
+				{
+					"key": "verify.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "\u003c@…\u003e is not registered in this guild, so they cannot queue. Register them with `/player_force_register`."
+				},
+				{
+					"key": "verify.player-verification",
+					"slug": "player-verification",
+					"title": "Player Verification — …",
+					"look": "default"
+				}
+			]
+		},
+		{
+			"name": "viewgame",
+			"responses": [
+				{
+					"key": "viewgame.game-not-found",
+					"slug": "game-not-found",
+					"title": "Game Not Found",
+					"look": "error",
+					"description": "Game **#…** could not be found. It may have already been cleaned up."
+				},
+				{
+					"key": "viewgame.no-game",
+					"slug": "no-game",
+					"title": "No Game",
+					"look": "error",
+					"description": "You must either run this command in a game channel or specify a game number."
+				},
+				{
+					"key": "viewgame.game-information",
+					"slug": "game-information",
+					"title": "Game Information · #…",
+					"look": "info"
+				}
+			]
+		},
+		{
+			"name": "void",
+			"responses": [
+				{
+					"key": "void.not-a-game-channel",
+					"slug": "not-a-game-channel",
+					"title": "Not a Game Channel",
+					"look": "error",
+					"description": "This command can only be used in a game text channel. Run it in the text channel of the match you want to void."
+				},
+				{
+					"key": "void.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "You must be a participant in this game to void it."
+				},
+				{
+					"key": "void.staff-only",
+					"slug": "staff-only",
+					"title": "Staff Only",
+					"look": "error",
+					"description": "Only staff can void matches. Please contact a staff member for assistance."
+				},
+				{
+					"key": "void.game-voided",
+					"slug": "game-voided",
+					"title": "Game Voided",
+					"look": "success",
+					"description": "Game **#…** has been voided. No ELO or stats were recorded."
+				}
+			]
+		},
+		{
+			"name": "win",
+			"responses": [
+				{
+					"key": "win.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while granting ELO to the player. Please try again later or contact support."
+				},
+				{
+					"key": "win.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to grant ELO to. Select a registered player from the command options."
+				},
+				{
+					"key": "win.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Register them with `/player_force_register` before granting ELO."
+				},
+				{
+					"key": "win.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. ELO can only be granted during an active season. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "win.elo-granted",
+					"slug": "elo-granted",
+					"title": "ELO Granted",
+					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "wipe",
+			"responses": [
+				{
+					"key": "wipe.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while wiping the stats. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "wipe.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to wipe. Select a registered player from the command options."
+				},
+				{
+					"key": "wipe.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players have seasonal stats to wipe."
+				},
+				{
+					"key": "wipe.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. An administrator should configure a season first."
+				},
+				{
+					"key": "wipe.no-stats-found",
+					"slug": "no-stats-found",
+					"title": "No Stats Found",
+					"look": "error",
+					"description": "**…** does not have stats for the active season. The player may need to play a game first."
+				},
+				{
+					"key": "wipe.no-games-to-wipe",
+					"slug": "no-games-to-wipe",
+					"title": "No Games To Wipe",
+					"look": "error",
+					"description": "**…** has no scored games from game **#…** onwards this season, so there is nothing to wipe."
+				},
+				{
+					"key": "wipe.stats-wiped",
+					"slug": "stats-wiped",
+					"title": "Stats Wiped",
+					"look": "success",
+					"description": "Successfully wiped the player's seasonal stats. This action has been logged for staff review. Use `/player_unwipe` to undo it.\n\n\u003e **Player:** `…`\n\u003e **Season:** `…`\n\u003e **Wiped:** …\n\u003e **ELO:** `…` → `…`\n\u003e **Rank:** `…`\n\u003e **Wipe ID:** `…`"
+				}
+			]
+		}
+	]
+}

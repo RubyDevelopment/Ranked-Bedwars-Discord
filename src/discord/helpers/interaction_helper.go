@@ -93,6 +93,11 @@ func EditInteractionResponse(s *discordgo.Session, i *discordgo.InteractionCreat
 
 // EditInteractionComponents edits an interaction response with embed and components.
 func EditInteractionComponents(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed, components []discordgo.MessageComponent) error {
+	if sent, err := sendCustomResponse(s, i, emb, components...); sent {
+		return nil
+	} else if err != nil {
+		apputil.DiscordLogger.Warn(fmt.Sprintf("custom response for %q in %s failed, using the built-in embed: %v", emb.Title, i.GuildID, err))
+	}
 	if IsPrefixInteraction(i) {
 		return sendPrefixReply(s, i, "", []*discordgo.MessageEmbed{emb})
 	}
