@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -51,7 +50,7 @@ var PlayerRegisterCommand = &types.Command{
 func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	username := helpers.OptionString(i, "username")
 	if !helpers.IsValidMcUsername(username) {
-		return helpers.EditInteractionEmbed(s, i, playerRegisterInvalidUsernameEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterInvalidUsernameEmbed(i))
 	}
 
 	userID := helpers.InteractionUserID(i)
@@ -59,23 +58,23 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 	// Check if player is already registered
 	existing, err := database.Must().Player.Get(i.GuildID, userID)
 	if err == nil && existing != nil {
-		return helpers.EditInteractionEmbed(s, i, playerRegisterAlreadyRegisteredEmbed(existing.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username))
 	} else if err != nil && !sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerRegisterEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
 	// A rank must exist so the new player can be given one (and its role)
 	if ok, rankErr := helpers.HasConfiguredRank(i.GuildID); rankErr != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerRegisterEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
 	} else if !ok {
-		return helpers.EditInteractionEmbed(s, i, playerRegisterNoRanksEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterNoRanksEmbed(i))
 	}
 
 	// Registration creates the player's stats in the active season, so one has to exist
 	if _, err := database.Must().Season.Active(i.GuildID); sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, playerRegisterNoSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterNoSeasonEmbed(i))
 	} else if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerRegisterEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
 	verification, _ := helpers.LoadRegistrationVerification(i.GuildID)
@@ -89,15 +88,15 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 	if helpers.RequiresRegistrationAPIVerification(verification) {
 		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(username, verification)
 		if verifyErr != nil {
-			return helpers.EditInteractionEmbed(s, i, playerRegisterAPIOutageEmbed(helpers.RegistrationNetworkLabel(verification)))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterAPIOutageEmbed(i, helpers.RegistrationNetworkLabel(verification)))
 		}
 		if !exists {
-			return helpers.EditInteractionEmbed(s, i, playerRegisterAccountNotFoundEmbed(username, helpers.RegistrationNetworkLabel(verification)))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterAccountNotFoundEmbed(i, username, helpers.RegistrationNetworkLabel(verification)))
 		}
 	}
 
 	// Register player atomically
-	return helpers.EditInteractionEmbed(s, i, registerNewPlayer(s, i.GuildID, userID, username))
+	return helpers.EditInteractionEmbed(s, i, registerNewPlayer(i, s, i.GuildID, userID, username))
 }
 
 // ============================================================================
@@ -105,96 +104,22 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 // ============================================================================
 
 // registerNewPlayer links the Minecraft name to the Discord user and returns the embed that says how it went.
-func registerNewPlayer(s *discordgo.Session, guildID, userID, username string) *discordgo.MessageEmbed {
+func registerNewPlayer(i *discordgo.InteractionCreate, s *discordgo.Session, guildID, userID, username string) *discordgo.MessageEmbed {
 	reg, err := database.Must().Player.Register(userID, guildID, userID, username, 0)
 	if err != nil {
 		if sdk.IsConflict(err) {
-			return playerRegisterConflictEmbed(username)
+			return helpers.PlayerRegisterConflictEmbed(i, username)
 		}
-		return unexpectedErrorPlayerRegisterEmbed()
+		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
 	// Apply starting rank/ELO for brand new registrations
 	if reg.CreatedGuild {
 		if err := helpers.ApplyStartingRank(guildID, userID, reg.PlayerID); err != nil {
-			return unexpectedErrorPlayerRegisterEmbed()
+			return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 		}
 	}
 	if _, err := helpers.SyncRegisteredPlayerProfile(s, guildID, reg.PlayerID, userID); err != nil {
-		return unexpectedErrorPlayerRegisterEmbed()
+		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
-	return playerRegisterSuccessEmbed(username)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorPlayerRegisterEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to process your registration. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func playerRegisterNoRanksEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Registration Unavailable",
-		Description: "No ranks have been configured for this guild yet, so you cannot be registered. Please ask an administrator to set up at least one rank.",
-	})
-}
-
-func playerRegisterNoSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Registration Unavailable",
-		Description: "This guild has no active season yet, so you cannot be registered. Please ask an administrator to start one on the dashboard's Season Periods page.",
-	})
-}
-
-func playerRegisterConflictEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Username Taken",
-		Description: fmt.Sprintf("The username **%s** is already linked to another player in this guild. Try a different username or contact staff if this is your account.", username),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerRegisterAlreadyRegisteredEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Already Registered",
-		Description: fmt.Sprintf("You are already registered as **%s**. Use `/player_rename` to change your username.", username),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerRegisterAPIOutageEmbed(network string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Verification Unavailable",
-		Description: fmt.Sprintf("Could not verify that account on **%s** right now. Please try again in a few minutes.", network),
-	})
-}
-
-func playerRegisterAccountNotFoundEmbed(username, network string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Account Not Found",
-		Description: fmt.Sprintf("Could not find a Minecraft account named **%s** on **%s**. Double-check the spelling and try again.", username, network),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerRegisterInvalidUsernameEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Username",
-		Description: "That Minecraft username format is not valid. Usernames must be 3-16 characters and contain only letters, numbers, and underscores.",
-	})
-}
-
-func playerRegisterSuccessEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title: "Registration Complete",
-		Description: fmt.Sprintf(
-			"Your Discord account has been successfully linked. Please wait a moment for your roles and display name to update.\n\n> **Username:** `%s`",
-			username,
-		),
-		Thumbnail: helpers.MinecraftBustAvatarURL(username),
-	})
+	return helpers.PlayerRegisterSuccessEmbed(i, username)
 }

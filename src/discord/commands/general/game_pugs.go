@@ -61,46 +61,14 @@ func executeGamePugsCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	switch sub {
 	case "list":
-		return helpers.EditInteractionEmbed(s, i, pugsListUnavailableEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PugsListUnavailableEmbed(i))
 	case "vote":
 		target := helpers.SubOptionUser(s, opts, "user")
 		if target == nil || target.Bot {
-			return helpers.EditInteractionEmbed(s, i, pugsInvalidTargetEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.PugsInvalidTargetEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, pugsVoteUnavailableEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PugsVoteUnavailableEmbed(i))
 	default:
-		return helpers.EditInteractionEmbed(s, i, pugsInvalidSubcommandEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PugsInvalidSubcommandEmbed(i))
 	}
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func pugsListUnavailableEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not Yet Implemented",
-		Description: "The PUGS division list requires additional infrastructure (snapshot system, role management) and is not available yet.",
-	})
-}
-
-func pugsVoteUnavailableEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not Yet Implemented",
-		Description: "The PUGS voting system requires additional infrastructure (voting channels, role management) and is not available yet.",
-	})
-}
-
-func pugsInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a real player to vote for. Select a member from the command options.",
-	})
-}
-
-func pugsInvalidSubcommandEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Subcommand",
-		Description: "Use `/game_pugs list` or `/game_pugs vote`.",
-	})
 }

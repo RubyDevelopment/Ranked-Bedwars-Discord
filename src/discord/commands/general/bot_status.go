@@ -1,7 +1,7 @@
 package general
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,20 +16,30 @@ import (
 // ============================================================================
 
 type botDisplayConfig struct {
-	status string
-	label  string
-	emoji  string
+	status      string
+	labelLayout string // layout keys: a guild renames a status or swaps its dot
+	emojiLayout string
 }
 
 var (
 	botDisplayConfigs = []botDisplayConfig{
-		{status: "Available", label: "Available", emoji: helpers.DotGreen},
-		{status: "Starting", label: "Starting", emoji: helpers.DotYellow},
-		{status: "Busy", label: "Busy", emoji: helpers.DotRed},
-		{status: "Cooldown", label: "Cooldown", emoji: helpers.DotOrange},
-		{status: "Offline", label: "Offline", emoji: helpers.DotGray},
+		botStatus("Available", helpers.DotGreen),
+		botStatus("Starting", helpers.DotYellow),
+		botStatus("Busy", helpers.DotRed),
+		botStatus("Cooldown", helpers.DotOrange),
+		botStatus("Offline", helpers.DotGray),
 	}
 )
+
+// botStatus defines the layouts that name a status and its dot.
+func botStatus(status, emoji string) botDisplayConfig {
+	key := "bots.status_" + strings.ToLower(status)
+	return botDisplayConfig{
+		status:      status,
+		labelLayout: helpers.DefineLayout(key+"_label", status+" label", status),
+		emojiLayout: helpers.DefineLayout(key+"_emoji", status+" dot", emoji),
+	}
+}
 
 func init() {
 	helpers.Register(BotStatusCommand)
@@ -56,36 +66,22 @@ func executeBotStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Fetch the registered bots for this guild
 	bots, err := helpers.GuildMetaBots(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorBotsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorBotsEmbed(i))
 	}
 
 	// If no bots are registered, return an error embed
 	if len(bots) == 0 {
-		return helpers.EditInteractionEmbed(s, i, emptyBotsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.EmptyBotsEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, botsOverviewEmbed(bots))
+	return helpers.EditInteractionEmbed(s, i, botsOverviewEmbed(i.GuildID, bots))
 }
 
 // ============================================================================
 // Embed Builders
 // ============================================================================
 
-func unexpectedErrorBotsEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to fetch the registered game bots for this guild. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func emptyBotsEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Registered Bots",
-		Description: "This guild has no registered game bots. If you think this is an error, please contact an administrator for assistance or try again later.",
-	})
-}
-
-func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
+func botsOverviewEmbed(guildID string, bots []types.Bot) *discordgo.MessageEmbed {
 	statusGroups := make(map[string][]string, len(botDisplayConfigs))
 	for _, cfg := range botDisplayConfigs {
 		statusGroups[cfg.status] = []string{}
@@ -96,15 +92,10 @@ func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
 			continue
 		}
 
-		name := bot.Username
-		if strings.TrimSpace(bot.Tier) != "" {
-			name = fmt.Sprintf("%s", name)
-		}
-
-		status := bot.Status
+		status, note := bot.Status, ""
 		if !bot.IsEnabled {
 			status = "Offline"
-			name += " · disabled"
+			note = helpers.FillLayout(guildID, helpers.LayoutBotsDisabled, nil)
 		}
 
 		// If bot is "Available", treat it as "Offline" for display
@@ -112,15 +103,15 @@ func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
 		if status == "Available" {
 			status = "Offline"
 		}
-
-		if _, ok := statusGroups[status]; ok {
-			statusGroups[status] = append(statusGroups[status], name)
-			continue
+		if _, ok := statusGroups[status]; !ok {
+			status = "Offline"
 		}
-
-		statusGroups["Offline"] = append(statusGroups["Offline"], name)
+		statusGroups[status] = append(statusGroups[status], helpers.FillLayout(guildID, helpers.LayoutBotsBot, map[string]string{
+			"name": bot.Username, "tier": bot.Tier, "status": status, "note": note,
+		}))
 	}
 
+	separator := helpers.LayoutSeparator(guildID, helpers.LayoutBotsSeparator)
 	fields := make([]*discordgo.MessageEmbedField, 0, len(botDisplayConfigs))
 	for _, cfg := range botDisplayConfigs {
 		group := statusGroups[cfg.status]
@@ -128,13 +119,16 @@ func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
 			continue
 		}
 
-		value := strings.Join(group, ", ")
+		value := strings.Join(group, separator)
 		if len(value) > 1024 {
 			value = value[:1021] + "..."
 		}
 
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s %s (%d)", cfg.emoji, cfg.label, len(group)),
+			Name: helpers.FillLayout(guildID, helpers.LayoutBotsGroupTitle, map[string]string{
+				"emoji": helpers.FillLayout(guildID, cfg.emojiLayout, nil), "label": helpers.FillLayout(guildID, cfg.labelLayout, nil),
+				"count": strconv.Itoa(len(group)), "status": cfg.status,
+			}),
 			Value:  value,
 			Inline: false,
 		})
@@ -144,5 +138,6 @@ func botsOverviewEmbed(bots []types.Bot) *discordgo.MessageEmbed {
 		Title:       "Registered Bots Status",
 		Description: "Displays the status and uptime metrics of all registered game bots for this guild.",
 		Fields:      fields,
+		Thumbnail:   helpers.ThumbBot,
 	})
 }

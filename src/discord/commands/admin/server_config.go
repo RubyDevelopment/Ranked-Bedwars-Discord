@@ -2,7 +2,6 @@ package admin
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -157,87 +156,87 @@ func executeServerConfigCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	case "bot":
 		return executeConfigBotCommand(s, i, sub, options)
 	default:
-		return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRouteEmbed(group, sub))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, group, sub))
 	}
 }
 
 func executeRequirementCommand(s *discordgo.Session, i *discordgo.InteractionCreate, resourceType types.RequirementType, sub string, options []*discordgo.ApplicationCommandInteractionDataOption) error {
 	cmdName := strings.ToLower(strings.TrimSpace(helpers.SubOptionString(options, "command")))
 	if findRegisteredCommand(cmdName) == nil {
-		return helpers.EditInteractionEmbed(s, i, serverConfigUnknownCommandEmbed(cmdName))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownCommandEmbed(i, cmdName))
 	}
 
 	switch sub {
 	case "list":
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, serverConfigCommandNotSetUpEmbed(cmdName))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigRequirementListEmbed(resourceType, cmdName, slots))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementListEmbed(i, resourceType, cmdName, slots))
 
 	case "set":
 		key := helpers.SubOptionString(options, "key")
 		if key == "" {
-			return helpers.EditInteractionEmbed(s, i, serverConfigInvalidKeyEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigInvalidKeyEmbed(i))
 		}
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, serverConfigCommandNotSetUpEmbed(cmdName))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
 		if _, ok := slots[key]; !ok {
-			return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRequirementKeyEmbed(cmdName, key, slots))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
 		}
 
 		id, label := resolveRequirementValue(s, i, options, resourceType)
 		if id == "" {
-			return helpers.EditInteractionEmbed(s, i, serverConfigMissingValueEmbed(string(resourceType)))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigMissingValueEmbed(i, string(resourceType)))
 		}
 
 		if err := helpers.SetRequirementSlotID(helpers.InteractionUserID(i), i.GuildID, cmdName, resourceType, key, id); err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigRequirementSetEmbed(resourceType, cmdName, key, label))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementSetEmbed(i, resourceType, cmdName, key, label))
 
 	case "get":
 		key := helpers.SubOptionString(options, "key")
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, serverConfigCommandNotSetUpEmbed(cmdName))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
 		slot, ok := slots[key]
 		if !ok {
-			return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRequirementKeyEmbed(cmdName, key, slots))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigRequirementGetEmbed(resourceType, cmdName, key, slot))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementGetEmbed(i, resourceType, cmdName, key, slot))
 
 	case "clear":
 		key := helpers.SubOptionString(options, "key")
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, serverConfigCommandNotSetUpEmbed(cmdName))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
 		if _, ok := slots[key]; !ok {
-			return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRequirementKeyEmbed(cmdName, key, slots))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
 		}
 		if err := helpers.SetRequirementSlotID(helpers.InteractionUserID(i), i.GuildID, cmdName, resourceType, key, ""); err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigRequirementClearedEmbed(resourceType, cmdName, key))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementClearedEmbed(i, resourceType, cmdName, key))
 
 	default:
-		return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRouteEmbed(string(resourceType), sub))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, string(resourceType), sub))
 	}
 }
 
@@ -247,36 +246,36 @@ func executeConfigBotCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	case "view":
 		config, err := database.Must().GuildConfig.Get(i.GuildID)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigBotViewEmbed(config.Prefix, config.IsPrefixEnabled, config.IsSlashEnabled))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigBotViewEmbed(i, config.Prefix, config.IsPrefixEnabled, config.IsSlashEnabled))
 	case "prefix":
 		prefix := helpers.SubOptionString(options, "prefix")
 		if n := utf8.RuneCountInString(prefix); n < 1 || n > 5 {
-			return helpers.EditInteractionEmbed(s, i, serverConfigInvalidPrefixEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigInvalidPrefixEmbed(i))
 		}
 		if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "prefix", prefix); err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigPrefixUpdatedEmbed(prefix))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigPrefixUpdatedEmbed(i, prefix))
 	case "toggle":
 		target := helpers.SubOptionString(options, "target")
 		enabled := helpers.SubOptionBool(options, "enabled")
 		switch target {
 		case "prefix":
 			if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_prefix_enabled", enabled); err != nil {
-				return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+				return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 			}
 		case "slash":
 			if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_slash_enabled", enabled); err != nil {
-				return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerConfigEmbed())
+				return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
 			}
 		default:
-			return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRouteEmbed("bot", sub))
+			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, "bot", sub))
 		}
-		return helpers.EditInteractionEmbed(s, i, serverConfigBotToggleEmbed(target, enabled))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigBotToggleEmbed(i, target, enabled))
 	default:
-		return helpers.EditInteractionEmbed(s, i, serverConfigUnknownRouteEmbed("bot", sub))
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, "bot", sub))
 	}
 }
 
@@ -359,186 +358,4 @@ func selectedConfigRoute(i *discordgo.InteractionCreate) (group, sub string, opt
 		return top[0].Name, "", top[0].Options
 	}
 	return "", "", nil
-}
-
-func requirementMention(resourceType types.RequirementType, id string) string {
-	if resourceType == types.ReqRole {
-		return fmt.Sprintf("<@&%s>", id)
-	}
-	return fmt.Sprintf("<#%s>", id)
-}
-
-func enabledLabel(enabled bool) string {
-	if enabled {
-		return "Enabled"
-	}
-	return "Disabled"
-}
-
-func toggleLabel(enabled bool) string {
-	if enabled {
-		return "enabled"
-	}
-	return "disabled"
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorServerConfigEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to update the configuration for this guild. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func serverConfigUnknownCommandEmbed(name string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unknown Command",
-		Description: fmt.Sprintf("No registered command named **%s**.", name),
-	})
-}
-
-func serverConfigCommandNotSetUpEmbed(name string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Command Not Set Up",
-		Description: fmt.Sprintf("**%s** has no configuration yet. Run `/server_config setup` first.", name),
-	})
-}
-
-func serverConfigUnknownRequirementKeyEmbed(cmdName, key string, slots map[string]types.RequirementSlot) *discordgo.MessageEmbed {
-	valid := make([]string, 0, len(slots))
-	for k := range slots {
-		valid = append(valid, "`"+k+"`")
-	}
-	sort.Strings(valid)
-	desc := fmt.Sprintf("**%s** has no requirement key **%s**.", cmdName, key)
-	if len(valid) > 0 {
-		desc += " Valid keys: " + strings.Join(valid, ", ")
-	} else {
-		desc += " This command declares no requirements of this type."
-	}
-	return helpers.Preset("error", types.PresetOptions{Title: "Unknown Requirement Key", Description: desc})
-}
-
-func serverConfigRequirementListEmbed(resourceType types.RequirementType, cmdName string, slots map[string]types.RequirementSlot) *discordgo.MessageEmbed {
-	title := fmt.Sprintf("%s Requirements — /%s", strings.ToUpper(string(resourceType[:1]))+string(resourceType[1:]), cmdName)
-	if len(slots) == 0 {
-		return helpers.Preset("info", types.PresetOptions{
-			Title:       title,
-			Description: fmt.Sprintf("**%s** declares no %s requirements.", cmdName, resourceType),
-		})
-	}
-
-	keys := make([]string, 0, len(slots))
-	for key := range slots {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	fields := make([]*discordgo.MessageEmbedField, 0, len(keys))
-	for _, key := range keys {
-		slot := slots[key]
-		value := "`Not configured`"
-		if slot.ID != "" {
-			value = requirementMention(resourceType, slot.ID)
-		}
-		state := "optional"
-		if slot.Required {
-			state = "required"
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s (%s)", key, state),
-			Value:  value,
-			Inline: true,
-		})
-	}
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       title,
-		Description: "Configured requirement keys for this command.",
-		Fields:      fields,
-	})
-}
-
-func serverConfigRequirementSetEmbed(resourceType types.RequirementType, cmdName, key, label string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Requirement Updated",
-		Description: fmt.Sprintf("Successfully updated the command requirement.\n\n> **Command:** `/%s`\n> **Key:** `%s`\n> **Type:** `%s`\n> **Value:** %s", cmdName, key, resourceType, label),
-	})
-}
-
-func serverConfigRequirementGetEmbed(resourceType types.RequirementType, cmdName, key string, slot types.RequirementSlot) *discordgo.MessageEmbed {
-	value := "`Not configured`"
-	if slot.ID != "" {
-		value = requirementMention(resourceType, slot.ID)
-	}
-	state := "optional"
-	if slot.Required {
-		state = "required"
-	}
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       "Command Requirement",
-		Description: fmt.Sprintf("> **Command:** `/%s`\n> **Key:** `%s`\n> **Type:** `%s`\n> **State:** `%s`\n> **Value:** %s", cmdName, key, resourceType, state, value),
-	})
-}
-
-func serverConfigRequirementClearedEmbed(resourceType types.RequirementType, cmdName, key string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Requirement Cleared",
-		Description: fmt.Sprintf("Successfully cleared the command requirement.\n\n> **Command:** `/%s`\n> **Key:** `%s`\n> **Type:** `%s`", cmdName, key, resourceType),
-	})
-}
-
-func serverConfigUnknownRouteEmbed(group, sub string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unknown Subcommand",
-		Description: fmt.Sprintf("Unknown config route `%s %s`. Use `/server_config` without arguments to see available options.", group, sub),
-	})
-}
-
-func serverConfigInvalidKeyEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Key",
-		Description: "You must provide a non-empty key.",
-	})
-}
-
-func serverConfigMissingValueEmbed(kind string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Missing Value",
-		Description: fmt.Sprintf("You must provide a %s.", kind),
-	})
-}
-
-func serverConfigBotViewEmbed(prefix string, prefixEnabled, slashEnabled bool) *discordgo.MessageEmbed {
-	lines := []string{
-		fmt.Sprintf("> **Prefix:** `%s` (`%s`)", prefix, enabledLabel(prefixEnabled)),
-		fmt.Sprintf("> **Slash Commands:** `%s`", enabledLabel(slashEnabled)),
-	}
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       "Bot Settings",
-		Description: strings.Join(lines, "\n"),
-	})
-}
-
-func serverConfigInvalidPrefixEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Prefix",
-		Description: "Please provide a valid prefix of 1-5 characters.",
-	})
-}
-
-func serverConfigPrefixUpdatedEmbed(prefix string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Prefix Updated",
-		Description: fmt.Sprintf("Successfully updated the command prefix.\n\n> **Prefix:** `%s`", prefix),
-	})
-}
-
-func serverConfigBotToggleEmbed(target string, enabled bool) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Bot Setting Updated",
-		Description: fmt.Sprintf("Successfully updated the command mode.\n\n> **Mode:** `%s`\n> **State:** `%s`", target, toggleLabel(enabled)),
-	})
 }

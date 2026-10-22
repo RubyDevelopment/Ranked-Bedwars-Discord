@@ -1,8 +1,6 @@
 package staff
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -68,7 +66,7 @@ func executeGamePartialVoidCommand(s *discordgo.Session, i *discordgo.Interactio
 	// 2. Fetch the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, gamePartialVoidNotFoundEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GamePartialVoidNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Partially Void the Game
@@ -77,28 +75,5 @@ func executeGamePartialVoidCommand(s *discordgo.Session, i *discordgo.Interactio
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("partially void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gamePartialVoidSuccessEmbed(gameNumber, loserIDs))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func gamePartialVoidNotFoundEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Found",
-		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
-	})
-}
-
-func gamePartialVoidSuccessEmbed(gameNumber int, loserIDs []string) *discordgo.MessageEmbed {
-	mentions := make([]string, len(loserIDs))
-	for idx, id := range loserIDs {
-		mentions[idx] = fmt.Sprintf("<@%s>", id)
-	}
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Game Partially Voided",
-		Description: fmt.Sprintf("Game **#%d** has been partially voided. The winning team's stats are preserved. This action has been logged for staff review.\n\n> **Affected Players:** %s", gameNumber, strings.Join(mentions, " ")),
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.GamePartialVoidSuccessEmbed(i, gameNumber, loserIDs))
 }

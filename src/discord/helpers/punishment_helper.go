@@ -270,6 +270,7 @@ func unexpectedErrorPunishmentEmbed(action string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: fmt.Sprintf("An unexpected error occurred while processing the %s. Please try again later or contact support.", action),
+		Thumbnail:   ThumbFlag,
 	})
 }
 
@@ -277,13 +278,7 @@ func punishmentInvalidTargetEmbed(action string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: fmt.Sprintf("You must specify a player to %s. Select a member from the command options.", action),
-	})
-}
-
-func punishmentSelfTargetEmbed(action string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: fmt.Sprintf("You cannot %s yourself. Select a different member to moderate.", action),
+		Thumbnail:   ThumbFlag,
 	})
 }
 
@@ -291,20 +286,7 @@ func punishmentBotTargetEmbed(adjective string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: fmt.Sprintf("Automated bot accounts cannot be %s. Target a registered player instead.", adjective),
-	})
-}
-
-func punishmentReasonRequiredEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Reason Required",
-		Description: "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field.",
-	})
-}
-
-func punishmentInvalidDurationEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Invalid Duration",
-		Description: "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`.",
+		Thumbnail:   ThumbFlag,
 	})
 }
 
@@ -312,35 +294,7 @@ func punishmentMemberNotFoundEmbed(action string) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Member Not Found",
 		Description: fmt.Sprintf("That user is not currently in this server. They must be in the server to apply a %s.", action),
-	})
-}
-
-func punishmentHierarchyEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Hierarchy Error",
-		Description: "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator.",
-	})
-}
-
-// PunishmentPlayerNotFoundEmbed is shown when the target has no player profile in this guild.
-func PunishmentPlayerNotFoundEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Player Not Found",
-		Description: "That player is not registered in this guild. They must register first before punishments can be managed.",
-	})
-}
-
-func punishmentAlreadyActiveEmbed(adjective string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Punishment Already Active",
-		Description: fmt.Sprintf("That player is already **%s**. Check `/player_punishments` for details.", adjective),
-	})
-}
-
-func punishmentNotActiveEmbed(adjective string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Punishment Not Active",
-		Description: fmt.Sprintf("That player is not currently **%s**. Verify their status with `/player_punishments`.", adjective),
+		Thumbnail:   ThumbFlag,
 	})
 }
 
@@ -362,6 +316,7 @@ func punishmentAppliedEmbed(spec *ApplySpec, user *discordgo.User, username, dur
 	return Preset("success", types.PresetOptions{
 		Title:       spec.Title,
 		Description: description,
+		Thumbnail:   ThumbHammer,
 	})
 }
 
@@ -372,6 +327,7 @@ func punishmentRevokedEmbed(action string, user *discordgo.User, reason string) 
 			"Successfully removed the %s. This action has been logged for staff review.\n\n> **Player:** <@%s>\n> **Reason:** %s",
 			strings.ToLower(action), user.ID, reason,
 		),
+		Thumbnail: ThumbHammer,
 	})
 }
 
@@ -537,11 +493,7 @@ func logPunishmentExpiry(s *discordgo.Session, guildID, command, userID string, 
 	if err != nil || channelID == "" {
 		return
 	}
-	_, _ = s.ChannelMessageSendEmbed(channelID, &discordgo.MessageEmbed{
-		Title:       "Punishment Expired",
-		Description: fmt.Sprintf("> **Player:** <@%s>\n> **Type:** `%s`\n> **Reason:** %s", userID, p.Type, p.Reason),
-		Timestamp:   time.Now().Format(time.RFC3339),
-	})
+	_, _ = s.ChannelMessageSendEmbed(channelID, PunishmentExpiredLogEmbed(userID, p))
 }
 
 // SendPunishmentAlert sends an alert to the moderation alerts channel when a punishment is applied or revoked.
@@ -571,22 +523,5 @@ func SendPunishmentAlert(s *discordgo.Session, guildID, command, action string, 
 		}
 	}
 
-	title := "Punishment Applied"
-	if action == "revoked" {
-		title = "Punishment Revoked"
-	} else if action == "expired" {
-		title = "Punishment Expired"
-	}
-
-	description := fmt.Sprintf("> **Player:** <@%s> (**%s**)\n> **Type:** `%s`\n", user.ID, username, pType)
-	if duration != "" && duration != "removed" {
-		description += fmt.Sprintf("> **Duration:** `%s`\n", duration)
-	}
-	description += fmt.Sprintf("> **Reason:** %s", reason)
-
-	_, _ = s.ChannelMessageSendEmbed(alertChannelID, &discordgo.MessageEmbed{
-		Title:       title,
-		Description: description,
-		Timestamp:   time.Now().Format(time.RFC3339),
-	})
+	_, _ = s.ChannelMessageSendEmbed(alertChannelID, PunishmentAlertEmbed(action, user, username, pType, duration, reason))
 }

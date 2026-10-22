@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -70,22 +69,22 @@ func executeGameRescoreCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	winnerTeam := helpers.SubOptionString(opts, "winner_team")
 	mvpUser := helpers.SubOptionUser(s, opts, "mvp")
 	if mvpUser == nil {
-		return helpers.EditInteractionEmbed(s, i, gameRescoreInvalidMvpEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreInvalidMvpEmbed(i))
 	}
 	if mvpUser.Bot {
-		return helpers.EditInteractionEmbed(s, i, gameRescoreBotMvpEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreBotMvpEmbed(i))
 	}
 
 	// 2. Validate the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, gameRescoreNotFoundEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreNotFoundEmbed(i, gameNumber))
 	}
 	if game.State != helpers.GameCleanup && game.State != helpers.GameVoided {
-		return helpers.EditInteractionEmbed(s, i, gameRescoreInvalidStateEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreInvalidStateEmbed(i, gameNumber))
 	}
 	if _, isParticipant := game.Player(mvpUser.ID); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, gameRescoreMvpNotInMatchEmbed(mvpUser))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreMvpNotInMatchEmbed(i, mvpUser))
 	}
 
 	// 3. Rescore the Game
@@ -94,52 +93,6 @@ func executeGameRescoreCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("rescore the game", err))
 	}
 
-	winners, losers := splitResultMentions(result.Results)
-	return helpers.EditInteractionEmbed(s, i, gameRescoreSuccessEmbed(gameNumber, winners, losers, mvpUser))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func gameRescoreInvalidMvpEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid MVP",
-		Description: "You must specify the MVP of the game. Select a player from the command options.",
-	})
-}
-
-func gameRescoreBotMvpEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid MVP",
-		Description: "Automated bot accounts cannot be the MVP. Select a real player instead.",
-	})
-}
-
-func gameRescoreNotFoundEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Found",
-		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
-	})
-}
-
-func gameRescoreInvalidStateEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid State",
-		Description: fmt.Sprintf("Game **#%d** has not finished yet. Only completed or voided games can be rescored; use `/game_score` for games that are still in progress.", gameNumber),
-	})
-}
-
-func gameRescoreMvpNotInMatchEmbed(mvp *discordgo.User) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid MVP",
-		Description: fmt.Sprintf("<@%s> was not a participant in this game. The MVP must be a player who took part in the match.", mvp.ID),
-	})
-}
-
-func gameRescoreSuccessEmbed(gameNumber int, winners, losers string, mvp *discordgo.User) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Game Rescored",
-		Description: fmt.Sprintf("Game **#%d** has been rescored. This action has been logged for staff review.\n\n> **Winners:** %s\n> **Losers:** %s\n> **MVP:** <@%s>", gameNumber, winners, losers, mvp.ID),
-	})
+	winners, losers := helpers.SplitResultMentions(result.Results)
+	return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreSuccessEmbed(i, gameNumber, winners, losers, mvpUser))
 }

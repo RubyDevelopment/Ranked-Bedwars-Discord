@@ -65,22 +65,22 @@ func executeGameCompareCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	opponent := helpers.OptionUser(s, i, "opponent")
 	player := helpers.ResolveUserOption(s, i, "user")
 	if opponent == nil || player == nil {
-		return helpers.EditInteractionEmbed(s, i, compareInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.CompareInvalidTargetEmbed(i))
 	}
 	if opponent.ID == player.ID {
-		return helpers.EditInteractionEmbed(s, i, compareSelfComparisonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.CompareSelfComparisonEmbed(i))
 	}
 	if opponent.Bot || player.Bot {
-		return helpers.EditInteractionEmbed(s, i, compareBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.CompareBotTargetEmbed(i))
 	}
 
 	// 2. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorCompareEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorCompareEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, compareNoActiveSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.CompareNoActiveSeasonEmbed(i))
 	}
 
 	// 3. Fetch Player Profiles & Stats
@@ -89,11 +89,11 @@ func executeGameCompareCommand(s *discordgo.Session, i *discordgo.InteractionCre
 
 	first, err := loadCompareSide(i.GuildID, seasonID, player, isAdmin || player.ID == executorID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, compareSideErrorEmbed(err, player))
+		return helpers.EditInteractionEmbed(s, i, compareSideErrorEmbed(i, err, player))
 	}
 	second, err := loadCompareSide(i.GuildID, seasonID, opponent, isAdmin || opponent.ID == executorID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, compareSideErrorEmbed(err, opponent))
+		return helpers.EditInteractionEmbed(s, i, compareSideErrorEmbed(i, err, opponent))
 	}
 
 	return helpers.EditInteractionEmbed(s, i, compareOverviewEmbed(seasonKey, first, second))
@@ -174,56 +174,23 @@ func compareSideField(side *compareSide) *discordgo.MessageEmbedField {
 // Embed Builders
 // ============================================================================
 
-func unexpectedErrorCompareEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to compare these players. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func compareInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify an opponent to compare against. Select a registered player from the command options.",
-	})
-}
-
-func compareSelfComparisonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You cannot compare a player against themselves. Select a different opponent.",
-	})
-}
-
-func compareBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts do not have ranked stats. Target a registered player instead.",
-	})
-}
-
-func compareNoActiveSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance.",
-	})
-}
-
 // compareSideErrorEmbed explains why one side of the comparison could not be loaded.
-func compareSideErrorEmbed(err error, user *discordgo.User) *discordgo.MessageEmbed {
+func compareSideErrorEmbed(i *discordgo.InteractionCreate, err error, user *discordgo.User) *discordgo.MessageEmbed {
 	switch err {
 	case errCompareNotRegistered:
 		return helpers.Preset("error", types.PresetOptions{
 			Title:       "Player Not Registered",
 			Description: fmt.Sprintf("<@%s> is not registered in this guild. They must run `/player_register` before they can be compared.", user.ID),
+			Thumbnail:   helpers.ThumbFlag,
 		})
 	case errCompareStatsHidden:
 		return helpers.Preset("error", types.PresetOptions{
 			Title:       "Stats Hidden",
 			Description: fmt.Sprintf("<@%s> has chosen to hide their stats from other players, so they cannot be compared.", user.ID),
+			Thumbnail:   helpers.ThumbFlag,
 		})
 	}
-	return unexpectedErrorCompareEmbed()
+	return helpers.UnexpectedErrorCompareEmbed(i)
 }
 
 func compareOverviewEmbed(season string, first, second *compareSide) *discordgo.MessageEmbed {
@@ -231,5 +198,6 @@ func compareOverviewEmbed(season string, first, second *compareSide) *discordgo.
 		Title:       "Player Comparison",
 		Description: fmt.Sprintf("Comparing **%s** and **%s** for season `%s`.", first.username, second.username, season),
 		Fields:      []*discordgo.MessageEmbedField{compareSideField(first), compareSideField(second)},
+		Thumbnail:   helpers.ThumbPlayers,
 	})
 }

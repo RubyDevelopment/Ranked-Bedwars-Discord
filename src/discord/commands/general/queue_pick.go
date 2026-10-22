@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -60,14 +59,14 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// 1. Validate the Game Channel & Draft
 	game, ok := helpers.Games.ByChannel(i.ChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, queuePickNotGameChannelEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickNotGameChannelEmbed(i))
 	}
 	draftView, err := helpers.Games.Draft(game.ID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, queuePickNoActiveDraftEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickNoActiveDraftEmbed(i))
 	}
 	if draftView.Turn < 0 {
-		return helpers.EditInteractionEmbed(s, i, queuePickDraftCompleteEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickDraftCompleteEmbed(i))
 	}
 
 	// 2. Resolve the Target Player
@@ -77,13 +76,13 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	} else if name := helpers.SubOptionString(opts, "name"); name != "" {
 		targetUserID = findPlayerByUsername(game, draftView.Pool, name)
 		if targetUserID == "" {
-			return helpers.EditInteractionEmbed(s, i, queuePickPlayerNotFoundEmbed(name))
+			return helpers.EditInteractionEmbed(s, i, helpers.QueuePickPlayerNotFoundEmbed(i, name))
 		}
 	} else {
-		return helpers.EditInteractionEmbed(s, i, queuePickMissingOptionEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickMissingOptionEmbed(i))
 	}
 	if !slices.Contains(draftView.Pool, targetUserID) {
-		return helpers.EditInteractionEmbed(s, i, queuePickInvalidSelectionEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickInvalidSelectionEmbed(i))
 	}
 
 	// 3. Make the Pick
@@ -95,7 +94,7 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	if picked, ok := game.Player(targetUserID); ok {
 		targetUsername = picked.Username
 	}
-	return helpers.EditInteractionEmbed(s, i, queuePickSuccessEmbed(targetUsername, actor))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueuePickSuccessEmbed(i, targetUsername, actor))
 }
 
 // ============================================================================
@@ -111,58 +110,4 @@ func findPlayerByUsername(game helpers.Game, pool []string, username string) str
 		}
 	}
 	return ""
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func queuePickNotGameChannelEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not a Game Channel",
-		Description: "This command can only be used in a game text channel. Run it in the text channel of the game you are drafting for.",
-	})
-}
-
-func queuePickNoActiveDraftEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Draft",
-		Description: "There is no active captain draft for this game. If you think this is an error, please contact an administrator for assistance.",
-	})
-}
-
-func queuePickDraftCompleteEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Draft Complete",
-		Description: "The captain draft for this game is already complete. No more players can be picked.",
-	})
-}
-
-func queuePickMissingOptionEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Missing Option",
-		Description: "You must provide either a player mention or a username to pick.",
-	})
-}
-
-func queuePickPlayerNotFoundEmbed(name string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Found",
-		Description: fmt.Sprintf("Could not find a player in the pick pool matching **%s**. Check the spelling or mention the player instead.", name),
-	})
-}
-
-func queuePickInvalidSelectionEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Selection",
-		Description: "The selected player is not in the available pick pool. Choose a player who has not been picked yet.",
-	})
-}
-
-func queuePickSuccessEmbed(username, captainID string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Player Picked",
-		Description: fmt.Sprintf("Successfully drafted the player onto the team.\n\n> **Player:** `%s`\n> **Captain:** <@%s>", username, captainID),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
 }

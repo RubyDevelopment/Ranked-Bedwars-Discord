@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
@@ -86,15 +86,9 @@ func deliverDecayNotice(n DecayNotice) bool {
 	var embed *discordgo.MessageEmbed
 	switch n.Kind {
 	case DecayWarning:
-		embed = Preset("caution", types.PresetOptions{
-			Title:       "ELO Decay Incoming",
-			Description: fmt.Sprintf("You have been inactive for a while. Unless you play a ranked game before <t:%d:R>, you will lose **%d ELO** (%d → %d).", n.At.Unix(), n.Amount, n.Before, n.After),
-		})
+		embed = DecayWarningEmbed(n)
 	case DecayApplied:
-		embed = Preset("error", types.PresetOptions{
-			Title:       "ELO Decayed",
-			Description: fmt.Sprintf("%d days without a ranked game cost you **%d ELO** (%d → %d). Play a ranked game to stop the decay.", n.InactivityDays, n.Amount, n.Before, n.After),
-		})
+		embed = DecayAppliedEmbed(n)
 	default:
 		return false
 	}

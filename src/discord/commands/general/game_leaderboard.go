@@ -3,7 +3,6 @@ package general
 import (
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -82,22 +81,22 @@ func executeGameLeaderboardCommand(s *discordgo.Session, i *discordgo.Interactio
 
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorLeaderboardEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, leaderboardNoActiveSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardNoActiveSeasonEmbed(i))
 	}
 
 	offset := (page - 1) * leaderboardPerPage
 	rows, err := database.Must().Stats.Leaderboard(i.GuildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: offset})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorLeaderboardEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
 	}
 	if len(rows.Data) == 0 {
 		if page > 1 {
-			return helpers.EditInteractionEmbed(s, i, leaderboardEmptyPageEmbed(page))
+			return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardEmptyPageEmbed(i, page))
 		}
-		return helpers.EditInteractionEmbed(s, i, leaderboardEmptyEmbed(seasonKey))
+		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardEmptyEmbed(i, seasonKey))
 	}
 
 	totalPages := 1
@@ -113,7 +112,7 @@ func executeGameLeaderboardCommand(s *discordgo.Session, i *discordgo.Interactio
 		log.Printf("leaderboard banner for guild %s: %v", i.GuildID, err)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, leaderboardOverviewEmbed(rows.Data, seasonKey, page, totalPages))
+	return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardOverviewEmbed(i, rows.Data, seasonKey, page, totalPages))
 }
 
 // ============================================================================
@@ -190,54 +189,4 @@ func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sd
 		position = rank.Position
 	}
 	helpers.EntryVars(vars, "me.", position, view.Config.Username, helpers.AvatarOf(invoker), st)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorLeaderboardEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to fetch the leaderboard for this guild. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func leaderboardNoActiveSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: "This guild does not have an active season configured.",
-	})
-}
-
-func leaderboardEmptyEmbed(season string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("Leaderboard — %s", season),
-		Description: "No players have stats for the active season yet.",
-	})
-}
-
-func leaderboardEmptyPageEmbed(page int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Page Empty",
-		Description: fmt.Sprintf("There are no leaderboard entries on page `%d`. Try a lower page number.", page),
-	})
-}
-
-func leaderboardOverviewEmbed(rows []sdk.LeaderboardEntry, season string, page, totalPages int) *discordgo.MessageEmbed {
-	var b strings.Builder
-	for _, row := range rows {
-		total := row.Wins + row.Losses
-		winRate := 0.0
-		if total > 0 {
-			winRate = float64(row.Wins) / float64(total) * 100
-		}
-		fmt.Fprintf(&b, "> **#%d** — `%d` ELO — %dW/%dL (`%.0f%%`)\n", row.Position, row.Elo, row.Wins, row.Losses, winRate)
-	}
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("Leaderboard — %s", season),
-		Description: b.String(),
-		FooterText:  fmt.Sprintf("Page %d/%d", page, totalPages),
-	})
 }

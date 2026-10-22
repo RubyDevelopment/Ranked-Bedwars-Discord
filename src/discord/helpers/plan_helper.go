@@ -98,22 +98,6 @@ func recallPlan(guildID string) (lastKnown, bool) {
 	return k, ok
 }
 
-func inactiveEmbed(guildID string, disabled bool, expires *time.Time) *discordgo.MessageEmbed {
-	if disabled {
-		return &discordgo.MessageEmbed{Title: "Server Disabled", Description: "Ranked Bedwars has been disabled for this server. Contact support if you think this is a mistake.", Color: ColorError}
-	}
-	desc := "This server doesn't have an active plan, so Ranked Bedwars is paused."
-	if expires != nil {
-		desc = fmt.Sprintf("This server's plan ended on <t:%d:D>, so Ranked Bedwars is paused.", expires.Unix())
-	}
-	desc += " An administrator can request a plan or a renewal in the dashboard"
-	if url := planPageURL(guildID); url != "" {
-		desc += ": " + url
-	}
-	desc += ". Settings and setup commands still work meanwhile."
-	return &discordgo.MessageEmbed{Title: "Plan Inactive", Description: desc, Color: ColorError}
-}
-
 // planDenial is nil when the guild may use the bot right now, else the embed explaining why not. When the guild could
 // not be loaded (gc.Guild nil) it falls back to the last known answer, and lets the command through only if there is none.
 func planDenial(gc GuildContext, guildID string, cmd *types.Command, now time.Time) *discordgo.MessageEmbed {

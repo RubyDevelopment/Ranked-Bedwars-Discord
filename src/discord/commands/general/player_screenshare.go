@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -48,15 +47,15 @@ var PlayerScreenshareCommand = &types.Command{
 func executePlayerScreenshareCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	svc := database.Get()
 	if svc == nil {
-		return helpers.EditInteractionEmbed(s, i, playerScreenshareDatabaseUnavailableEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareDatabaseUnavailableEmbed(i))
 	}
 
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, playerScreenshareInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, playerScreenshareBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareBotTargetEmbed(i))
 	}
 
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
@@ -66,46 +65,5 @@ func executePlayerScreenshareCommand(s *discordgo.Session, i *discordgo.Interact
 		username = view.Config.Username
 	}
 
-	return helpers.EditInteractionEmbed(s, i, playerScreenshareSubmittedEmbed(target, username, reason))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func playerScreenshareSubmittedEmbed(target *discordgo.User, username, reason string) *discordgo.MessageEmbed {
-	description := fmt.Sprintf(
-		"Your screenshare request has been submitted. Staff will review the request and contact you shortly.\n\n> **Player:** <@%s> (**%s**)",
-		target.ID, username,
-	)
-	if reason != "" {
-		description += fmt.Sprintf("\n> **Reason:** %s", reason)
-	}
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Screenshare Request Submitted",
-		Description: description,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerScreenshareDatabaseUnavailableEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to submit the screenshare request because the database service is unavailable. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func playerScreenshareInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a player to request a screenshare for. Select a member from the command options.",
-	})
-}
-
-func playerScreenshareBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated application bot profiles cannot be screenshared. Target a real player instead.",
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareSubmittedEmbed(i, target, username, reason))
 }

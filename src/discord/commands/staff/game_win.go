@@ -50,10 +50,10 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, gameWinInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameWinInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, gameWinBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameWinBotTargetEmbed(i))
 	}
 
 	// 2. Parse Options
@@ -65,31 +65,31 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, gameWinRegistrationRequiredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.GameWinRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 
 	// 4. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, gameWinNoActiveSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameWinNoActiveSeasonEmbed(i))
 	}
 
 	// 5. Get or Create Stats
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 
 	// 6. Fetch Rank Ladder
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 	sortedRanks := helpers.SortedRanks(ranks)
 
@@ -126,23 +126,23 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	// 8. Update ELO
 	updated, err := helpers.AdjustElo(actor, i.GuildID, pid, seasonID, stats, totalEloGain)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 
 	// 9. Sync Rank
 	newRank, err := helpers.SyncRankForElo(actor, i.GuildID, pid, seasonID, previousRank, updated.Elo)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 
 	// 10. Update Win Stats if requested
 	if countStats {
 		if _, err := database.Must().Stats.Increment(actor, i.GuildID, pid, seasonID, map[string]int{"wins": winCount}); err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameWinEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gameWinSuccessEmbed(target, view.Config.Username, winCount, totalEloGain, previousElo, updated.Elo, previousRank, newRank, countStats, winDetails))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameWinSuccessEmbed(i, target, view.Config.Username, winCount, totalEloGain, previousElo, updated.Elo, previousRank, newRank, countStats, winDetails))
 }
 
 // ============================================================================
@@ -152,64 +152,4 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 // ptrToFloat64 returns a pointer to v for option bounds.
 func ptrToFloat64(v float64) *float64 {
 	return &v
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorGameWinEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while granting ELO to the player. Please try again later or contact support.",
-	})
-}
-
-func gameWinInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a player to grant ELO to. Select a registered player from the command options.",
-	})
-}
-
-func gameWinBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts cannot receive ELO grants. Target a registered player instead.",
-	})
-}
-
-func gameWinRegistrationRequiredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` before granting ELO.",
-	})
-}
-
-func gameWinNoActiveSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: "This guild does not have an active season configured. ELO can only be granted during an active season. Please contact an administrator to configure a season.",
-	})
-}
-
-func gameWinSuccessEmbed(user *discordgo.User, username string, winCount, totalEloGain, previousElo, newElo int, oldRank, newRank string, countStats bool, winDetails []string) *discordgo.MessageEmbed {
-	description := fmt.Sprintf(
-		"Successfully granted ELO to <@%s> (**%s**). This action has been logged for staff review.\n\n> **Wins Granted:** `%d`\n> **Total ELO Gain:** `+%d`\n> **Previous ELO:** `%d`\n> **New ELO:** `%d`\n> **Previous Rank:** `%s`\n> **New Rank:** `%s`\n> **Counted Towards Stats:** `%t`",
-		user.ID, username, winCount, totalEloGain, previousElo, newElo, oldRank, newRank, countStats,
-	)
-
-	// Add win breakdown if there are rank changes
-	if len(winDetails) > 0 {
-		description += "\n\n__**ELO Breakdown:**__\n"
-		for _, detail := range winDetails {
-			description += fmt.Sprintf("> %s\n", detail)
-		}
-	}
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "ELO Granted",
-		Description: description,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
 }

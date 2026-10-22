@@ -464,20 +464,6 @@ func sendQueueAlert(s *discordgo.Session, guildID, userID string, embed *discord
 	}
 }
 
-func queueDeniedEmbed(description string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Queue Entry Denied",
-		Description: description,
-	})
-}
-
-func queuePartyEmbed(title, description string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       title,
-		Description: description,
-	})
-}
-
 func init() { registerGameEffects() }
 
 // QueueManager holds everything about queues that isn't Discord I/O: the FIFO

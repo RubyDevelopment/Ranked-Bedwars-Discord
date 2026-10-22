@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
@@ -183,7 +183,9 @@ func HandleAccountAge(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	}
 	// Tell them why, if their DMs are open.
 	if dm, err := s.UserChannelCreate(m.User.ID); err == nil {
-		_, _ = s.ChannelMessageSendEmbed(dm.ID, queueDeniedEmbed(msg))
+		denied := queueDeniedEmbed(msg)
+		denied.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: ThumbPlayers}
+		_, _ = s.ChannelMessageSendEmbed(dm.ID, denied)
 	}
 }
 
@@ -402,85 +404,6 @@ func (api *DiscordRestAPI) fetchImageAsBase64(imageURL string) (string, error) {
 const (
 	HistoryPerPage = 5
 )
-
-// BuildStrikeHistoryEmbed renders the strike history embed for one page.
-func BuildStrikeHistoryEmbed(username string, entries []models.PlayerStrikesModel, page int) *discordgo.MessageEmbed {
-	totalPages := HistoryTotalPages(len(entries))
-	description := fmt.Sprintf("This player has a total of **%d** strike(s) on record.", len(entries))
-	if len(entries) == 0 {
-		description = "No strike history was found for this player."
-	}
-	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("%s's Strike History • Page %d of %d", username, page+1, totalPages),
-		Description: description,
-		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildStrikeHistoryFieldsDirect(entries, page),
-		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
-	})
-}
-
-// BuildDecayHistoryEmbed renders the ELO decay history embed for one page.
-func BuildDecayHistoryEmbed(username string, entries []models.PlayerDecaysModel, page int) *discordgo.MessageEmbed {
-	totalPages := HistoryTotalPages(len(entries))
-	totalDecayed, voided := 0, 0
-	for _, entry := range entries {
-		if entry.IsVoided {
-			voided++
-			continue
-		}
-		totalDecayed += entry.AmountDeducted
-	}
-	description := fmt.Sprintf("This player has lost **%d** ELO across **%d** decay(s) this season.", totalDecayed, len(entries)-voided)
-	if voided > 0 {
-		description += fmt.Sprintf(" **%d** voided decay(s) are not counted.", voided)
-	}
-	if len(entries) == 0 {
-		description = "No decay history was found for this player."
-	}
-	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("%s's ELO Decay History • Page %d of %d", username, page+1, totalPages),
-		Description: description,
-		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildDecayHistoryFieldsDirect(entries, page),
-		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
-	})
-}
-
-// BuildPunishmentHistoryEmbed renders the punishment history embed for one page.
-func BuildPunishmentHistoryEmbed(username string, entries []models.PlayerPunishmentsModel, page int, activeOnly bool) *discordgo.MessageEmbed {
-	totalPages := HistoryTotalPages(len(entries))
-	description := fmt.Sprintf("This player has a total of **%d** punishment(s) on record.", len(entries))
-	if len(entries) == 0 {
-		description = "No punishment history was found for this player."
-	}
-	titlePrefix := "Punishment History"
-	if activeOnly {
-		titlePrefix = "Active Punishments"
-	}
-	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("%s's %s • Page %d of %d", username, titlePrefix, page+1, totalPages),
-		Description: description,
-		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildPunishmentHistoryFieldsDirect(entries, page),
-		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
-	})
-}
-
-// BuildGameHistoryEmbed renders the game history embed for one page.
-func BuildGameHistoryEmbed(username string, entries []sdk.GameHistory, page int) *discordgo.MessageEmbed {
-	totalPages := HistoryTotalPages(len(entries))
-	description := fmt.Sprintf("This player has a total of **%d** game(s) on record for the current season.", len(entries))
-	if len(entries) == 0 {
-		description = "No game history was found for this player."
-	}
-	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("%s's Game History • Page %d of %d", username, page+1, totalPages),
-		Description: description,
-		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildGameHistoryFieldsDirect(entries, page),
-		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
-	})
-}
 
 // HistoryPageFooter builds the shared pagination footer text.
 func HistoryPageFooter(page, totalPages, totalFound int) string {

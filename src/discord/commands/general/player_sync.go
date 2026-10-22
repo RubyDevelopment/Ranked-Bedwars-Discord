@@ -1,8 +1,6 @@
 package general
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -48,68 +46,24 @@ func executePlayerSyncCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	view, err := database.Must().Player.Get(i.GuildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, PlayerSyncRegistrationRequiredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerSyncEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSyncEmbed(i))
 	}
 
 	// 2. Validate Guild Membership
 	member, err := helpers.FetchGuildMember(s, i.GuildID, userID)
 	if err != nil || member == nil {
-		return helpers.EditInteractionEmbed(s, i, PlayerSyncMemberNotFoundEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncMemberNotFoundEmbed(i))
 	}
 
 	// 3. Synchronize Roles & Nickname
 	actions, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerSyncEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSyncEmbed(i))
 	}
 	if len(actions) == 0 {
-		return helpers.EditInteractionEmbed(s, i, PlayerSyncUpToDateEmbed(view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncUpToDateEmbed(i, view.Config.Username))
 	}
-	return helpers.EditInteractionEmbed(s, i, PlayerSyncSuccessEmbed(view.Config.Username, actions))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorPlayerSyncEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while synchronizing your profile. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func PlayerSyncRegistrationRequiredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Registration Required",
-		Description: "You must register before you can refresh your profile. Run `/player_register` to link your Minecraft account first.",
-	})
-}
-
-func PlayerSyncMemberNotFoundEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Member Not Found",
-		Description: "Your guild membership could not be found. Verify you are still a member of this guild and try again.",
-	})
-}
-
-func PlayerSyncUpToDateEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Profile Synchronized",
-		Description: fmt.Sprintf("Your profile for **%s** is already up to date. No further changes are needed.", username),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func PlayerSyncSuccessEmbed(username string, actions []string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title: "Account Synchronized",
-		Description: fmt.Sprintf(
-			"Successfully refreshed your roles and nickname.\n\n> **Username:** `%s`\n\n%s",
-			username, strings.Join(actions, "\n"),
-		),
-		Thumbnail: helpers.MinecraftBustAvatarURL(username),
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncSuccessEmbed(i, view.Config.Username, actions))
 }

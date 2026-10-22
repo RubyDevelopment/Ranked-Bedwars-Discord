@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -60,40 +59,40 @@ func executePlayerStatsCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		target = invoker
 	}
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, playerStatsInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, playerStatsBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsBotTargetEmbed(i))
 	}
 
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, playerStatsNotRegisteredEmbed(target))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsNotRegisteredEmbed(i, target))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerStatsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerStatsEmbed(i))
 	}
 	config := view.Config
 
 	executorID := helpers.InteractionUserID(i)
 	isAdmin := helpers.MemberIsAdministrator(s, i)
 	if !config.IsStatsVisible && target.ID != executorID && !isAdmin {
-		return helpers.EditInteractionEmbed(s, i, playerStatsPrivateEmbed(target, config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsPrivateEmbed(i, target, config.Username))
 	}
 
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerStatsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerStatsEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, playerStatsNoActiveSeasonEmbed(config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsNoActiveSeasonEmbed(i, config.Username))
 	}
 
 	// Use GetOrCreate to create stats on-demand if they don't exist
 	playerID := sdk.UintToString(view.Player.ID)
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, playerID, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerStatsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerStatsEmbed(i))
 	}
 	position := 0
 	if rank, err := database.Must().Stats.Rank(i.GuildID, playerID, seasonID); err == nil {
@@ -108,7 +107,7 @@ func executePlayerStatsCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		log.Printf("stats banner for guild %s: %v", i.GuildID, err)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, playerStatsOverviewEmbed(config.Username, stats))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsOverviewEmbed(i, config.Username, stats))
 }
 
 // ============================================================================
@@ -147,76 +146,4 @@ func sendStatsBanner(s *discordgo.Session, i *discordgo.InteractionCreate, targe
 		return false, err
 	}
 	return true, helpers.EditInteractionFile(s, i, "", "stats.png", img)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorPlayerStatsEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to fetch the seasonal statistics for this player. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func playerStatsInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a user to view stats for. Select a registered player from the command options.",
-	})
-}
-
-func playerStatsBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts do not have stats. Target a registered player instead.",
-	})
-}
-
-func playerStatsNotRegisteredEmbed(user *discordgo.User) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: fmt.Sprintf("<@%s> is not registered in this guild. They must run `/player_register` before stats are available.", user.ID),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
-	})
-}
-
-func playerStatsPrivateEmbed(user *discordgo.User, username string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Stats Private",
-		Description: fmt.Sprintf("<@%s> has their stats set to private. Only they can view their own stats.", user.ID),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerStatsNoActiveSeasonEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: fmt.Sprintf("This guild does not have an active season configured for **%s**. Please contact an administrator for assistance.", username),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerStatsOverviewEmbed(username string, stats *models.PlayerStatsModel) *discordgo.MessageEmbed {
-	totalGames := stats.Wins + stats.Losses
-	winRate := 0.0
-	if totalGames > 0 {
-		winRate = float64(stats.Wins) / float64(totalGames) * 100
-	}
-	kdr := 0.0
-	if stats.Deaths > 0 {
-		kdr = float64(stats.Kills) / float64(stats.Deaths)
-	}
-
-	description := fmt.Sprintf(
-		"Seasonal statistics for **%s**.\n\n> **ELO:** `%d`\n> **Rank:** `%s`\n> **Wins:** `%d`\n> **Losses:** `%d`\n> **Win Rate:** `%.1f%%`\n> **Kills:** `%d`\n> **Deaths:** `%d`\n> **KDR:** `%.2f`\n> **Beds Destroyed:** `%d`\n> **Final Kills:** `%d`",
-		username, stats.Elo, stats.Rank, stats.Wins, stats.Losses, winRate, stats.Kills, stats.Deaths, kdr, stats.BedsDestroyed, stats.FinalKills,
-	)
-
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       fmt.Sprintf("Player Stats — %s", username),
-		Description: description,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
 }

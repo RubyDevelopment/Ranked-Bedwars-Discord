@@ -50,10 +50,10 @@ func executeGameLossCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, gameLossInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameLossInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, gameLossBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameLossBotTargetEmbed(i))
 	}
 
 	// 2. Parse Options
@@ -65,31 +65,31 @@ func executeGameLossCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, gameLossRegistrationRequiredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.GameLossRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 
 	// 4. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, gameLossNoActiveSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameLossNoActiveSeasonEmbed(i))
 	}
 
 	// 5. Get or Create Stats
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 	}
 
 	// 6. Fetch Rank Ladder
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 	}
 	sortedRanks := helpers.SortedRanks(ranks)
 
@@ -130,81 +130,21 @@ func executeGameLossCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// 8. Update ELO
 	updated, err := helpers.AdjustElo(actor, i.GuildID, pid, seasonID, stats, -totalEloLoss)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 	}
 
 	// 9. Sync Rank
 	newRank, err := helpers.SyncRankForElo(actor, i.GuildID, pid, seasonID, previousRank, updated.Elo)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 	}
 
 	// 10. Update Loss Stats if requested
 	if countStats {
 		if _, err := database.Must().Stats.Increment(actor, i.GuildID, pid, seasonID, map[string]int{"losses": lossCount}); err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameLossEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameLossEmbed(i))
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gameLossSuccessEmbed(target, view.Config.Username, lossCount, totalEloLoss, previousElo, updated.Elo, previousRank, newRank, countStats, lossDetails))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorGameLossEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while removing ELO from the player. Please try again later or contact support.",
-	})
-}
-
-func gameLossInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a player to remove ELO from. Select a registered player from the command options.",
-	})
-}
-
-func gameLossBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts cannot receive ELO removals. Target a registered player instead.",
-	})
-}
-
-func gameLossRegistrationRequiredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` before removing ELO.",
-	})
-}
-
-func gameLossNoActiveSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: "This guild does not have an active season configured. ELO can only be removed during an active season. Please contact an administrator to configure a season.",
-	})
-}
-
-func gameLossSuccessEmbed(user *discordgo.User, username string, lossCount, totalEloLoss, previousElo, newElo int, oldRank, newRank string, countStats bool, lossDetails []string) *discordgo.MessageEmbed {
-	description := fmt.Sprintf(
-		"Successfully removed ELO from <@%s> (**%s**). This action has been logged for staff review.\n\n> **Losses Applied:** `%d`\n> **Total ELO Loss:** `-%d`\n> **Previous ELO:** `%d`\n> **New ELO:** `%d`\n> **Previous Rank:** `%s`\n> **New Rank:** `%s`\n> **Counted Towards Stats:** `%t`",
-		user.ID, username, lossCount, totalEloLoss, previousElo, newElo, oldRank, newRank, countStats,
-	)
-
-	// Add loss breakdown if there are rank changes
-	if len(lossDetails) > 0 {
-		description += "\n\n__**ELO Breakdown:**__\n"
-		for _, detail := range lossDetails {
-			description += fmt.Sprintf("> %s\n", detail)
-		}
-	}
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "ELO Removed",
-		Description: description,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.GameLossSuccessEmbed(i, target, view.Config.Username, lossCount, totalEloLoss, previousElo, updated.Elo, previousRank, newRank, countStats, lossDetails))
 }

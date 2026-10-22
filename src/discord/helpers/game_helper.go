@@ -1196,6 +1196,14 @@ type embedTemplate struct {
 	Footer      *string       `json:"footer,omitempty"`
 	Ping        *bool         `json:"ping,omitempty"`
 	Fields      *[]embedField `json:"fields,omitempty"`
+
+	// How the {teamPlayers} list of a team is written. PlayerLine is one player, PlayerLineOut one who is out of the match
+	// (live tracker), TeamEmpty a team with nobody, PlayerSeparator what goes between the lines. A line can use {mention},
+	// {name}, {id}, {dot}, {captain}, {team}, {elo}, {kills}, {deaths}, {finalKills}, {beds}, {assists}. Absent = the default of the embed.
+	PlayerLine      *string `json:"playerLine,omitempty"`
+	PlayerLineOut   *string `json:"playerLineOut,omitempty"`
+	TeamEmpty       *string `json:"teamEmpty,omitempty"`
+	PlayerSeparator *string `json:"playerSeparator,omitempty"`
 }
 
 // embedKind says how an embed behaves; the text lives in the template.
@@ -1229,86 +1237,6 @@ func off(t embedTemplate) embedTemplate { t.Enabled = yes(false); return t }
 
 var teamField = embedField{Name: "{team}", Value: "{teamPlayers}", Inline: true, Each: "team"}
 
-// The old bot's thumbnails.
-const (
-	thumbDoubleSwords = "https://i.imgur.com/YPxilj8.png"
-	thumbTimer        = "https://i.imgur.com/Ixj8JKk.png"
-	thumbTada         = "https://i.imgur.com/M5yz7dL.png"
-	thumbSprout       = "https://i.imgur.com/XHnyZh9.png"
-	thumbFlag         = "https://i.imgur.com/C2W5O9t.png"
-	thumbTrashCan     = "https://i.imgur.com/bKH6mWU.png"
-)
-
-func thumb(t embedTemplate, url string) embedTemplate   { t.Thumbnail = &url; return t }
-func colored(t embedTemplate, hex string) embedTemplate { t.Color = &hex; return t }
-
-// statusFields is how the old party embeds listed who was still missing and who had joined.
-var statusFields = []embedField{
-	{Name: DotRed + " Waiting ({waitingCount})", Value: "{waiting}", Inline: true},
-	{Name: DotGreen + " Joined ({joinedCount}/{playerCount})", Value: "{joined}", Inline: true},
-}
-
-var teamStatusField = embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}
-
-var submitYourWin = thumb(tpl("info", "Submit Your Win",
-	"When your match ends, send a **screenshot of the win screen** in this channel.\n\nYou can submit **3 minutes** after the match starts.\n\nRun **`/game_submit`** and attach the image, or send **`=submit`** with the screenshot attached to the same message."), thumbSprout)
-
-// The defaults are the old bot's embeds, word for word. Embeds the old bot never had are switched off.
-var defaultEmbeds = map[string]embedTemplate{
-	// Pre-game
-	"introduction": func() embedTemplate {
-		t := thumb(tpl("success", "Welcome to Game #{game}", "Welcome to **Standard {mode}** teams have been automatically assigned. Defend your bed, destroy enemy beds, and fight until one team remains. Your team voice channel is ready, join it to coordinate with your team!", teamField), thumbDoubleSwords)
-		t.Ping = yes(true)
-		return t
-	}(),
-	"teams":            thumb(tpl("success", "Drafting Complete", "Captain drafting is finished. Team voice channels are being prepared.", teamField), thumbTada),
-	"botConnecting":    off(tpl("pending", "Host Joining", "`{bot}` is joining the server to host your match.")),
-	"privateGameReady": off(tpl("info", "Private Game Ready", "`{bot}` opened the private game. Party invites are next.")),
-	"partyInvitation": thumb(tpl("pending", "Party Invitation",
-		"The host is sending party invites now. Accept the in-game invite to join.\n\n**Not getting an invite?**\n1. Make sure your status is **Online**.\n2. Make sure **Party Invites** are **Enabled**.\n3. Make sure you are using the correct username.\n\nYou can also join manually with `/party_group join {bot}`.",
-		append([]embedField{
-			{Name: "Host", Value: "`{bot}`", Inline: true},
-			{Name: "Ending", Value: "<t:{endsAt}:R>", Inline: true},
-			{Name: "​", Value: "​", Inline: true},
-		}, statusFields...)...), thumbTimer),
-	"partyReady": thumb(tpl("success", "Party Ready", "Everyone has joined the party. The match is about to begin, and the party will be warped to **{mode}** shortly.\n\nDo not leave the party.",
-		append([]embedField{{Name: "Host", Value: "`{bot}`"}}, statusFields...)...), thumbTada),
-	"partyTimeout": thumb(tpl("error", "Party Timeout", "The game was **voided** because not everyone joined the party in time.\n\nPlayers who did not join were penalized automatically.",
-		statusFields...), thumbTrashCan),
-	// Not in the old bot, but only posted when a step is stuck: it tells whoever set the server up what to fix.
-	"hostProblem": tpl("error", "Hosting Problem", "The hosting bot got stuck on **{step}**.\n\n> **What happened:** {reason}\n\n{hint}",
-		embedField{Name: "What the bot last saw", Value: "```{diagnosis}```"},
-		embedField{Name: "For whoever set this server up", Value: "Lines starting with ⚠ had no rule that reacted to them. Fix it in the dashboard under Game Server → Minecraft Server → Server automations (Rules and Commands), then host again."}),
-	"mapSelected": thumb(tpl("success", "Map Voting Ended", "The map selection has concluded! The winning map is **{map}**. Please wait while the game prepares the lobby."), thumbTada),
-	"teamSelection": thumb(tpl("pending", "Team Selection",
-		"The bot is checking that every player is on their assigned team.\n\n**What to do:**\n1. Open the **Team Selector** item.\n2. Join your assigned **Team Color**.\n\n**Ends:** <t:{endsAt}:R>",
-		teamStatusField), thumbTimer),
-	"teamsVerified": thumb(tpl("success", "Teams Verified", "Every player is on their assigned team. The game is ready to start.", teamStatusField), thumbTada),
-	"teamTimeout":   thumb(tpl("error", "Team Selection Timeout", "Not every player was on their assigned team in time. Check that each player is on the correct team before starting."), thumbFlag),
-
-	// In-game
-	"matchStarted":       thumb(tpl("success", "Match Started", "The game has started and the Team Selector is closed. The rosters below are the teams for this match.", teamStatusField), thumbTada),
-	"matchStartedManual": submitYourWin,
-	"liveTracker": tpl("info", "Game #{game} Live Match Tracker",
-		"Here is a real-time team rosters and elimination status for the `{mode}` match!\n\n**Time Elapsed:** <t:{startedAt}:R>",
-		embedField{Name: "{team} {bed}", Value: "{teamPlayers}", Inline: true, Each: "team"}),
-	"bedDestroyed":   off(tpl("caution", "Bed Destroyed", "**{team}**'s bed was destroyed by {destroyer}.")),
-	"finalKill":      off(tpl("info", "Final Kill", "{killer} eliminated {victim}.")),
-	"teamEliminated": off(tpl("caution", "Team Eliminated", "**{team}** has been eliminated.")),
-	"phaseChanged":   off(tpl("info", "{phaseName}", "The match moved on to phase {phase}.")),
-	"statTracked":    off(tpl("info", "{stat}", "{player} +{amount} ({total} total)")),
-
-	// Post-game
-	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match. The result is being scored.",
-		embedField{Name: "Match stats", Value: "{statTable}"})),
-	"scored":     thumb(colored(tpl("default", "Match Finished", "**Game #{game}**\n\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), "#dc4d4d"), thumbTada),
-	"casualDone": colored(tpl("success", "Casual Match Logged • Game #{game}", "**Status:** Match concluded\n\nCasual stats were recorded and this game room is closing."), "#57f287"),
-	"staffPending": colored(tpl("pending", "Win Submitted • Game #{game}",
-		"**Status:** Pending staff scoring\n**Claimed winner:** {winner}\n\nThe match was moved to the review category. Staff will score it shortly."), "#fee75c"),
-	"trackingLost": submitYourWin,
-	"voided":       thumb(tpl("error", "Game Voided", "This game was voided and will not count towards your stats.\n\n**Reason:** {reason}"), thumbFlag),
-}
-
 // merge puts an override on top of a default.
 func (t embedTemplate) merge(o embedTemplate) embedTemplate {
 	if o.Enabled != nil {
@@ -1340,6 +1268,18 @@ func (t embedTemplate) merge(o embedTemplate) embedTemplate {
 	}
 	if o.Fields != nil {
 		t.Fields = o.Fields
+	}
+	if o.PlayerLine != nil {
+		t.PlayerLine = o.PlayerLine
+	}
+	if o.PlayerLineOut != nil {
+		t.PlayerLineOut = o.PlayerLineOut
+	}
+	if o.TeamEmpty != nil {
+		t.TeamEmpty = o.TeamEmpty
+	}
+	if o.PlayerSeparator != nil {
+		t.PlayerSeparator = o.PlayerSeparator
 	}
 	return t
 }
@@ -1623,50 +1563,79 @@ func statTable(g Game, f guildFlow) string {
 	return strings.Join(lines, "\n")
 }
 
-// teamVars builds the per-team values for fields repeated for every team.
-func (d embedData) teamVars(lines string) []map[string]string {
+// defaultPlayerLines are how each kind of embed writes a player of a team (and one who is out of the match), and an
+// empty team, unless the guild's template says otherwise.
+var defaultPlayerLines = map[string]struct{ line, out, empty string }{
+	"plain":  {"- {mention}", "- {mention}", "`Empty`"},
+	"status": {"{dot} `{name}`", "{dot} `{name}`", "No players"},
+	"locked": {"{dot} `{name}`", "{dot} `{name}`", "No players"},
+	"alive":  {"{dot} `{name}`", "{dot} ~~`{name}`~~", "No players"},
+}
+
+func orDefault(v *string, def string) string {
+	if v != nil && strings.TrimSpace(*v) != "" {
+		return *v
+	}
+	return def
+}
+
+// teamVars builds the per-team values for fields repeated for every team. Each player is written with the template's
+// PlayerLine (or the kind's default), so a guild chooses what a player's line shows.
+func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 	waiting := map[string]bool{}
 	for _, id := range d.Waiting {
 		waiting[id] = true
 	}
-	var out []map[string]string
+	def := defaultPlayerLines[lines]
+	if def.line == "" {
+		def = defaultPlayerLines["plain"]
+	}
+	line, out, empty := orDefault(t.PlayerLine, def.line), orDefault(t.PlayerLineOut, def.out), orDefault(t.TeamEmpty, def.empty)
+	sep := "\n"
+	if t.PlayerSeparator != nil && *t.PlayerSeparator != "" {
+		sep = strings.ReplaceAll(*t.PlayerSeparator, `\n`, "\n")
+	}
+	var teams []map[string]string
 	for _, team := range d.Game.Teams {
 		var rows []string
 		for _, p := range d.Game.TeamPlayers(team) {
+			dot, tpl := "", line
 			switch lines {
 			case "status":
-				dot := DotGreen
+				dot = DotGreen
 				if waiting[p.UserID] {
 					dot = DotRed
 				} else if len(d.Joined) == 0 && len(d.Waiting) == 0 {
 					dot = DotGray
 				}
-				rows = append(rows, fmt.Sprintf("%s `%s`", dot, p.Username))
 			case "locked": // the match began: every player is on their team
-				rows = append(rows, fmt.Sprintf("%s `%s`", DotGreen, p.Username))
+				dot = DotGreen
 			case "alive":
+				dot = DotGreen
 				if d.Eliminated[p.UserID] {
-					rows = append(rows, fmt.Sprintf("%s ~~`%s`~~", DotRed, p.Username))
-				} else {
-					rows = append(rows, fmt.Sprintf("%s `%s`", DotGreen, p.Username))
+					dot, tpl = DotRed, out
 				}
-			default:
-				rows = append(rows, "- <@"+p.UserID+">")
 			}
+			captain := ""
+			if p.Captain {
+				captain = "👑"
+			}
+			rows = append(rows, strings.TrimSpace(fill(tpl, map[string]string{
+				"mention": "<@" + p.UserID + ">", "name": p.Username, "id": p.UserID, "dot": dot, "captain": captain, "team": team,
+				"elo": strconv.Itoa(p.EloBefore), "kills": strconv.Itoa(p.Kills), "deaths": strconv.Itoa(p.Deaths),
+				"finalKills": strconv.Itoa(p.FinalKills), "beds": strconv.Itoa(p.BedsDestroyed), "assists": strconv.Itoa(p.Assists),
+			})))
 		}
 		if len(rows) == 0 {
-			rows = []string{"No players"}
-			if lines == "plain" {
-				rows = []string{"`Empty`"}
-			}
+			rows = []string{empty}
 		}
 		bed := "🛏️"
 		if d.BedLost[team] {
 			bed = "❌"
 		}
-		out = append(out, map[string]string{"team": team, "teamPlayers": strings.Join(rows, "\n"), "bed": bed})
+		teams = append(teams, map[string]string{"team": team, "teamPlayers": strings.Join(rows, sep), "bed": bed})
 	}
-	return out
+	return teams
 }
 
 var styleToPreset = map[string]string{"success": "success", "pending": "loading", "info": "info", "caution": "caution", "error": "error", "default": "default"}
@@ -1682,7 +1651,7 @@ func renderEmbed(key string, t embedTemplate, d embedData) *discordgo.MessageEmb
 		rows := []map[string]string{vars}
 		if f.Each == "team" {
 			rows = nil
-			for _, tv := range d.teamVars(embedKinds[key].TeamLines) {
+			for _, tv := range d.teamVars(embedKinds[key].TeamLines, t) {
 				merged := make(map[string]string, len(vars)+3)
 				for k, v := range vars {
 					merged[k] = v

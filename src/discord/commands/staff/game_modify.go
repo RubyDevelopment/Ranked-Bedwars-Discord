@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
@@ -113,23 +112,23 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 1. Validate Subcommand
 	subcommand, options := types.SelectedSubcommand(i)
 	if subcommand == "" {
-		return helpers.EditInteractionEmbed(s, i, gameModifyInvalidSubcommandEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyInvalidSubcommandEmbed(i))
 	}
 
 	// 2. Validate Target User
 	target := helpers.SubOptionUser(s, options, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, gameModifyInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, gameModifyBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyBotTargetEmbed(i))
 	}
 
 	// 3. Validate Stat Key
 	statKey := helpers.SubOptionString(options, "stat")
 	statLabel := modifyStatLabels[statKey]
 	if statLabel == "" {
-		return helpers.EditInteractionEmbed(s, i, gameModifyUnknownStatEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyUnknownStatEmbed(i))
 	}
 	value := helpers.SubOptionInt(options, "value")
 	actor := helpers.InteractionUserID(i)
@@ -138,25 +137,25 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, gameModifyRegistrationRequiredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.GameModifyRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 
 	// 5. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, gameModifyNoActiveSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyNoActiveSeasonEmbed(i))
 	}
 
 	// 6. Get or Create Stats
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 	}
 
 	// 7. Apply Stat Modification
@@ -179,11 +178,11 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			updated, err = helpers.AdjustElo(actor, i.GuildID, pid, seasonID, stats, value)
 		}
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 		newVal = updated.Elo
 		if _, rankErr := helpers.SyncRankForElo(actor, i.GuildID, pid, seasonID, previousRank, newVal); rankErr != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 	} else if subcommand == "set" {
 		absolute := value
@@ -192,7 +191,7 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 		updated, err := database.Must().Stats.Patch(actor, i.GuildID, pid, seasonID, map[string]any{statKey: absolute})
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 		newVal = getStatValue(updated, statKey)
 	} else {
@@ -202,12 +201,12 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 		updated, err := database.Must().Stats.Increment(actor, i.GuildID, pid, seasonID, map[string]int{statKey: delta})
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameModifyEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 		newVal = getStatValue(updated, statKey)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gameModifySuccessEmbed(statLabel, target, view.Config.Username, subcommand, newVal, currentVal))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameModifySuccessEmbed(i, statLabel, target, view.Config.Username, subcommand, newVal, currentVal))
 }
 
 // ============================================================================
@@ -255,68 +254,4 @@ func getStatValue(stats *models.PlayerStatsModel, statKey string) int {
 	default:
 		return 0
 	}
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorGameModifyEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while modifying the player's statistics. Please try again later or contact support.",
-	})
-}
-
-func gameModifyInvalidSubcommandEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Subcommand",
-		Description: "You must specify a subcommand: `add`, `remove`, or `set`. Select one from the command options.",
-	})
-}
-
-func gameModifyInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a player to modify. Select a registered player from the command options.",
-	})
-}
-
-func gameModifyBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts cannot have their statistics modified. Target a registered player instead.",
-	})
-}
-
-func gameModifyUnknownStatEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unknown Statistic",
-		Description: "That is not a valid statistic that can be modified. Please select a valid statistic from the command options.",
-	})
-}
-
-func gameModifyRegistrationRequiredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register them with `/player_force_register` before modifying their statistics.",
-	})
-}
-
-func gameModifyNoActiveSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: "This guild does not have an active season configured. Statistics can only be modified during an active season. Please contact an administrator to configure a season.",
-	})
-}
-
-func gameModifySuccessEmbed(statLabel string, user *discordgo.User, username, operation string, newVal, currentVal int) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title: "Statistics Modified",
-		Description: fmt.Sprintf(
-			"Successfully adjusted the player's statistics. This action has been logged for staff review.\n\n> **Player:** <@%s> (**%s**)\n> **Statistic:** `%s`\n> **Operation:** `%s`\n> **Previous Value:** `%d`\n> **New Value:** `%d`",
-			user.ID, username, statLabel, operation, currentVal, newVal,
-		),
-		Thumbnail: helpers.MinecraftBustAvatarURL(username),
-	})
 }

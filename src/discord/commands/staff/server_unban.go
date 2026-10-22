@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -62,7 +61,7 @@ func executeServerUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 1. Validate Target User ID
 	targetID := strings.TrimSpace(helpers.OptionString(i, "user_id"))
 	if !snowflakePattern.MatchString(targetID) {
-		return helpers.EditInteractionEmbed(s, i, serverUnbanInvalidUserIDEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerUnbanInvalidUserIDEmbed(i))
 	}
 
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
@@ -76,14 +75,14 @@ func executeServerUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// registered; resolve them as a moderation target regardless.
 	playerID, profile, err := helpers.EnsureModerationTarget(actor, i.GuildID, &discordgo.User{ID: targetID, Username: targetID})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerUnbanEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerUnbanEmbed(i))
 	}
 	pid := sdk.UintToString(playerID)
 
 	// 3. Remove Active Server Bans
 	active, err := database.Must().Punishments.ByPlayer(i.GuildID, pid, true, "", sdk.Page{})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerUnbanEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerUnbanEmbed(i))
 	}
 	found := false
 	for _, entry := range active.Data {
@@ -92,7 +91,7 @@ func executeServerUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		}
 		found = true
 		if err := database.Must().Punishments.Delete(actor, i.GuildID, entry.ID); err != nil && !sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, unexpectedErrorServerUnbanEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerUnbanEmbed(i))
 		}
 	}
 
@@ -100,7 +99,7 @@ func executeServerUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	_, banErr := s.GuildBan(i.GuildID, targetID)
 	discordBanned := banErr == nil
 	if !found && !discordBanned {
-		return helpers.EditInteractionEmbed(s, i, serverUnbanNotActiveEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.ServerUnbanNotActiveEmbed(i))
 	}
 
 	// 5. Reverse Discord Ban & Record History
@@ -115,47 +114,8 @@ func executeServerUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	if profile != nil && profile.Username != "" {
 		username = profile.Username
 	}
-	embed := serverUnbanSuccessEmbed(targetID, username, reason, unbanned)
+	embed := helpers.ServerUnbanSuccessEmbed(i, targetID, username, reason, unbanned)
 	helpers.LogCommandResult(s, i.GuildID, "server_unban", actor, embed)
 	helpers.SendPunishmentAlert(s, i.GuildID, "server_ban", "revoked", &discordgo.User{ID: targetID}, username, "server_ban", "removed", reason)
 	return helpers.EditInteractionEmbed(s, i, embed)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorServerUnbanEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while processing the server unban. Please try again later or contact support.",
-	})
-}
-
-func serverUnbanInvalidUserIDEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid User ID",
-		Description: "That is not a valid Discord user ID. Provide the 17-20 digit ID of the user to unban.",
-	})
-}
-
-func serverUnbanNotActiveEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Punishment Not Active",
-		Description: "That player is not currently **server banned**. Verify their status with `/player_punishments`.",
-	})
-}
-
-func serverUnbanSuccessEmbed(targetID, username, reason string, unbanned bool) *discordgo.MessageEmbed {
-	description := fmt.Sprintf(
-		"Successfully processed the server unban. This action has been logged for staff review.\n\n> **User ID:** `%s`\n> **Username:** `%s`\n> **Reason:** %s",
-		targetID, username, reason,
-	)
-	if !unbanned {
-		description += "\n\nThe Discord unban could not be applied due to missing permissions."
-	}
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Server Unban Applied",
-		Description: description,
-	})
 }

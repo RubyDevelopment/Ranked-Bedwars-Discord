@@ -769,14 +769,6 @@ func FormatRoleMention(roleID string) string {
 	return fmt.Sprintf("<@&%s>", roleID)
 }
 
-// PunishmentHierarchyEmbed is shown when role hierarchy blocks moderation.
-func PunishmentHierarchyEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Hierarchy Error",
-		Description: "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator.",
-	})
-}
-
 // OptionString reads a top-level slash string option.
 func OptionString(i *discordgo.InteractionCreate, name string) string {
 	for _, opt := range i.ApplicationCommandData().Options {
@@ -925,14 +917,6 @@ func ParseTimeFilter(input string) (time.Duration, bool) {
 	}
 }
 
-// InvalidTimeFilterEmbed is shown when a time filter string is invalid.
-func InvalidTimeFilterEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Invalid Time Filter",
-		Description: "That time filter format is not recognized. Use values like `1d`, `7d`, `2w`, or omit the filter to show all history.",
-	})
-}
-
 // V2Flag marks a message as Components V2.
 const V2Flag = 1 << 15
 
@@ -995,15 +979,17 @@ func ParseMessageDoc(raw json.RawMessage) (*MessageDoc, error) {
 	return &d, nil
 }
 
-var varPattern = regexp.MustCompile(`\{\{\s*([\w.]+)\s*\}\}`)
+// varPattern matches {path}, and the older {{path}} that messages saved before single braces still hold.
+var varPattern = regexp.MustCompile(`\{\{\s*([\w.]+)\s*\}\}|\{\s*([\w.]+)\s*\}`)
 
-// FillVars replaces every {{path}} with vars[path]; unknown paths stay as written.
+// FillVars replaces every {path} (or {{path}}) with vars[path]; unknown paths stay as written.
 func FillVars(text string, vars map[string]string) string {
-	if !strings.Contains(text, "{{") {
+	if !strings.Contains(text, "{") {
 		return text
 	}
 	return varPattern.ReplaceAllStringFunc(text, func(whole string) string {
-		if v, ok := vars[varPattern.FindStringSubmatch(whole)[1]]; ok {
+		m := varPattern.FindStringSubmatch(whole)
+		if v, ok := vars[m[1]+m[2]]; ok {
 			return v
 		}
 		return whole

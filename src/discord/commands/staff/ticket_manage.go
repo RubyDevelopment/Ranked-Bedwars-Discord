@@ -96,7 +96,7 @@ func executeTicketManageCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	case "remove":
 		return changeTicketMember(s, i, false)
 	}
-	return helpers.EditInteractionEmbed(s, i, ticketManageInvalidSubcommandEmbed())
+	return helpers.EditInteractionEmbed(s, i, helpers.TicketManageInvalidSubcommandEmbed(i))
 }
 
 // executeTicketPanel opens the panel manager for administrators.
@@ -293,15 +293,4 @@ func changeTicketMember(s *discordgo.Session, i *discordgo.InteractionCreate, ad
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
 	}
 	return helpers.EditInteractionEmbed(s, i, helpers.TicketMemberRemovedEmbed(target.ID))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func ticketManageInvalidSubcommandEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Subcommand",
-		Description: "That is not a valid ticket action. Choose one of `panel`, `leaderboard`, `stats`, `logs`, `claim`, `close`, `add`, or `remove`.",
-	})
 }

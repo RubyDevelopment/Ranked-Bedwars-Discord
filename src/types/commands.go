@@ -67,6 +67,20 @@ type CommandConfig struct {
 	// Responses are the built-in answers of the command, as the bot wrote them: what the dashboard's Responses tab lists to
 	// be restyled. The bot keeps them in step with its own code each time it syncs the commands (SeedCommandConfigs).
 	Responses []CommandResponse `json:"responses,omitempty"`
+
+	// Layouts are the pieces of text the command builds its lists and rows from (a bot's line, a queue's heading), as the
+	// bot wrote them: the dashboard lets a guild rewrite each one. The guild's own versions live in panels.responses.layouts.
+	Layouts []CommandLayout `json:"layouts,omitempty"`
+}
+
+// CommandLayout is one rewritable piece of text of a command: its key (command.name), a label, the default text with {var}
+// placeholders, and the variables it can use. Repeats means it is written once for every row of a list.
+type CommandLayout struct {
+	Key     string   `json:"key"`
+	Label   string   `json:"label"`
+	Default string   `json:"default"`
+	Vars    []string `json:"vars,omitempty"`
+	Repeats bool     `json:"repeats,omitempty"`
 }
 
 // CommandResponse is one built-in answer of a command (see scripts/gen_responses): its key (command.title-slug), title,

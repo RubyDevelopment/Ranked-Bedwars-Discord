@@ -955,6 +955,7 @@ func logCommandUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 		args = append(args, opt.Name+": "+val)
 	}
 	_, _ = s.ChannelMessageSendEmbed(channelID, &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbGuild},
 		Title:       "/" + cmd.Name,
 		Description: strings.Join(args, "\n"),
 		Fields: []*discordgo.MessageEmbedField{
@@ -1443,21 +1444,6 @@ func buildOptionalPromptComponents(cmdName string, optional []types.Requirement)
 	}}}
 }
 
-// optionalAvailableEmbed tells an administrator every required slot is now
-// configured and lists cmdName's remaining optional ones, pairing with
-// buildOptionalPromptComponents' Continue/Skip buttons.
-func optionalAvailableEmbed(cmdName string, optional []types.Requirement) *discordgo.MessageEmbed {
-	description := fmt.Sprintf("All required resources for `%s` are now configured, and it's ready to use.\n\n`%s` also has these optional resources available:\n", cmdName, cmdName)
-	for _, req := range optional {
-		description += fmt.Sprintf("- %s: %s\n", req.Type, req.Key)
-	}
-	description += "\nWould you like to configure them now, or skip for now? You're able to configure these at any time using `/server_config`."
-	return Preset("caution", types.PresetOptions{
-		Title:       "Optional Configuration Available",
-		Description: description,
-	})
-}
-
 // HandleRequirementFixSelect responds to a pick from BuildRequirementFixComponents
 // or a click on buildOptionalPromptComponents' Continue/Skip buttons. It
 // reports false when customID isn't one of these, so the caller can fall
@@ -1566,13 +1552,6 @@ func requirementListDescription(cmdName, phase string, items []types.Requirement
 	return FormatConfigurationErrorAdmin(cmdName, items, nil)
 }
 
-func configurationCompleteEmbed(cmdName string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
-		Title:       "Configuration Complete",
-		Description: fmt.Sprintf("`%s` is ready to use. Please re-run the command. You're able to configure it further at any time using `/server_config`.", cmdName),
-	})
-}
-
 // ackRequirementFix acknowledges a component click without changing the message (updateRequirementFixMessage edits it later).
 func ackRequirementFix(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
@@ -1672,7 +1651,7 @@ func roleRequirementDenial(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if gate.staff {
 		perm := settings.Commands[cmd.Name]
 		if decision := checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, i.Member, MemberIsAdministrator(s, i), gate); !decision.Allowed {
-			return Preset("error", types.PresetOptions{Title: decision.Title, Description: decision.Message})
+			return Preset("error", types.PresetOptions{Title: decision.Title, Description: decision.Message, Thumbnail: ThumbFlag})
 		}
 	}
 
@@ -1685,6 +1664,7 @@ func roleRequirementDenial(s *discordgo.Session, i *discordgo.InteractionCreate,
 			return Preset("error", types.PresetOptions{
 				Title:       "Registration Required",
 				Description: "You must be registered to use this command. Run `/player_register` to link your Minecraft account first, or `/player_refresh` if you are already registered.",
+				Thumbnail:   ThumbFlag,
 			})
 		}
 	}

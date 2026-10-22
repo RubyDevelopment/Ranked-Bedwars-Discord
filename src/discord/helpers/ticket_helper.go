@@ -1667,54 +1667,6 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 	return nil
 }
 
-// TicketWelcomeMessage renders the message posted inside a ticket: a ping line,
-// the configurable welcome, the ticket details and the Close / Claim buttons.
-// With preview set the buttons are disabled and no pings are included.
-func TicketWelcomeMessage(ticket *types.Ticket, panel *types.InteractivePanel, category *types.TicketCategory, guildName string, preview bool) *discordgo.MessageEmbed {
-	welcome := category.Welcome
-	color := welcome.Color
-	if color == 0 {
-		color = defaultPanelColor
-	}
-	if welcome.NoColor {
-		color = EmbedBlendColor
-	}
-
-	title := TicketPlaceholders(welcome.Title, ticket, panel, category, guildName)
-	body := TicketPlaceholders(welcome.Body, ticket, panel, category, guildName)
-
-	fields := []*discordgo.MessageEmbedField{}
-	switch {
-	case welcome.Fields != nil: // the fields the category's welcome message defines
-		for _, f := range *welcome.Fields {
-			name := truncate(strings.TrimSpace(TicketPlaceholders(f.Name, ticket, panel, category, guildName)), 256)
-			value := truncate(strings.TrimSpace(TicketPlaceholders(f.Value, ticket, panel, category, guildName)), 1024)
-			if name == "" || value == "" || len(fields) == 25 { // Discord refuses an empty field, and more than 25
-				continue
-			}
-			fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: value, Inline: f.Inline})
-		}
-	case !welcome.HideDetails:
-		fields = append(fields, ticketDetailFields(ticket)...)
-	}
-
-	footer := ""
-	if welcome.Footer != "" {
-		footer = TicketPlaceholders(welcome.Footer, ticket, panel, category, guildName)
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: body,
-		Color:       color,
-		Fields:      fields,
-		Footer:      &discordgo.MessageEmbedFooter{Text: footer},
-		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: welcome.ThumbnailURL},
-	}
-
-	return embed
-}
-
 // ticketDetailFields lays the ticket details out as inline columns:
 // Reference / Category / Owner on the first row, Created At / Status below.
 func ticketDetailFields(ticket *types.Ticket) []*discordgo.MessageEmbedField {
@@ -1776,6 +1728,7 @@ func TicketCloseConfirmMessage(deleteOnClose bool) *discordgo.MessageEmbed {
 		outcome = "deleted"
 	}
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbGuild},
 		Title:       "Close Ticket",
 		Description: fmt.Sprintf("Are you sure you want to close this ticket? A transcript of the conversation will be saved and this thread will be %s.", outcome),
 		Color:       ColorCaution,
@@ -1801,16 +1754,6 @@ func TicketCloseConfirmButtons() []discordgo.MessageComponent {
 	}
 }
 
-// TicketLogMessage renders one entry of the ticket log channel (and the
-// owner's DM). The transcript, when any, is attached to the message itself.
-func TicketLogMessage(color int, title, description string, lines []string) *discordgo.MessageEmbed {
-	body := description
-	if len(lines) > 0 {
-		body += "\n\n" + strings.Join(lines, "\n")
-	}
-	return &discordgo.MessageEmbed{Title: title, Description: body, Color: color}
-}
-
 // TicketTranscriptMessage is the V2 card for a closed ticket (the title carries its own markdown heading): the summary
 // lines plus the transcript file attached inside the same container.
 func TicketTranscriptMessage(color int, title, description string, lines []string, transcriptName string) []discordgo.MessageComponent {
@@ -1833,84 +1776,6 @@ func TicketClosedLines(ticket *types.Ticket, guildName string) []string {
 		"- **Closed By:** <@" + ticket.ClosedBy + ">",
 	}
 	return lines
-}
-
-// TicketLeaderboardMessage ranks the staff who have claimed the most tickets.
-func TicketLeaderboardMessage(rows []TicketLeaderboardRow, viewerID string) *discordgo.MessageEmbed {
-	if len(rows) == 0 {
-		return &discordgo.MessageEmbed{
-			Title:       "Ticket Leaderboard",
-			Description: "No tickets have been claimed yet. Claim a ticket to get on the board.",
-			Color:       ColorInfo,
-		}
-	}
-
-	medals := []string{"🥇", "🥈", "🥉"}
-	var board strings.Builder
-	shown := rows
-	if len(shown) > 10 {
-		shown = shown[:10]
-	}
-	for idx, row := range shown {
-		place := fmt.Sprintf("`#%d`", idx+1)
-		if idx < len(medals) {
-			place = medals[idx]
-		}
-		fmt.Fprintf(&board, "%s <@%s> - **%d** claimed, **%d** closed\n", place, row.StaffID, row.Stats.Claimed, row.Stats.Closed)
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "Ticket Leaderboard",
-		Description: "The staff members who have claimed the most tickets.\n\n" + board.String(),
-		Color:       ColorDefault,
-	}
-	for idx, row := range rows {
-		if row.StaffID == viewerID && idx >= len(shown) {
-			embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Your rank: #%d with %d claimed", idx+1, row.Stats.Claimed)}
-			break
-		}
-	}
-	return embed
-}
-
-// TicketStatsMessage shows one staff member's ticket numbers.
-func TicketStatsMessage(staffID string, stats types.TicketStaffStats, rank, total, activeClaims int) *discordgo.MessageEmbed {
-	rankText := "Unranked"
-	if rank > 0 {
-		rankText = fmt.Sprintf("#%d of %d", rank, total)
-	}
-	return &discordgo.MessageEmbed{
-		Title: "Ticket Stats",
-		Description: fmt.Sprintf(
-			"<@%s>\n\n- **Claimed:** %d\n- **Closed:** %d\n- **Currently Claimed:** %d\n- **Leaderboard Rank:** %s",
-			staffID, stats.Claimed, stats.Closed, activeClaims, rankText,
-		),
-		Color: ColorDefault,
-	}
-}
-
-// TicketLogsMessage lists the most recently closed tickets.
-func TicketLogsMessage(entries []*types.Ticket, filter string) *discordgo.MessageEmbed {
-	if len(entries) == 0 {
-		return &discordgo.MessageEmbed{
-			Title:       "Ticket Logs",
-			Description: "No closed tickets matched your search.",
-			Color:       ColorInfo,
-		}
-	}
-	var list strings.Builder
-	for _, ticket := range entries {
-		claimed := ""
-		if ticket.ClaimedBy != "" {
-			claimed = fmt.Sprintf(" - claimed by <@%s>", ticket.ClaimedBy)
-		}
-		fmt.Fprintf(&list, "**#%s** %s - <@%s> - closed <t:%d:R> by <@%s>%s\n", ticket.Ref, ticket.CategoryLabel, ticket.OwnerID, ticket.ClosedAt, ticket.ClosedBy, claimed)
-	}
-	description := list.String()
-	if filter != "" {
-		description = filter + "\n\n" + description
-	}
-	return &discordgo.MessageEmbed{Title: "Ticket Logs", Description: truncate(description, 4000), Color: ColorDefault}
 }
 
 // ============================================================================
@@ -2327,6 +2192,7 @@ func handleTicketCloseAnswer(s *discordgo.Session, i *discordgo.InteractionCreat
 		_ = RespondEmbed(s, i, Preset("info", types.PresetOptions{
 			Title:       "Close Cancelled",
 			Description: "The ticket stays open.",
+			Thumbnail:   ThumbGuild,
 		}))
 		return
 	}
@@ -2344,6 +2210,7 @@ func handleTicketCloseAnswer(s *discordgo.Session, i *discordgo.InteractionCreat
 	_ = RespondEmbed(s, i, Preset("info", types.PresetOptions{
 		Title:       "Closing Ticket",
 		Description: "Saving the transcript. This only takes a moment.",
+		Thumbnail:   ThumbGuild,
 	}))
 
 	closerIsStaff := IsTicketStaff(i.Member, ctx.Panel, ctx.Category)
@@ -2351,12 +2218,14 @@ func handleTicketCloseAnswer(s *discordgo.Session, i *discordgo.InteractionCreat
 		_ = RespondEmbed(s, i, Preset("error", types.PresetOptions{
 			Title:       "Unexpected Error",
 			Description: "The ticket could not be closed. Please try again later or contact support.",
+			Thumbnail:   ThumbFlag,
 		}))
 		return
 	}
 	_ = RespondEmbed(s, i, Preset("success", types.PresetOptions{
 		Title:       "Ticket Closed",
 		Description: "The transcript has been saved and this ticket is being closed.",
+		Thumbnail:   ThumbGuild,
 	}))
 }
 
@@ -2820,104 +2689,6 @@ func followupEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *
 // Embed Builders
 // ============================================================================
 
-func ticketCreatedEmbed(threadID string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
-		Title:       "Ticket Created",
-		Description: fmt.Sprintf("Your ticket was created: <#%s>. Continue the conversation there.", threadID),
-	})
-}
-
-// ticketOpenErrorEmbed explains why a ticket could not be opened.
-func ticketOpenErrorEmbed(err error) *discordgo.MessageEmbed {
-	var limit *TicketLimitError
-	switch {
-	case errors.As(err, &limit):
-		mentions := make([]string, len(limit.Threads))
-		for idx, id := range limit.Threads {
-			mentions[idx] = "<#" + id + ">"
-		}
-		return Preset("caution", types.PresetOptions{
-			Title: "Ticket Limit Reached",
-			Description: fmt.Sprintf(
-				"You can only have **%d** open ticket(s) for this panel. Continue in %s or close it before opening a new one.",
-				limit.Limit, strings.Join(mentions, ", "),
-			),
-		})
-	case errors.Is(err, ErrTicketPanelNotFound), errors.Is(err, ErrTicketCategoryNotFound):
-		return Preset("error", types.PresetOptions{
-			Title:       "Panel Outdated",
-			Description: "This panel is no longer available. Ask staff to send a fresh one.",
-		})
-	}
-	return Preset("error", types.PresetOptions{
-		Title:       "Ticket Not Created",
-		Description: "Your ticket could not be created. The bot may be missing permission to create private threads in this channel. Please contact staff.",
-	})
-}
-
-func TicketBotTargetEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts cannot be part of tickets. Select a member instead.",
-	})
-}
-
-func TicketPermissionDeniedEmbed(reason string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Permission Denied",
-		Description: reason,
-	})
-}
-
-func ticketNotInChannelEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Not A Ticket",
-		Description: "This command must be run inside an open ticket thread.",
-	})
-}
-
-func ticketPanelMissingEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Panel Not Found",
-		Description: "The panel for this ticket no longer exists. Ask an administrator to check `/ticket_manage panel`.",
-	})
-}
-
-func TicketClaimedEmbed(staffID string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
-		Title:       "Ticket Claimed",
-		Description: fmt.Sprintf("Successfully claimed this ticket.\n\n> **Claimed By:** <@%s>", staffID),
-	})
-}
-
-func TicketMemberAddedEmbed(userID string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
-		Title:       "Member Added",
-		Description: fmt.Sprintf("Successfully added <@%s> to this ticket.", userID),
-	})
-}
-
-func TicketMemberRemovedEmbed(userID string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
-		Title:       "Member Removed",
-		Description: fmt.Sprintf("Successfully removed <@%s> from this ticket.", userID),
-	})
-}
-
-func TicketRemoveOwnerEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "The ticket owner cannot be removed from their own ticket. Close the ticket instead.",
-	})
-}
-
-func UnexpectedErrorTicketEmbed() *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred. Please try again later or contact support.",
-	})
-}
-
 // TicketContextErrorEmbed explains why a ticket could not be resolved.
 func TicketContextErrorEmbed(err error) *discordgo.MessageEmbed {
 	switch {
@@ -2925,30 +2696,6 @@ func TicketContextErrorEmbed(err error) *discordgo.MessageEmbed {
 		return ticketNotInChannelEmbed()
 	case errors.Is(err, ErrTicketPanelNotFound):
 		return ticketPanelMissingEmbed()
-	}
-	return UnexpectedErrorTicketEmbed()
-}
-
-// TicketActionErrorEmbed explains why a claim or close could not be applied.
-func TicketActionErrorEmbed(err error) *discordgo.MessageEmbed {
-	switch {
-	case errors.Is(err, ErrTicketNotFound):
-		return ticketNotInChannelEmbed()
-	case errors.Is(err, ErrTicketAlreadyClaimed):
-		return Preset("error", types.PresetOptions{
-			Title:       "Already Claimed",
-			Description: "This ticket has already been claimed. Only the staff member who claimed it can release it.",
-		})
-	case errors.Is(err, ErrTicketNotClaimed):
-		return Preset("error", types.PresetOptions{
-			Title:       "Not Claimed",
-			Description: "This ticket has not been claimed yet. Claim it first to take ownership.",
-		})
-	case errors.Is(err, ErrTicketClaimDisabled):
-		return Preset("error", types.PresetOptions{
-			Title:       "Claiming Disabled",
-			Description: "Claiming is turned off for this panel. An administrator can enable it under the panel settings.",
-		})
 	}
 	return UnexpectedErrorTicketEmbed()
 }
@@ -2998,7 +2745,7 @@ func HandleTicketModal(s *discordgo.Session, i *discordgo.InteractionCreate, cus
 
 // modalError tells the admin what to fix without losing their place.
 func modalError(s *discordgo.Session, i *discordgo.InteractionCreate, title, description string) {
-	_ = RespondEmbed(s, i, Preset("error", types.PresetOptions{Title: title, Description: description}))
+	_ = RespondEmbed(s, i, Preset("error", types.PresetOptions{Title: title, Description: description, Thumbnail: ThumbFlag}))
 }
 
 func modalNewPanel(s *discordgo.Session, i *discordgo.InteractionCreate, values map[string]string) {

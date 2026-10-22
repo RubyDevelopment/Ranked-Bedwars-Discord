@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -51,51 +50,51 @@ func executeQueueCallCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// 1. Validate Target User
 	target := helpers.SubOptionUser(s, i.ApplicationCommandData().Options, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, queueCallInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallInvalidTargetEmbed(i))
 	}
 	if target.ID == actor {
-		return helpers.EditInteractionEmbed(s, i, queueCallSelfTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallSelfTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, queueCallBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallBotTargetEmbed(i))
 	}
 
 	// 2. Fetch the Invoker's Voice State
 	voiceState, err := s.State.VoiceState(i.GuildID, actor)
 	if err != nil || voiceState == nil || voiceState.ChannelID == "" {
-		return helpers.EditInteractionEmbed(s, i, queueCallNotInVoiceEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallNotInVoiceEmbed(i))
 	}
 	voiceChannelID := voiceState.ChannelID
 
 	// 3. Validate the Game Behind the Voice Channel
 	game, ok := helpers.Games.ByChannel(voiceChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, queueCallNotInGameEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallNotInGameEmbed(i))
 	}
 	if _, isParticipant := game.Player(actor); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, queueCallNotInMatchEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallNotInMatchEmbed(i))
 	}
 	if _, targetIsParticipant := game.Player(target.ID); targetIsParticipant {
-		return helpers.EditInteractionEmbed(s, i, queueCallAlreadyInMatchEmbed(target))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallAlreadyInMatchEmbed(i, target))
 	}
 	if !isTeamVoiceChannel(game, voiceChannelID) {
-		return helpers.EditInteractionEmbed(s, i, queueCallWrongChannelEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallWrongChannelEmbed(i))
 	}
 
 	// 4. Verify Bot Permissions
 	perms, err := s.State.UserChannelPermissions(s.State.User.ID, voiceChannelID)
 	if err != nil || perms&discordgo.PermissionManageRoles == 0 {
-		return helpers.EditInteractionEmbed(s, i, queueCallMissingPermissionsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallMissingPermissionsEmbed(i))
 	}
 
 	// 5. Grant the Target Access
 	err = s.ChannelPermissionSet(voiceChannelID, target.ID, discordgo.PermissionOverwriteTypeMember,
 		discordgo.PermissionVoiceConnect|discordgo.PermissionVoiceSpeak, 0)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorQueueCallEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueCallEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, queueCallSuccessEmbed(target, game.Number))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueueCallSuccessEmbed(i, target, game.Number))
 }
 
 // ============================================================================
@@ -110,85 +109,4 @@ func isTeamVoiceChannel(game helpers.Game, channelID string) bool {
 		}
 	}
 	return false
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorQueueCallEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to add the player to your team voice channel. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func queueCallInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a player to add to your team voice channel. Select a member from the command options.",
-	})
-}
-
-func queueCallSelfTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You cannot add yourself to your own team voice channel. Target another player instead.",
-	})
-}
-
-func queueCallBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts cannot be added to voice channels. Target a real player instead.",
-	})
-}
-
-func queueCallNotInVoiceEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not in Voice",
-		Description: "You must be connected to your team voice channel to use this command. Join it and try again.",
-	})
-}
-
-func queueCallNotInGameEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not in Game",
-		Description: "The voice channel you are in does not belong to an active game. Join your team voice channel and try again.",
-	})
-}
-
-func queueCallNotInMatchEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not in Match",
-		Description: "You are not a participant in this game, so you cannot add players to its voice channels.",
-	})
-}
-
-func queueCallAlreadyInMatchEmbed(target *discordgo.User) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Already in Match",
-		Description: fmt.Sprintf("<@%s> is already a participant in this game and cannot be added again.", target.ID),
-	})
-}
-
-func queueCallWrongChannelEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Wrong Channel",
-		Description: "You are not in your assigned team voice channel. Join it and try again.",
-	})
-}
-
-func queueCallMissingPermissionsEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Missing Permissions",
-		Description: "The bot does not have permission to manage permissions in this voice channel. Please contact an administrator for assistance.",
-	})
-}
-
-func queueCallSuccessEmbed(target *discordgo.User, gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Voice Access Granted",
-		Description: fmt.Sprintf("Successfully added the player to your team voice channel.\n\n> **Player:** <@%s>\n> **Game:** `#%d`", target.ID, gameNumber),
-	})
 }

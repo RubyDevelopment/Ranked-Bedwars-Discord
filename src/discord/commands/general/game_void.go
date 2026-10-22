@@ -58,15 +58,15 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// 1. Validate the Game Channel & Participant
 	game, ok := helpers.Games.ByChannel(i.ChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, voidMatchNotGameChannelEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotGameChannelEmbed(i))
 	}
 	if _, isParticipant := game.Player(actor); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, voidMatchNotInMatchEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotInMatchEmbed(i))
 	}
 
 	// 2. Validate Staff Permissions
 	if !helpers.MemberIsAdministrator(s, i) {
-		return helpers.EditInteractionEmbed(s, i, voidMatchStaffOnlyEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchStaffOnlyEmbed(i))
 	}
 
 	// 3. Resolve Reason from Option
@@ -78,37 +78,5 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, voidMatchSuccessEmbed(game.Number))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func voidMatchNotGameChannelEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not a Game Channel",
-		Description: "This command can only be used in a game text channel. Run it in the text channel of the match you want to void.",
-	})
-}
-
-func voidMatchNotInMatchEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Not in Match",
-		Description: "You must be a participant in this game to void it.",
-	})
-}
-
-func voidMatchStaffOnlyEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Staff Only",
-		Description: "Only staff can void matches. Please contact a staff member for assistance.",
-	})
-}
-
-func voidMatchSuccessEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Game Voided",
-		Description: fmt.Sprintf("Game **#%d** has been voided. No ELO or stats were recorded.", gameNumber),
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchSuccessEmbed(i, game.Number))
 }

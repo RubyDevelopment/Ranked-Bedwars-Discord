@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -57,10 +56,10 @@ func executeGameUnvoidCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 1. Validate the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, gameUnvoidNotFoundEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidNotFoundEmbed(i, gameNumber))
 	}
 	if game.State != helpers.GameVoided {
-		return helpers.EditInteractionEmbed(s, i, gameUnvoidNotVoidedEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidNotVoidedEmbed(i, gameNumber))
 	}
 
 	// 2. Restore the Game
@@ -69,30 +68,5 @@ func executeGameUnvoidCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("unvoid the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gameUnvoidSuccessEmbed(gameNumber, len(result.Results)))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func gameUnvoidNotFoundEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Found",
-		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
-	})
-}
-
-func gameUnvoidNotVoidedEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Voided",
-		Description: fmt.Sprintf("Game **#%d** has not been voided, so there is nothing to restore.", gameNumber),
-	})
-}
-
-func gameUnvoidSuccessEmbed(gameNumber, restored int) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Game Restored",
-		Description: fmt.Sprintf("Game **#%d** has been restored from its voided state. This action has been logged for staff review.\n\n> **Players Restored:** `%d`", gameNumber, restored),
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidSuccessEmbed(i, gameNumber, len(result.Results)))
 }

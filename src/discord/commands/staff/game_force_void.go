@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -71,7 +70,7 @@ func executeGameForceVoidCommand(s *discordgo.Session, i *discordgo.InteractionC
 	// 2. Fetch the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, gameForceVoidNotFoundEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameForceVoidNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Void the Game
@@ -79,23 +78,5 @@ func executeGameForceVoidCommand(s *discordgo.Session, i *discordgo.InteractionC
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gameForceVoidSuccessEmbed(gameNumber, reason))
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func gameForceVoidNotFoundEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Found",
-		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
-	})
-}
-
-func gameForceVoidSuccessEmbed(gameNumber int, reason string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Game Force Voided",
-		Description: fmt.Sprintf("Game **#%d** has been force voided. This action has been logged for staff review.\n\n> **Reason:** %s", gameNumber, reason),
-	})
+	return helpers.EditInteractionEmbed(s, i, helpers.GameForceVoidSuccessEmbed(i, gameNumber, reason))
 }

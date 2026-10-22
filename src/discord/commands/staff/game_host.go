@@ -3,7 +3,6 @@ package staff
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -112,18 +111,18 @@ func executeGameHostCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		return helpers.EditInteractionComponents(s, i, embed, components)
 	}
 	if sub == "list" {
-		return helpers.EditInteractionEmbed(s, i, gameHostListEmbed(helpers.Games.CustomGames(guildID)))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHostListEmbed(i, helpers.Games.CustomGames(guildID)))
 	}
 
 	number := helpers.SubOptionInt(opts, "game")
 	g, ok := helpers.Games.ByNumber(guildID, number)
 	if !ok || g.Custom == nil {
-		return helpers.EditInteractionEmbed(s, i, gameHostNotFoundEmbed(number))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHostNotFoundEmbed(i, number))
 	}
 
 	switch sub {
 	case "view":
-		return helpers.EditInteractionEmbed(s, i, gameHostViewEmbed(g))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHostViewEmbed(i, g))
 
 	case "cancel":
 		if err := helpers.Games.Void(actor, guildID, g.ID, helpers.SubOptionString(opts, "reason"), helpers.VoidOptions{}); err != nil {
@@ -229,58 +228,5 @@ func autocompleteGameHost(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
 		Data: &discordgo.InteractionResponseData{Choices: choices},
-	})
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func gameHostNotFoundEmbed(number int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Hosted Game Not Found",
-		Description: fmt.Sprintf("No live hosted game **#%d** was found. Use `/game_host list` to see the running ones.", number),
-	})
-}
-
-func gameHostListEmbed(games []helpers.Game) *discordgo.MessageEmbed {
-	if len(games) == 0 {
-		return helpers.Preset("info", types.PresetOptions{
-			Title:       "Hosted Games",
-			Description: "No hosted games are running. Start one with `/game_host create`.",
-		})
-	}
-	lines := make([]string, len(games))
-	for i, g := range games {
-		sizes := make([]string, len(g.Custom.Teams))
-		for t, team := range g.Custom.Teams {
-			sizes[t] = strconv.Itoa(len(team))
-		}
-		lines[i] = fmt.Sprintf("> `#%d` · `%s` · `%s` · `%s` · ranks %s · stats %s · <@%s>", g.Number, g.Mode.Name, strings.Join(sizes, "v"), g.State, helpers.HostOnOff(g.Custom.Ranked), helpers.HostOnOff(g.Custom.Stats), g.Custom.HostedBy)
-	}
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       fmt.Sprintf("Hosted Games (%d)", len(games)),
-		Description: strings.Join(lines, "\n"),
-	})
-}
-
-func gameHostViewEmbed(g helpers.Game) *discordgo.MessageEmbed {
-	var fields []*discordgo.MessageEmbedField
-	for t, team := range g.Custom.Teams {
-		value := "<@" + strings.Join(team, "> <@") + ">"
-		if name := helpers.TeamName(t); g.Channels.Voice[name] != "" {
-			value += "\n<#" + g.Channels.Voice[name] + ">"
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{Name: helpers.TeamName(t), Value: value, Inline: true})
-	}
-	hosting := "by hand"
-	if g.Bot != "" {
-		hosting = "`" + g.Bot + "`"
-	}
-	return helpers.Preset("info", types.PresetOptions{
-		Title: fmt.Sprintf("Hosted Game #%d", g.Number),
-		Description: fmt.Sprintf("> **Mode:** `%s`\n> **State:** `%s`\n> **Map:** `%s`\n> **Ranks:** %s\n> **Stats:** %s\n> **Hosted:** %s\n> **By:** <@%s>",
-			g.Mode.Name, g.State, g.Map, helpers.HostOnOff(g.Custom.Ranked), helpers.HostOnOff(g.Custom.Stats), hosting, g.Custom.HostedBy),
-		Fields: fields,
 	})
 }

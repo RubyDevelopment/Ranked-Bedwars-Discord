@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -69,30 +68,30 @@ func executeStrikeListCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, strikeListBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeListBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, strikeListNotRegisteredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.StrikeListNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorStrikeListEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeListEmbed(i))
 	}
 
 	// 4. Fetch & Filter Strike History
 	entries, err := database.Must().Strikes.AllByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), 0, false)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorStrikeListEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeListEmbed(i))
 	}
 
 	filtered := helpers.FilterStrikeHistoryEntries(entries, filterDuration)
 	if len(filtered) == 0 {
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, strikeListEmptyFilteredEmbed(view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, helpers.StrikeListEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, strikeListEmptyEmbed(view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeListEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 5. Render First Page
@@ -100,46 +99,4 @@ func executeStrikeListCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	embed := helpers.BuildStrikeHistoryEmbed(view.Config.Username, filtered, 0)
 	components := helpers.BuildHistoryPageComponents(helpers.HistoryPageStrikes, target.ID, 1, totalPages, []string{filterInput})
 	return helpers.EditInteractionComponents(s, i, embed, components)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorStrikeListEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while loading the strike history. Please try again later or contact support.",
-	})
-}
-
-func strikeListBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts do not have a strike history. Target a registered player instead.",
-	})
-}
-
-func strikeListNotRegisteredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
-	})
-}
-
-func strikeListEmptyEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Strikes Clear",
-		Description: "No strike history was found for this player. This player maintains a clean record.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func strikeListEmptyFilteredEmbed(username, filter string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Strikes Empty",
-		Description: fmt.Sprintf("No strike history was found for this player in the last **%s**. Try a longer filter or remove it.", filter),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
 }

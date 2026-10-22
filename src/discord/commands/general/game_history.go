@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -82,36 +81,36 @@ func executeGameHistoryCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, gameHistoryBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, gameHistoryNotRegisteredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameHistoryEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
 	}
 
 	// 4. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameHistoryEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, gameHistoryNoActiveSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryNoActiveSeasonEmbed(i))
 	}
 
 	// 5. Fetch & Filter Game History
 	participants, err := database.Must().Player.AllGames(i.GuildID, sdk.UintToString(view.Player.ID))
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorGameHistoryEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
 	}
 
 	entries := helpers.FilterGameHistoryEntries(participants, seasonID, filterDuration, hideVoided)
 	if len(entries) == 0 {
-		return helpers.EditInteractionEmbed(s, i, gameHistoryEmptyEmbed(view.Config.Username, filterInput))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryEmptyEmbed(i, view.Config.Username, filterInput))
 	}
 
 	// 6. Render First Page
@@ -123,49 +122,4 @@ func executeGameHistoryCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	embed := helpers.BuildGameHistoryEmbed(view.Config.Username, entries, 0)
 	components := helpers.BuildHistoryPageComponents(helpers.HistoryPageGames, target.ID, 1, totalPages, []string{filterInput, voidedFlag})
 	return helpers.EditInteractionComponents(s, i, embed, components)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorGameHistoryEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while loading the game history. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func gameHistoryBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts do not have a game history. Target a registered player instead.",
-	})
-}
-
-func gameHistoryNotRegisteredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
-	})
-}
-
-func gameHistoryNoActiveSeasonEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Active Season",
-		Description: "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance.",
-	})
-}
-
-func gameHistoryEmptyEmbed(username, filter string) *discordgo.MessageEmbed {
-	description := "No game history was found for this player in the current season."
-	if filter != "" {
-		description = fmt.Sprintf("No game history was found for this player in the last **%s**. Try a longer filter or remove it.", filter)
-	}
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "No Games Found",
-		Description: description,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
 }

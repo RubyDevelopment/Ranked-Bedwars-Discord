@@ -1,7 +1,6 @@
 package general
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
@@ -77,33 +76,33 @@ func executePlayerPunishmentsCommand(s *discordgo.Session, i *discordgo.Interact
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, playerPunishmentsBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, playerPunishmentsNotRegisteredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerPunishmentsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerPunishmentsEmbed(i))
 	}
 
 	// 4. Fetch & Filter Punishment History
 	entries, err := database.Must().Punishments.ByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), false, "", sdk.Page{})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerPunishmentsEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerPunishmentsEmbed(i))
 	}
 
 	filtered := helpers.FilterPunishmentHistoryEntries(entries.Data, activeOnly, filterDuration)
 	if len(filtered) == 0 {
 		if activeOnly {
-			return helpers.EditInteractionEmbed(s, i, playerPunishmentsEmptyActiveEmbed(view.Config.Username))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsEmptyActiveEmbed(i, view.Config.Username))
 		}
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, playerPunishmentsEmptyFilteredEmbed(view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, playerPunishmentsEmptyEmbed(view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 5. Render First Page
@@ -115,54 +114,4 @@ func executePlayerPunishmentsCommand(s *discordgo.Session, i *discordgo.Interact
 	embed := helpers.BuildPunishmentHistoryEmbed(view.Config.Username, filtered, 0, activeOnly)
 	components := helpers.BuildHistoryPageComponents(helpers.HistoryPagePunishments, target.ID, 1, totalPages, []string{activeFlag, filterInput})
 	return helpers.EditInteractionComponents(s, i, embed, components)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorPlayerPunishmentsEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while loading the punishment history. Please try again later or contact support.",
-	})
-}
-
-func playerPunishmentsBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts do not have a punishment history. Target a registered player instead.",
-	})
-}
-
-func playerPunishmentsNotRegisteredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Register with `/player_register` to link a Minecraft account first.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
-	})
-}
-
-func playerPunishmentsEmptyEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "History Clear",
-		Description: "No punishment history was found for this player. This player maintains a clean record.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerPunishmentsEmptyActiveEmbed(username string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "No Active Punishments",
-		Description: "No active punishments were found for this player. This player maintains a clean record.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerPunishmentsEmptyFilteredEmbed(username, filter string) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "History Empty",
-		Description: fmt.Sprintf("No punishment history was found for this player in the last **%s**. Try a longer filter or remove it.", filter),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
 }

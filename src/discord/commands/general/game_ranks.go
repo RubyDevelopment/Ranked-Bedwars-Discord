@@ -2,6 +2,7 @@ package general
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,16 +43,16 @@ var GameRanksCommand = &types.Command{
 func executeGameRanksCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorRanksEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRanksEmbed(i))
 	}
 
 	sorted := helpers.SortedRanks(ranks)
 	if len(sorted) == 0 {
-		return helpers.EditInteractionEmbed(s, i, emptyRanksEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.EmptyRanksEmbed(i))
 	}
 
 	content := buildRanksContent(i, sorted)
-	return helpers.EditInteractionEmbed(s, i, ranksOverviewEmbed(content))
+	return helpers.EditInteractionEmbed(s, i, helpers.RanksOverviewEmbed(i, content))
 }
 
 // ============================================================================
@@ -71,7 +72,7 @@ func buildRanksContent(i *discordgo.InteractionCreate, sorted []types.Rank) stri
 			if statsErr == nil && stats != nil {
 				elo := stats.Elo
 				current := helpers.RankForElo(sorted, elo)
-				currentName := "Unranked"
+				currentName := helpers.FillLayout(i.GuildID, helpers.LayoutRanksUnranked, nil)
 				if current != nil {
 					currentName = current.RankName
 				}
@@ -84,33 +85,35 @@ func buildRanksContent(i *discordgo.InteractionCreate, sorted []types.Rank) stri
 					}
 				}
 
+				vars := map[string]string{"elo": strconv.Itoa(elo), "rank": currentName}
+				layout := helpers.LayoutRanksProgressMax
 				if nextRank != nil {
-					description.WriteString(fmt.Sprintf("**Your ELO:** `%d`\n**Your Rank:** `%s` **Next Rank:** `%s` (in `%d` ELO)\n\n",
-						elo, currentName, nextRank.RankName, nextRank.MinElo-elo))
-				} else {
-					description.WriteString(fmt.Sprintf("**Your ELO:** `%d`\n**Your Rank:** `%s`\nYou have achieved maximum competitive rank status!\n\n",
-						elo, currentName))
+					layout = helpers.LayoutRanksProgress
+					vars["next_rank"], vars["next_min_elo"], vars["next_in"] = nextRank.RankName, strconv.Itoa(nextRank.MinElo), strconv.Itoa(nextRank.MinElo-elo)
 				}
+				description.WriteString(helpers.FillLayout(i.GuildID, layout, vars) + "\n\n")
 			}
 		}
 	}
 
 	if description.Len() == 0 {
-		description.WriteString("Use `/player_register` to track your seasonal elo and rank progression!\n\n")
+		description.WriteString(helpers.FillLayout(i.GuildID, helpers.LayoutRanksGuest, nil) + "\n\n")
 	}
 
-	description.WriteString("__**Available Ranks:**__\n")
+	description.WriteString(helpers.FillLayout(i.GuildID, helpers.LayoutRanksHeading, nil) + "\n")
 	for _, rank := range sorted {
-		maxElo := "∞"
+		maxElo := helpers.FillLayout(i.GuildID, helpers.LayoutRanksNoMax, nil)
 		if rank.MaxElo != 0 {
-			maxElo = fmt.Sprintf("%d", rank.MaxElo)
+			maxElo = strconv.Itoa(rank.MaxElo)
 		}
 		roleMention := rank.RoleID
 		if strings.TrimSpace(roleMention) != "" {
 			roleMention = fmt.Sprintf("<@&%s>", roleMention)
 		}
-		description.WriteString(fmt.Sprintf("%s — ELO: `%d - %s` | Win: `+%d` | Loss: `-%d`\n",
-			roleMention, rank.MinElo, maxElo, rank.KFactorWin, absInt(rank.KFactorLoss)))
+		description.WriteString(helpers.FillLayout(i.GuildID, helpers.LayoutRanksLine, map[string]string{
+			"role": roleMention, "name": rank.RankName, "min_elo": strconv.Itoa(rank.MinElo), "max_elo": maxElo,
+			"win": strconv.Itoa(rank.KFactorWin), "loss": strconv.Itoa(absInt(rank.KFactorLoss)),
+		}) + "\n")
 	}
 
 	return description.String()
@@ -121,36 +124,4 @@ func absInt(value int) int {
 		return -value
 	}
 	return value
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorRanksEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while trying to fetch the registered ranks for this guild. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func emptyRanksEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Configured Ranks",
-		Description: "This guild has no configured rank tiers. If you think this is an error, please contact an administrator for assistance or try again later.",
-	})
-}
-
-func ranksOverviewEmbed(content string) *discordgo.MessageEmbed {
-	header := "View the status of all registered game ranks for this guild.\n\n"
-	fullDescription := header + content
-
-	if len(fullDescription) > 2000 {
-		fullDescription = fullDescription[:1997] + "..."
-	}
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Registered Ranks",
-		Description: fullDescription,
-	})
 }

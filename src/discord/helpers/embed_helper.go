@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,6 +190,7 @@ func parseOptionalString(val any) (string, bool) {
 // GuildNotRegisteredEmbed creates an embed for guild not registered errors.
 func GuildNotRegisteredEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       "Guild Not Registered",
 		Description: "It looks like this guild isn't registered with Ranked Bedwars yet. An administrator should run `/server_setup init` to initialize this server.",
 		Color:       ColorError,
@@ -198,6 +200,7 @@ func GuildNotRegisteredEmbed() *discordgo.MessageEmbed {
 // SimpleErrorEmbed creates a simple error embed.
 func SimpleErrorEmbed(message string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       "Error",
 		Description: message,
 		Color:       ColorError,
@@ -207,6 +210,7 @@ func SimpleErrorEmbed(message string) *discordgo.MessageEmbed {
 // CommandErrorEmbed creates an embed for command execution errors.
 func CommandErrorEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       "Command Error",
 		Description: "An unexpected error occurred while executing this command. Please try again later or contact staff if the issue persists.",
 		Color:       ColorError,
@@ -216,6 +220,7 @@ func CommandErrorEmbed() *discordgo.MessageEmbed {
 // CommandErrorSlashEmbed creates an embed for slash command execution errors.
 func CommandErrorSlashEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       "Command Error",
 		Description: "An unexpected error occurred while executing this command. Please try again later or contact staff if the issue persists.",
 		Color:       ColorError,
@@ -225,6 +230,7 @@ func CommandErrorSlashEmbed() *discordgo.MessageEmbed {
 // ConfigurationErrorEmbed creates an embed for configuration errors.
 func ConfigurationErrorEmbed(description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       "Configuration Error",
 		Description: description,
 		Color:       ColorError,
@@ -234,6 +240,7 @@ func ConfigurationErrorEmbed(description string) *discordgo.MessageEmbed {
 // AccessDeniedEmbed creates an embed for access denied errors.
 func AccessDeniedEmbed(title, message string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbFlag},
 		Title:       title,
 		Description: message,
 		Color:       ColorError,
@@ -287,6 +294,20 @@ func MinecraftBustAvatarURL(username string) string {
 	}
 	return "https://nmsr.nickac.dev/bust/" + url.PathEscape(name)
 }
+
+// The old bot's thumbnail icons that earn their place (white glyphs, made for Discord's dark theme). Its candle icons,
+// the clock/timer duplicate, the yellow/green/red logo tiles and the empty `bot` fallback were left out: they say
+// nothing a command could use. The doubleSwords, timer, tada, sprout, flag and trashCan constants are in game_helper.go.
+const (
+	ThumbHammer  = "https://i.imgur.com/2dLIqF6.png"
+	ThumbClock   = "https://i.imgur.com/i2JnqZm.png"
+	ThumbLoad    = "https://i.imgur.com/KowXZbQ.png"
+	ThumbPlayer  = "https://i.imgur.com/E0l2g2j.png"
+	ThumbPlayers = "https://i.imgur.com/5yrykSY.png"
+	ThumbBed     = "https://i.imgur.com/BBlmpYu.png"
+	ThumbGuild   = "https://i.imgur.com/LvOizEZ.png"
+	ThumbBot     = "https://i.imgur.com/U0dRZnV.png"
+)
 
 // DiscordRelativeTimestamp formats a Discord relative timestamp (`<t:unix:R>`).
 func DiscordRelativeTimestamp(t time.Time) string {
@@ -415,6 +436,8 @@ type ResponseRule = types.ResponseRule
 type ResponseConfig struct {
 	Defaults  map[string]ResponseRule `json:"defaults"`
 	Overrides map[string]ResponseRule `json:"overrides"`
+	// Layouts are the guild's rewrites of the bot's list and row text, by layout key (see DefineLayout). An empty one is the default.
+	Layouts map[string]string `json:"layouts"`
 }
 
 // ResponseTitleSlug is the stable part of an embed title that names a response: what comes before a " — " or
@@ -595,18 +618,7 @@ func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, em
 		return false, nil
 	}
 
-	invoker := i.User
-	if i.Member != nil && i.Member.User != nil {
-		invoker = i.Member.User
-	}
-	vars := map[string]string(GuildVars(s, i.GuildID, invoker))
-	vars["channel.id"], vars["channel.mention"] = i.ChannelID, "<#"+i.ChannelID+">"
-	now := time.Now().UTC()
-	vars["time.date"], vars["time.time"] = now.Format("2006-01-02"), now.Format("15:04")
-	vars["time.unix"], vars["time.relative"] = fmt.Sprint(now.Unix()), fmt.Sprintf("<t:%d:R>", now.Unix())
-	if invoker != nil {
-		vars["user.id"] = invoker.ID
-	}
+	vars := InteractionVars(s, i)
 
 	payload, ok := buildResponsePayload(st, data.Name, SubcommandPathFromInteraction(data), emb, vars)
 	if !ok {
@@ -618,4 +630,215 @@ func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, em
 	}
 	err := EditOriginalPayload(s, i.Interaction, payload)
 	return err == nil, err
+}
+
+// ============================================================================
+// What an interaction offers a saved message
+// ============================================================================
+
+// InteractionVars is everything a saved message can read about the interaction that triggered the answer, as
+// {{path}} variables: who asked (user.*, member.*), where (guild.*, channel.*), what they ran (command.*) and
+// every option they gave (option.<name>, and for a user, channel or role option also .id, .mention, .name ...).
+func InteractionVars(s *discordgo.Session, i *discordgo.InteractionCreate) map[string]string {
+	v := map[string]string{}
+	if i == nil || i.Interaction == nil {
+		return v
+	}
+	invoker := i.User
+	if i.Member != nil && i.Member.User != nil {
+		invoker = i.Member.User
+	}
+	if s != nil && s.State != nil {
+		for k, val := range GuildVars(s, i.GuildID, invoker) {
+			v[k] = val
+		}
+	} else if invoker != nil {
+		v["user.name"], v["user.mention"], v["user.avatar"] = invoker.Username, invoker.Mention(), AvatarOf(invoker)
+	}
+	now := time.Now().UTC()
+	v["time.date"], v["time.time"] = now.Format("2006-01-02"), now.Format("15:04")
+	v["time.unix"], v["time.relative"] = fmt.Sprint(now.Unix()), fmt.Sprintf("<t:%d:R>", now.Unix())
+
+	v["interaction.id"], v["interaction.type"] = i.ID, i.Type.String()
+	v["interaction.locale"], v["interaction.guild_locale"] = string(i.Locale), ""
+	if i.GuildLocale != nil {
+		v["interaction.guild_locale"] = string(*i.GuildLocale)
+	}
+	v["guild.id"] = i.GuildID
+	v["channel.id"], v["channel.mention"] = i.ChannelID, "<#"+i.ChannelID+">"
+	if s != nil && s.State != nil {
+		if ch, err := s.State.Channel(i.ChannelID); err == nil && ch != nil {
+			v["channel.name"] = ch.Name
+		}
+		if g, err := s.State.Guild(i.GuildID); err == nil && g != nil && g.OwnerID != "" {
+			v["guild.owner"], v["guild.owner_mention"] = g.OwnerID, "<@"+g.OwnerID+">"
+		}
+	}
+	if invoker != nil {
+		v["user.id"], v["user.tag"] = invoker.ID, invoker.Username
+		v["user.display_name"] = invoker.Username
+		if invoker.GlobalName != "" {
+			v["user.display_name"] = invoker.GlobalName
+		}
+		v["user.created"] = fmt.Sprintf("<t:%d:R>", snowflakeUnix(invoker.ID))
+	}
+	if m := i.Member; m != nil {
+		v["member.nick"] = m.Nick
+		v["member.display_name"] = v["user.display_name"]
+		if m.Nick != "" {
+			v["member.display_name"] = m.Nick
+		}
+		v["member.joined"] = fmt.Sprintf("<t:%d:R>", m.JoinedAt.Unix())
+		v["member.role_count"] = fmt.Sprint(len(m.Roles))
+		mentions := make([]string, len(m.Roles))
+		for n, id := range m.Roles {
+			mentions[n] = "<@&" + id + ">"
+		}
+		v["member.roles"] = strings.Join(mentions, " ")
+	}
+	if i.Message != nil {
+		v["message.id"], v["message.content"] = i.Message.ID, i.Message.Content
+		v["message.url"] = fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, i.Message.ID)
+	}
+	if data, ok := i.Data.(discordgo.ApplicationCommandInteractionData); ok {
+		sub := SubcommandPathFromInteraction(data)
+		v["command.name"], v["command.subcommand"] = data.Name, sub
+		v["command.full"] = strings.TrimSpace(data.Name + " " + strings.ReplaceAll(sub, ".", " "))
+		v["command.prefix_used"] = fmt.Sprint(IsPrefixInteraction(i))
+		addOptionVars(v, data.Options, data.Resolved)
+	}
+	return v
+}
+
+// addOptionVars sets option.<name> for every option, reaching into subcommands.
+func addOptionVars(v map[string]string, opts []*discordgo.ApplicationCommandInteractionDataOption, res *discordgo.ApplicationCommandInteractionDataResolved) {
+	for _, o := range opts {
+		if o == nil {
+			continue
+		}
+		key := "option." + o.Name
+		switch o.Type {
+		case discordgo.ApplicationCommandOptionSubCommand, discordgo.ApplicationCommandOptionSubCommandGroup:
+			addOptionVars(v, o.Options, res)
+		case discordgo.ApplicationCommandOptionUser:
+			id := fmt.Sprint(o.Value)
+			v[key], v[key+".id"], v[key+".mention"] = "<@"+id+">", id, "<@"+id+">"
+			if res != nil && res.Users[id] != nil {
+				u := res.Users[id]
+				v[key+".name"], v[key+".tag"], v[key+".avatar"] = u.Username, u.Username, AvatarOf(u)
+				if u.GlobalName != "" {
+					v[key+".name"] = u.GlobalName
+				}
+			}
+		case discordgo.ApplicationCommandOptionChannel:
+			id := fmt.Sprint(o.Value)
+			v[key], v[key+".id"], v[key+".mention"] = "<#"+id+">", id, "<#"+id+">"
+			if res != nil && res.Channels[id] != nil {
+				v[key+".name"] = res.Channels[id].Name
+			}
+		case discordgo.ApplicationCommandOptionRole:
+			id := fmt.Sprint(o.Value)
+			v[key], v[key+".id"], v[key+".mention"] = "<@&"+id+">", id, "<@&"+id+">"
+			if res != nil && res.Roles[id] != nil {
+				v[key+".name"] = res.Roles[id].Name
+			}
+		default:
+			v[key] = fmt.Sprint(o.Value)
+		}
+	}
+}
+
+// snowflakeUnix is when a Discord id was created.
+func snowflakeUnix(id string) int64 {
+	n, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return (n>>22 + 1420070400000) / 1000
+}
+
+// ============================================================================
+// Layouts: the text lists and rows are built from
+// ============================================================================
+
+// A layout is one piece of text an embed builds from a list or a row (a bot's line, a queue's heading) with {var}
+// placeholders. The code owns the default; a guild rewrites it on the dashboard (panels.responses.layouts[key]) and an
+// empty rewrite means the default. A key is "<command>.<name>": the command's name is how the bot hands the dashboard
+// the layouts of each command (see layoutsOf).
+
+var layoutRegistry = map[string]types.CommandLayout{}
+
+// DefineLayout registers a layout at start-up and returns its key, so a package-level var can hold it:
+//
+//	var botLine = DefineLayout("bots.line", "One bot", "`{name}`", "name", "tier")
+func DefineLayout(key, label, def string, vars ...string) string {
+	layoutRegistry[key] = types.CommandLayout{Key: key, Label: label, Default: def, Vars: vars}
+	return key
+}
+
+// DefineRepeatedLayout is DefineLayout for a layout written once per row of a list.
+func DefineRepeatedLayout(key, label, def string, vars ...string) string {
+	DefineLayout(key, label, def, vars...)
+	l := layoutRegistry[key]
+	l.Repeats = true
+	layoutRegistry[key] = l
+	return key
+}
+
+// layoutsOf are the layouts whose key starts with "<command>.", in key order.
+func layoutsOf(command string) []types.CommandLayout {
+	var out []types.CommandLayout
+	for key, l := range layoutRegistry {
+		if strings.HasPrefix(key, command+".") {
+			out = append(out, l)
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Key < out[b].Key })
+	return out
+}
+
+// LayoutText is the layout's text for a guild: its rewrite, or the default.
+func LayoutText(guildID, key string) string {
+	if guildID != "" {
+		if t := responseStateOf(guildID).cfg.Layouts[key]; strings.TrimSpace(t) != "" {
+			return t
+		}
+	}
+	return layoutRegistry[key].Default
+}
+
+// FillLayout writes a layout with its variables. A line whose variables are all empty is left out (so "{note}" on a
+// line of its own disappears with no note), and a name that is not in vars is empty.
+func FillLayout(guildID, key string, vars map[string]string) string {
+	var out []string
+	for _, line := range strings.Split(LayoutText(guildID, key), "\n") {
+		found, filled := false, false
+		text := varPattern.ReplaceAllStringFunc(line, func(whole string) string {
+			m := varPattern.FindStringSubmatch(whole)
+			found = true
+			val := vars[m[1]+m[2]]
+			if val != "" {
+				filled = true
+			}
+			return val
+		})
+		if found && !filled {
+			continue
+		}
+		out = append(out, text)
+	}
+	return strings.Join(out, "\n")
+}
+
+// GuildOf is the guild an interaction came from ("" for none), so an embed builder can name its layouts' guild.
+func GuildOf(i *discordgo.InteractionCreate) string {
+	if i == nil || i.Interaction == nil {
+		return ""
+	}
+	return i.GuildID
+}
+
+// LayoutSeparator is a layout that goes between the items of a list: "\n" in it means a new line.
+func LayoutSeparator(guildID, key string) string {
+	return strings.ReplaceAll(LayoutText(guildID, key), `\n`, "\n")
 }

@@ -547,6 +547,12 @@ func reconcileCommandConfigs(existing map[string]types.CommandConfig, registry [
 			cfg.Responses = want
 			updated = true
 		}
+		if want := layoutsOf(cmd.Name); !slices.EqualFunc(cfg.Layouts, want, func(a, b types.CommandLayout) bool {
+			return a.Key == b.Key && a.Label == b.Label && a.Default == b.Default && a.Repeats == b.Repeats && slices.Equal(a.Vars, b.Vars)
+		}) {
+			cfg.Layouts = want
+			updated = true
+		}
 		if updated {
 			existing[cmd.Name] = cfg
 			changed = true
@@ -578,6 +584,7 @@ func defaultCommandConfig(cmd *types.Command) types.CommandConfig {
 	}
 	reconcileRequirements(&cfg, cmd.Requirements)
 	cfg.Responses = responsesOf(cmd.Name)
+	cfg.Layouts = layoutsOf(cmd.Name)
 	return cfg
 }
 
@@ -961,31 +968,6 @@ func notifyUnassignedGuild(s *discordgo.Session, guildID string, logger baseutil
 // ============================================================================
 // Embed Builders
 // ============================================================================
-
-// unassignedGuildEmbed is the notice posted when the bot joins a guild that has no plan yet.
-func unassignedGuildEmbed() *discordgo.MessageEmbed {
-	return Preset("caution", types.PresetOptions{
-		Title:       "Ranked Bedwars Is Connected",
-		Description: "Ranked Bedwars has joined this guild and created its configuration. A plan is required before the bot can be used.",
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "Getting Started",
-				Value:  "1. An administrator opens the dashboard.\n2. Choose a plan, select this guild and request access.\n3. Once the request is approved, the bot switches on.",
-				Inline: false,
-			},
-			{
-				Name:   "Until Then",
-				Value:  "Commands and buttons stay paused. The setup and configuration commands keep working, so the guild can be prepared in advance.",
-				Inline: false,
-			},
-			{
-				Name:   "Need Help?",
-				Value:  "Contact support through the dashboard and include the name of this guild.",
-				Inline: false,
-			},
-		},
-	})
-}
 
 // unassignedGuildComponents are the dashboard links under that notice (none when no dashboard URL is configured).
 func unassignedGuildComponents() []discordgo.MessageComponent {

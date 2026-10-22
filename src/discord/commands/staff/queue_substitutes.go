@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -68,20 +67,20 @@ func executeQueueSubstitutesCommand(s *discordgo.Session, i *discordgo.Interacti
 	outgoing := helpers.SubOptionUser(s, opts, "out")
 	incoming := helpers.SubOptionUser(s, opts, "in")
 	if outgoing == nil || incoming == nil {
-		return helpers.EditInteractionEmbed(s, i, queueSubstitutesInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesInvalidTargetEmbed(i))
 	}
 	if outgoing.Bot || incoming.Bot {
-		return helpers.EditInteractionEmbed(s, i, queueSubstitutesBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesBotTargetEmbed(i))
 	}
 	if outgoing.ID == incoming.ID {
-		return helpers.EditInteractionEmbed(s, i, queueSubstitutesSamePlayerEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesSamePlayerEmbed(i))
 	}
 
 	// 2. Fetch the Game
 	gameNumber := helpers.SubOptionInt(opts, "game")
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, queueSubstitutesGameNotFoundEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesGameNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Swap the Players
@@ -89,49 +88,7 @@ func executeQueueSubstitutesCommand(s *discordgo.Session, i *discordgo.Interacti
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("substitute the player", err))
 	}
 
-	embed := queueSubstitutesSuccessEmbed(gameNumber, outgoing, incoming)
+	embed := helpers.QueueSubstitutesSuccessEmbed(i, gameNumber, outgoing, incoming)
 	helpers.LogCommandResult(s, i.GuildID, "queue_substitutes", helpers.InteractionUserID(i), embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func queueSubstitutesInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify both the player leaving and the substitute taking their place.",
-	})
-}
-
-func queueSubstitutesBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts cannot play in games. Select real players instead.",
-	})
-}
-
-func queueSubstitutesSamePlayerEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "The outgoing player and the substitute must be different players.",
-	})
-}
-
-func queueSubstitutesGameNotFoundEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Found",
-		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
-	})
-}
-
-func queueSubstitutesSuccessEmbed(gameNumber int, outgoing, incoming *discordgo.User) *discordgo.MessageEmbed {
-	return helpers.Preset("success", types.PresetOptions{
-		Title: "Substitute Assigned",
-		Description: fmt.Sprintf(
-			"Successfully swapped the players. This action has been logged for staff review.\n\n> **Game:** `#%d`\n> **Leaving:** <@%s>\n> **Substitute:** <@%s>",
-			gameNumber, outgoing.ID, incoming.ID,
-		),
-	})
 }

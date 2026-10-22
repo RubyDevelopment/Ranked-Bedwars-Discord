@@ -1,8 +1,6 @@
 package staff
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -73,7 +71,7 @@ func executeGameScoreCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// 2. Fetch the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, gameScoreNotFoundEmbed(gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameScoreNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Score the Game
@@ -82,42 +80,9 @@ func executeGameScoreCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("score the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, gameScoreSuccessEmbed(gameNumber, teamName, result.Results))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameScoreSuccessEmbed(i, gameNumber, teamName, result.Results))
 }
 
 // ============================================================================
 // Core Logic & Helpers
 // ============================================================================
-
-// splitResultMentions lists the winners and losers of a scored game as mentions.
-func splitResultMentions(results []helpers.EloResult) (winners, losers string) {
-	var won, lost []string
-	for _, r := range results {
-		if r.Win {
-			won = append(won, fmt.Sprintf("<@%s>", r.UserID))
-		} else {
-			lost = append(lost, fmt.Sprintf("<@%s>", r.UserID))
-		}
-	}
-	return strings.Join(won, " "), strings.Join(lost, " ")
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func gameScoreNotFoundEmbed(gameNumber int) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Game Not Found",
-		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
-	})
-}
-
-func gameScoreSuccessEmbed(gameNumber int, teamName string, results []helpers.EloResult) *discordgo.MessageEmbed {
-	winners, losers := splitResultMentions(results)
-
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Game Scored",
-		Description: fmt.Sprintf("Game **#%d** has been scored. This action has been logged for staff review.\n\n> **Winning Team:** `%s`\n> **Winners:** %s\n> **Losers:** %s", gameNumber, teamName, winners, losers),
-	})
-}

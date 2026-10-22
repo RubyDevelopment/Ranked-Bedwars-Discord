@@ -1,7 +1,6 @@
 package staff
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
@@ -50,10 +49,10 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, playerUnwipeInvalidTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, playerUnwipeBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeBotTargetEmbed(i))
 	}
 	wipeID := helpers.OptionInt(i, "wipe_id")
 	actor := helpers.InteractionUserID(i)
@@ -62,24 +61,24 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, playerUnwipeNotRegisteredEmbed())
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerUnwipeEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 	username := view.Config.Username
 
 	// 3. Find the Wipe to Undo (this season's wipes, newest first)
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerUnwipeEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, playerWipeNoSeasonEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeNoSeasonEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 	wipes, err := database.Must().Wipes.AllByPlayer(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerUnwipeEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 	var wipe *models.PlayerWipe
 	for idx := range wipes {
@@ -91,21 +90,21 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 	switch {
 	case wipe == nil:
-		return helpers.EditInteractionEmbed(s, i, playerUnwipeNothingEmbed(username, wipeID))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeNothingEmbed(i, username, wipeID))
 	case wipe.RestoredAt != nil:
-		return helpers.EditInteractionEmbed(s, i, playerUnwipeAlreadyEmbed(username, wipe.ID))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeAlreadyEmbed(i, username, wipe.ID))
 	}
 
 	// 4. Restore
 	result, err := database.Must().Wipes.Restore(actor, i.GuildID, pid, seasonID, wipe.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, playerUnwipeNothingEmbed(username, wipeID))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeNothingEmbed(i, username, wipeID))
 		}
 		if sdk.IsConflict(err) {
-			return helpers.EditInteractionEmbed(s, i, playerUnwipeAlreadyEmbed(username, wipe.ID))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeAlreadyEmbed(i, username, wipe.ID))
 		}
-		return helpers.EditInteractionEmbed(s, i, unexpectedErrorPlayerUnwipeEmbed())
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 
 	// 5. Sync Rank
@@ -114,75 +113,7 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		newRank = result.Stats.Rank
 	}
 
-	embed := playerUnwipeSuccessEmbed(username, result, newRank)
+	embed := helpers.PlayerUnwipeSuccessEmbed(i, username, result, newRank)
 	helpers.LogCommandResult(s, i.GuildID, "player_unwipe", actor, embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
-}
-
-// ============================================================================
-// Embed Builders
-// ============================================================================
-
-func unexpectedErrorPlayerUnwipeEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: "An unexpected error occurred while restoring the stats. Please contact an administrator for assistance or try again later.",
-	})
-}
-
-func playerUnwipeInvalidTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "You must specify a player to unwipe. Select a registered player from the command options.",
-	})
-}
-
-func playerUnwipeBotTargetEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Invalid Target",
-		Description: "Automated bot accounts do not have stats to restore. Target a registered player instead.",
-	})
-}
-
-func playerUnwipeNotRegisteredEmbed() *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Player Not Registered",
-		Description: "That player is not registered in this guild. Only registered players can have stats restored.",
-		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
-	})
-}
-
-func playerUnwipeNothingEmbed(username string, wipeID int) *discordgo.MessageEmbed {
-	description := fmt.Sprintf("**%s** has no wipe to undo.", username)
-	if wipeID > 0 {
-		description = fmt.Sprintf("**%s** has no wipe with ID **%d**.", username, wipeID)
-	}
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Wipe Found",
-		Description: description,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerUnwipeAlreadyEmbed(username string, wipeID uint) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Already Restored",
-		Description: fmt.Sprintf("Wipe **%d** of **%s** was already undone.", wipeID, username),
-		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
-	})
-}
-
-func playerUnwipeSuccessEmbed(username string, r *sdk.WipeResult, rank string) *discordgo.MessageEmbed {
-	scope := "All stats this season"
-	if r.Wipe.FromGameNumber > 0 {
-		scope = fmt.Sprintf("Game **#%d** onwards (**%d** games)", r.Wipe.FromGameNumber, r.Wipe.GamesAffected)
-	}
-	return helpers.Preset("success", types.PresetOptions{
-		Title: "Stats Restored",
-		Description: fmt.Sprintf(
-			"Successfully undid the wipe. This action has been logged for staff review.\n\n> **Player:** `%s`\n> **Restored:** %s\n> **ELO:** `%d`\n> **Rank:** `%s`\n> **Wipe ID:** `%d`",
-			username, scope, r.Stats.Elo, rank, r.Wipe.ID,
-		),
-		Thumbnail: helpers.MinecraftBustAvatarURL(username),
-	})
 }

@@ -154,27 +154,22 @@ func parseColor(s string) (color.NRGBA, bool) {
 	return color.NRGBA{R: uint8(v >> 24), G: uint8(v >> 16), B: uint8(v >> 8), A: uint8(v)}, true
 }
 
-// fill replaces every {{path}} with its value; unknown paths become empty text.
+// fill replaces every {path} with its value. The older {{path}} still works and, unlike a single-brace name that
+// is not a variable (left as written), becomes empty text when unknown.
 func (v Vars) fill(s string) string {
-	if !strings.Contains(s, "{{") {
+	if !strings.Contains(s, "{") {
 		return s
 	}
-	var b strings.Builder
-	for {
-		i := strings.Index(s, "{{")
-		if i < 0 {
-			break
+	return varPattern.ReplaceAllStringFunc(s, func(whole string) string {
+		m := varPattern.FindStringSubmatch(whole)
+		if m[1] != "" {
+			return v[m[1]]
 		}
-		j := strings.Index(s[i:], "}}")
-		if j < 0 {
-			break
+		if val, ok := v[m[2]]; ok {
+			return val
 		}
-		b.WriteString(s[:i])
-		b.WriteString(v[strings.TrimSpace(s[i+2:i+j])])
-		s = s[i+j+2:]
-	}
-	b.WriteString(s)
-	return b.String()
+		return whole
+	})
 }
 
 func number(s string) (float64, bool) {
