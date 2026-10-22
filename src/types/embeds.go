@@ -26,10 +26,14 @@ type PresetOptions struct {
 type ResponseRule struct {
 	MessageID string         `json:"message_id,omitempty"`
 	Reply     *ResponseReply `json:"reply,omitempty"`
+	// Enabled is only ever stored as false: the rule is switched off but kept, and the next broader rule answers.
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // Usable reports whether the rule names something to answer with.
-func (r ResponseRule) Usable() bool { return r.MessageID != "" || r.Reply != nil }
+func (r ResponseRule) Usable() bool {
+	return (r.Enabled == nil || *r.Enabled) && (r.MessageID != "" || r.Reply != nil)
+}
 
 // ResponseReply is a reply built in the dashboard's response builder, in the shape custom commands use: a plain
 // message (Content), classic embeds, or Components V2.
