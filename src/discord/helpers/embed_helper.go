@@ -490,7 +490,7 @@ func responseLook(color int) string {
 // Resolve finds the rule that answers a response of `command` whose title slug is `slug` and look is `look`.
 func (c ResponseConfig) Resolve(command, slug, look string) (ResponseRule, bool) {
 	for _, r := range []ResponseRule{c.Overrides[command+"."+slug], c.Overrides[command+".*"], c.Defaults[look]} {
-		if r.MessageID != "" {
+		if r.Usable() {
 			return r, true
 		}
 	}
@@ -594,11 +594,29 @@ func buildResponsePayload(st *responseState, command, sub string, emb *discordgo
 	if !ok {
 		return nil, false
 	}
-	doc := st.messages[rule.MessageID]
-	if doc == nil {
+	var doc *MessageDoc
+	if rule.Reply != nil {
+		doc = replyDoc(rule.Reply)
+	} else if doc = st.messages[rule.MessageID]; doc == nil {
 		return nil, false // the message was deleted: keep the built-in answer
 	}
 	return doc.Payload(VarFiller(responseVars(vars, command, sub, slug, look, emb, doc.ResponseFields))), true
+}
+
+// replyDoc is the message a dashboard-built reply describes (the same reading custom commands give a reply).
+func replyDoc(r *types.ResponseReply) *MessageDoc {
+	doc := &MessageDoc{Mode: "embeds", Buttons: r.Buttons}
+	switch r.Type {
+	case "component":
+		doc.Mode, doc.Buttons, doc.V2 = "v2", nil, r.Components
+	case "embed":
+		doc.Content, doc.Embeds = r.Content, r.Embeds
+	default:
+		if doc.Content = r.Content; doc.Content == "" {
+			doc.Content = r.Text
+		}
+	}
+	return doc
 }
 
 // sendCustomResponse answers with the guild's saved message instead of `emb`, if it set one up. It reports

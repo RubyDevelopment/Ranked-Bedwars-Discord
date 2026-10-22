@@ -22,7 +22,22 @@ type PresetOptions struct {
 	Fields      []*discordgo.MessageEmbedField
 }
 
-// ResponseRule points at the saved message that answers.
+// ResponseRule says what answers: a saved message (MessageID) or a reply built on the dashboard itself (Reply).
 type ResponseRule struct {
-	MessageID string `json:"message_id"`
+	MessageID string         `json:"message_id,omitempty"`
+	Reply     *ResponseReply `json:"reply,omitempty"`
+}
+
+// Usable reports whether the rule names something to answer with.
+func (r ResponseRule) Usable() bool { return r.MessageID != "" || r.Reply != nil }
+
+// ResponseReply is a reply built in the dashboard's response builder, in the shape custom commands use: a plain
+// message (Content), classic embeds, or Components V2.
+type ResponseReply struct {
+	Type       string       `json:"type"` // message, embed or component
+	Content    string       `json:"content"`
+	Text       string       `json:"text"`
+	Buttons    []LinkButton `json:"buttons"`
+	Embeds     []Embed      `json:"embeds"`
+	Components []V2Item     `json:"components"`
 }
