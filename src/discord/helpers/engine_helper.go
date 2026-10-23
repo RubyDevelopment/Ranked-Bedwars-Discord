@@ -210,6 +210,7 @@ func (b *EngineBridge) Listen(ctx context.Context, addr, secret string) error {
 	mux.Handle("/live/chat", LiveChat)                     // the dashboard's live bot chat (LIVE_CHAT_SECRET)
 	mux.HandleFunc("/live/control", LiveChat.ServeControl) // the dashboard's live console: actions on a bot (same secret)
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	b.logf("bridge listening on %s", addr)
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -223,8 +224,10 @@ func (b *EngineBridge) Listen(ctx context.Context, addr, secret string) error {
 }
 
 func (b *EngineBridge) serveWS(w http.ResponseWriter, r *http.Request) {
+	b.logf("engine connection attempt from %s", r.RemoteAddr)
 	given := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if subtle.ConstantTimeCompare([]byte(given), []byte(b.secret)) != 1 {
+		b.logf("engine from %s rejected: wrong ENGINE_BRIDGE_SECRET", r.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
