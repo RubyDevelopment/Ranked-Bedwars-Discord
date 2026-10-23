@@ -159,14 +159,52 @@ type DiscordLogAuthor struct {
 	Bot    bool   `json:"bot,omitempty"`
 }
 
+type DiscordLogEmbedField struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Inline bool   `json:"inline,omitempty"`
+}
+
+type DiscordLogEmbed struct {
+	Title        string                 `json:"title,omitempty"`
+	Description  string                 `json:"description,omitempty"`
+	URL          string                 `json:"url,omitempty"`
+	Color        int                    `json:"color,omitempty"`
+	Author       string                 `json:"author,omitempty"`
+	Footer       string                 `json:"footer,omitempty"`
+	Timestamp    string                 `json:"timestamp,omitempty"`
+	ImageURL     string                 `json:"image_url,omitempty"`
+	ThumbnailURL string                 `json:"thumbnail_url,omitempty"`
+	Fields       []DiscordLogEmbedField `json:"fields,omitempty"`
+}
+
+type DiscordLogAttachment struct {
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	ContentType string `json:"content_type,omitempty"`
+	Size        int    `json:"size,omitempty"`
+}
+
+type DiscordLogReaction struct {
+	Name  string `json:"name"`
+	ID    string `json:"id,omitempty"`
+	Count int    `json:"count"`
+	Me    bool   `json:"me,omitempty"`
+}
+
 // DiscordLogMessage is one message of the game's Discord chat.
 type DiscordLogMessage struct {
-	ID          string            `json:"id"`
-	At          time.Time         `json:"at"`
-	Author      DiscordLogAuthor  `json:"author"`
-	Content     string            `json:"content,omitempty"`
-	Attachments []string          `json:"attachments,omitempty"` // URLs
-	Mentions    map[string]string `json:"mentions,omitempty"`    // user id -> name
+	ID          string                 `json:"id"`
+	At          time.Time              `json:"at"`
+	EditedAt    *time.Time             `json:"edited_at,omitempty"`
+	Author      DiscordLogAuthor       `json:"author"`
+	Content     string                 `json:"content,omitempty"`
+	Embeds      []DiscordLogEmbed      `json:"embeds,omitempty"`
+	Components  []string               `json:"components,omitempty"`
+	Attachments []DiscordLogAttachment `json:"attachments,omitempty"`
+	Mentions    map[string]string      `json:"mentions,omitempty"` // user id -> name
+	Reactions   []DiscordLogReaction   `json:"reactions,omitempty"`
+	Pinned      bool                   `json:"pinned,omitempty"`
 }
 
 // DraftConfig is the captain flow's settings.
@@ -279,7 +317,7 @@ type GamePlayer struct {
 	FirstBloods   int    `json:"first_bloods"`
 
 	// Custom are the stats the guild's server profile counts from chat (id -> total), on top of the ones above.
-	Custom map[string]int `json:"custom,omitempty"`
+	Custom map[string]float64 `json:"custom,omitempty"`
 }
 
 // MatchEnd is how a match finished (or is finishing).
@@ -287,18 +325,20 @@ type MatchEnd string
 
 // MatchEvent is one thing the hosting bot saw in the match. Players are Discord ids.
 type MatchEvent struct {
-	Kind      string // kill, bed, eliminated, phase or stat
-	Killer    string
-	Victim    string
-	Final     bool
-	Team      string
-	Destroyer string
-	Phase     int
-	PhaseName string
-	Stat      string
-	Player    string
-	Amount    float64
-	Total     float64
+	Kind       string // kill, bed, eliminated, phase or stat
+	OccurredAt time.Time
+	Killer     string
+	Victim     string
+	Final      bool
+	FirstBlood bool
+	Team       string
+	Destroyer  string
+	Phase      int
+	PhaseName  string
+	Stat       string
+	Player     string
+	Amount     float64
+	Total      float64
 }
 
 // RecoverSummary counts what Recover did.

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"maps"
 	"math/rand/v2"
+	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -1625,7 +1627,7 @@ func statTable(g Game, f guildFlow) string {
 		}
 		sort.Strings(ids)
 		for _, id := range ids {
-			parts = append(parts, fmt.Sprintf("%s %d", f.label(id), p.Custom[id]))
+			parts = append(parts, fmt.Sprintf("%s %g", f.label(id), p.Custom[id]))
 		}
 		line := fmt.Sprintf("`%s` %s", p.Username, strings.Join(parts, " · "))
 		if size+len(line)+1 > 1000 {
@@ -1879,6 +1881,11 @@ type GameChatLine = types.GameChatLine
 // DiscordLogAuthor is defined in package types (games.go).
 type DiscordLogAuthor = types.DiscordLogAuthor
 
+// DiscordLogEmbed and its field and attachment types are defined in package types.
+type DiscordLogEmbed = types.DiscordLogEmbed
+type DiscordLogEmbedField = types.DiscordLogEmbedField
+type DiscordLogAttachment = types.DiscordLogAttachment
+
 // DiscordLogMessage is defined in package types (games.go).
 type DiscordLogMessage = types.DiscordLogMessage
 
@@ -2014,6 +2021,10 @@ func NewGameChatCollector(session func() *discordgo.Session) func(ch GameChannel
 
 func logMessage(msg *discordgo.Message) DiscordLogMessage {
 	out := DiscordLogMessage{ID: msg.ID, At: msg.Timestamp}
+	if msg.EditedTimestamp != nil {
+		out.EditedAt = msg.EditedTimestamp
+	}
+	out.Pinned = msg.Pinned
 	if a := msg.Author; a != nil {
 		out.Author = DiscordLogAuthor{ID: a.ID, Name: firstNonEmpty(a.GlobalName, a.Username), Avatar: a.AvatarURL("64"), Bot: a.Bot}
 	}
@@ -2021,24 +2032,39 @@ func logMessage(msg *discordgo.Message) DiscordLogMessage {
 		out.Author.Name = msg.Member.Nick
 	}
 
-	parts := []string{strings.TrimSpace(msg.Content)}
+	out.Content = strings.TrimSpace(msg.Content)
 	for _, e := range msg.Embeds {
-		parts = append(parts, e.Title, e.Description)
+		embed := DiscordLogEmbed{Title: e.Title, Description: e.Description, URL: e.URL, Color: e.Color, Timestamp: e.Timestamp}
+		if e.Author != nil {
+			embed.Author = e.Author.Name
+		}
+		if e.Footer != nil {
+			embed.Footer = e.Footer.Text
+		}
+		if e.Image != nil {
+			embed.ImageURL = e.Image.URL
+		}
+		if e.Thumbnail != nil {
+			embed.ThumbnailURL = e.Thumbnail.URL
+		}
 		for _, f := range e.Fields {
-			parts = append(parts, f.Name+": "+f.Value)
+			if f != nil {
+				embed.Fields = append(embed.Fields, DiscordLogEmbedField{Name: f.Name, Value: f.Value, Inline: f.Inline})
+			}
 		}
+		out.Embeds = append(out.Embeds, embed)
 	}
-	parts = append(parts, componentText(msg.Components)...)
-	var kept []string
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			kept = append(kept, p)
-		}
-	}
-	out.Content = strings.Join(kept, "\n")
-
+	out.Components = componentText(msg.Components)
 	for _, a := range msg.Attachments {
-		out.Attachments = append(out.Attachments, a.URL)
+		out.Attachments = append(out.Attachments, DiscordLogAttachment{Name: a.Filename, URL: a.URL, ContentType: a.ContentType, Size: a.Size})
+	}
+	for _, reaction := range msg.Reactions {
+		if reaction == nil || reaction.Emoji == nil {
+			continue
+		}
+		out.Reactions = append(out.Reactions, types.DiscordLogReaction{
+			Name: reaction.Emoji.Name, ID: reaction.Emoji.ID, Count: reaction.Count, Me: reaction.Me,
+		})
 	}
 	if len(msg.Mentions) > 0 {
 		out.Mentions = make(map[string]string, len(msg.Mentions))
@@ -2294,6 +2320,29 @@ func (a sdkGameAPI) EndGame(actor, g string, id uint, status string) (*models.Ga
 
 func (a sdkGameAPI) CompleteGame(actor, g string, id uint, in sdk.CompleteGameRequest) (*models.GamesModel, error) {
 	return a.s.Client().CompleteGame(a.ctx(), actor, g, id, in)
+}
+
+func (a sdkGameAPI) CompleteGameWithCustomStats(actor, g string, id uint, in sdk.CompleteGameRequest, customStats map[uint]map[string]float64) (*models.GamesModel, error) {
+	type participantRequest struct {
+		models.GamePlayersModel
+		CustomStats map[string]float64 `json:"custom_stats,omitempty"`
+	}
+	participants := make([]participantRequest, 0, len(in.Participants))
+	for _, participant := range in.Participants {
+		participants = append(participants, participantRequest{
+			GamePlayersModel: participant,
+			CustomStats:      customStats[participant.PlayerID],
+		})
+	}
+	request := struct {
+		Status       string               `json:"status"`
+		Scoring      string               `json:"scoring,omitempty"`
+		Participants []participantRequest `json:"participants,omitempty"`
+	}{Status: in.Status, Scoring: in.Scoring, Participants: participants}
+	var game models.GamesModel
+	path := fmt.Sprintf("/v1/guilds/%s/games/%d/complete", url.PathEscape(g), id)
+	err := a.s.Client().API.DoWithHeaders(a.ctx(), http.MethodPost, path, request, &game, map[string]string{"X-Actor": actor})
+	return &game, err
 }
 
 func (a sdkGameAPI) ReverseGame(actor, g string, id uint, players []uint, reopen bool) (int, error) {
@@ -3685,7 +3734,7 @@ func (m *GameManager) commitRanked(actor string, g Game, winningTeam, staffMVP s
 		row.EloBefore, row.EloAfter, row.EloChange = r.Before, r.After, r.Change
 		rows = append(rows, row)
 	}
-	if _, err := m.api().CompleteGame(actor, g.GuildID, g.ID, sdk.CompleteGameRequest{Status: string(types.GameStatusCompleted), Scoring: "ranked", Participants: rows}); err != nil {
+	if _, err := m.completeGame(actor, g, sdk.CompleteGameRequest{Status: string(types.GameStatusCompleted), Scoring: "ranked", Participants: rows}); err != nil {
 		return nil, fmt.Errorf("complete game: %w", err)
 	}
 
@@ -3707,6 +3756,27 @@ func participantRow(g Game, p GamePlayer) models.GamePlayersModel {
 	}
 }
 
+type customStatsGameCompleter interface {
+	CompleteGameWithCustomStats(actor, guildID string, id uint, in sdk.CompleteGameRequest, customStats map[uint]map[string]float64) (*models.GamesModel, error)
+}
+
+func (m *GameManager) completeGame(actor string, g Game, in sdk.CompleteGameRequest) (*models.GamesModel, error) {
+	customStats := make(map[uint]map[string]float64)
+	for _, player := range g.Players {
+		if len(player.Custom) != 0 {
+			customStats[player.PlayerID] = player.Custom
+		}
+	}
+	if len(customStats) != 0 {
+		api := m.api()
+		if customAPI, ok := api.(customStatsGameCompleter); ok {
+			return customAPI.CompleteGameWithCustomStats(actor, g.GuildID, g.ID, in, customStats)
+		}
+		return nil, errors.New("database API does not support custom game statistics")
+	}
+	return m.api().CompleteGame(actor, g.GuildID, g.ID, in)
+}
+
 // commitCasual writes a finished match of a mode that awards no ELO. Nobody
 // won, so no wins/losses are recorded; gameplay counters are kept when the
 // mode tracks stats.
@@ -3719,7 +3789,7 @@ func (m *GameManager) commitCasual(actor string, g Game) error {
 	for _, p := range g.Players {
 		rows = append(rows, participantRow(g, p))
 	}
-	_, err := m.api().CompleteGame(actor, g.GuildID, g.ID, sdk.CompleteGameRequest{Status: string(types.GameStatusCompleted), Scoring: scoring, Participants: rows})
+	_, err := m.completeGame(actor, g, sdk.CompleteGameRequest{Status: string(types.GameStatusCompleted), Scoring: scoring, Participants: rows})
 	if err != nil {
 		return fmt.Errorf("complete game: %w", err)
 	}
@@ -4392,7 +4462,7 @@ func (m *GameManager) AddStats(id uint, userID string, d GamePlayer) error {
 		p.FirstBloods += d.FirstBloods
 		for id, n := range d.Custom {
 			if p.Custom == nil {
-				p.Custom = map[string]int{}
+				p.Custom = map[string]float64{}
 			}
 			p.Custom[id] += n
 		}

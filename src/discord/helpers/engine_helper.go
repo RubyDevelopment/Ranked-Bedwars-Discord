@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +21,34 @@ import (
 	"ranked-bedwars/src/types"
 	appLog "ranked-bedwars/src/utility"
 )
+
+const (
+	timelineGameStarted = "game_started"
+	timelineGameEnded   = "game_ended"
+	timelineKill        = "kill"
+	timelineBed         = "bed"
+	timelineEliminated  = "eliminated"
+	timelineStat        = "stat"
+	timelinePhase       = "phase"
+)
+
+type timelineEventRequest struct {
+	Kind       string          `json:"kind"`
+	OccurredAt time.Time       `json:"occurred_at"`
+	Actor      *string         `json:"actor,omitempty"`
+	Target     *string         `json:"target,omitempty"`
+	Team       *string         `json:"team,omitempty"`
+	Final      *bool           `json:"final,omitempty"`
+	FirstBlood *bool           `json:"first_blood,omitempty"`
+	Phase      *int            `json:"phase,omitempty"`
+	PhaseName  *string         `json:"phase_name,omitempty"`
+	Stat       *string         `json:"stat,omitempty"`
+	Amount     *float64        `json:"amount,omitempty"`
+	Total      *float64        `json:"total,omitempty"`
+	Winner     *string         `json:"winner,omitempty"`
+	Inferred   *bool           `json:"inferred,omitempty"`
+	Details    json.RawMessage `json:"details,omitempty"`
+}
 
 // ============================================================================
 // Engine bridge
@@ -120,6 +148,7 @@ type engineInbound struct {
 	Killer     string  `json:"killer"`
 	Victim     string  `json:"victim"`
 	Final      bool    `json:"final"`
+	FirstBlood bool    `json:"first_blood"`
 	Team       string  `json:"team"`
 	Destroyer  string  `json:"destroyer"`
 	Phase      int     `json:"phase"`
@@ -133,6 +162,7 @@ type engineInbound struct {
 		ID            string             `json:"id"`
 		Kills         int                `json:"kills"`
 		Deaths        int                `json:"deaths"`
+		Assists       int                `json:"assists"`
 		FinalKills    int                `json:"final_kills"`
 		BedsDestroyed int                `json:"beds_destroyed"`
 		BedsLost      int                `json:"beds_lost"`
@@ -561,14 +591,16 @@ func (b *EngineBridge) handle(msg engineInbound) {
 
 	case "game.event":
 		Games.Notify(msg.GameID, GameEvent{Kind: EventMatch, Match: &MatchEvent{
-			Kind: msg.Kind, Killer: msg.Killer, Victim: msg.Victim, Final: msg.Final, Team: msg.Team, Destroyer: msg.Destroyer,
+			Kind: msg.Kind, OccurredAt: timelineTime(msg.At), Killer: msg.Killer, Victim: msg.Victim, Final: msg.Final, FirstBlood: msg.FirstBlood, Team: msg.Team, Destroyer: msg.Destroyer,
 			Phase: msg.Phase, PhaseName: msg.PhaseName, Stat: msg.Stat, Player: msg.StatPlayer, Amount: msg.StatAmount, Total: msg.StatTotal,
 		}})
+		b.persistTimelineEvent(msg.GameID, b.timelineInput(msg))
 
 	case "game.started":
 		if err := Games.BeginMatch(msg.GameID); err != nil && !errors.Is(err, ErrWrongState) {
 			b.logf("begin match %d: %v", msg.GameID, err)
 		}
+		b.persistTimelineEvent(msg.GameID, timelineInput(timelineGameStarted, msg.At))
 
 	case "chat.line":
 		LiveChat.Line(msg.GuildID, msg.Bot, msg.Text, msg.Motd, msg.At)
@@ -595,6 +627,69 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		Games.Notify(msg.GameID, GameEvent{Kind: EventTrackingLost, Reason: msg.Reason})
 	}
 }
+
+func (b *EngineBridge) timelineInput(msg engineInbound) timelineEventRequest {
+	input := timelineEventRequest{Kind: msg.Kind, OccurredAt: timelineTime(msg.At)}
+	switch msg.Kind {
+	case timelineKill:
+		input.Actor, input.Target = optionalText(msg.Killer), optionalText(msg.Victim)
+		input.Final, input.FirstBlood = optionalBool(msg.Final), optionalBool(msg.FirstBlood)
+	case timelineBed:
+		input.Team, input.Actor = optionalText(msg.Team), optionalText(msg.Destroyer)
+	case timelineEliminated:
+		input.Team = optionalText(msg.Team)
+	case timelineStat:
+		input.Stat, input.Actor = optionalText(msg.Stat), optionalText(msg.StatPlayer)
+		input.Amount, input.Total = optionalNumber(msg.StatAmount), optionalNumber(msg.StatTotal)
+	case timelinePhase:
+		input.Phase, input.PhaseName = optionalInt(msg.Phase), optionalText(msg.PhaseName)
+	}
+	return input
+}
+
+func (b *EngineBridge) persistTimelineEvent(gameID uint, input timelineEventRequest) {
+	guildID := ""
+	if g, ok := Games.Get(gameID); ok {
+		guildID = g.GuildID
+	} else {
+		b.mu.Lock()
+		guildID = b.hosted[gameID]
+		b.mu.Unlock()
+	}
+	if guildID == "" {
+		b.logf("cannot persist timeline event for game %d: guild is unavailable", gameID)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	path := fmt.Sprintf("/v1/guilds/%s/games/%d/events", url.PathEscape(guildID), gameID)
+	var persisted json.RawMessage
+	if err := database.Must().Client().API.Do(ctx, http.MethodPost, path, input, &persisted); err != nil {
+		b.logf("persist timeline event for game %d: %v", gameID, err)
+	}
+}
+
+func timelineInput(kind string, at int64) timelineEventRequest {
+	return timelineEventRequest{Kind: kind, OccurredAt: timelineTime(at)}
+}
+
+func timelineTime(at int64) time.Time {
+	if at <= 0 {
+		return time.Now().UTC()
+	}
+	return time.UnixMilli(at).UTC()
+}
+
+func optionalText(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func optionalBool(value bool) *bool         { return &value }
+func optionalInt(value int) *int            { return &value }
+func optionalNumber(value float64) *float64 { return &value }
 
 func (b *EngineBridge) reply(gameID uint, r hostReply) {
 	b.mu.Lock()
@@ -671,23 +766,30 @@ func (b *EngineBridge) strikeNoShows(g Game, ids []string) {
 
 // gameEnded records what the engine tracked and scores the game for the team that won.
 func (b *EngineBridge) gameEnded(msg engineInbound) {
+	g, ok := Games.Get(msg.GameID)
+	endEvent := timelineInput(timelineGameEnded, msg.At)
+	endEvent.Winner, endEvent.Inferred = optionalText(msg.Winner), optionalBool(msg.Inferred)
+	b.persistTimelineEvent(msg.GameID, endEvent)
+
 	b.mu.Lock()
 	delete(b.hosted, msg.GameID)
 	b.mu.Unlock()
-
-	g, ok := Games.Get(msg.GameID)
 	if !ok {
+		b.logf("game-ended frame for game %d: runtime game is unavailable", msg.GameID)
 		return
 	}
+	statsFailed := false
 	for _, p := range msg.Players {
-		custom := make(map[string]int, len(p.Custom))
-		for id, n := range p.Custom {
-			custom[id] = int(math.Round(n))
+		if err := Games.AddStats(g.ID, p.ID, GamePlayer{
+			Kills: p.Kills, Deaths: p.Deaths, Assists: p.Assists, FinalKills: p.FinalKills,
+			BedsDestroyed: p.BedsDestroyed, BedsLost: p.BedsLost, FirstBloods: p.FirstBloods, Custom: p.Custom,
+		}); err != nil {
+			statsFailed = true
+			b.logf("store tracked stats for player %s in game %d: %v", p.ID, g.ID, err)
 		}
-		_ = Games.AddStats(g.ID, p.ID, GamePlayer{
-			Kills: p.Kills, Deaths: p.Deaths, FinalKills: p.FinalKills,
-			BedsDestroyed: p.BedsDestroyed, BedsLost: p.BedsLost, FirstBloods: p.FirstBloods, Custom: custom,
-		})
+	}
+	if statsFailed {
+		Games.Notify(g.ID, GameEvent{Kind: EventTrackingLost, Reason: "Some tracked participant statistics could not be recorded."})
 	}
 	if strings.TrimSpace(msg.Winner) == "" {
 		Games.Notify(g.ID, GameEvent{Kind: EventTrackingLost, Reason: "The match ended but the bot couldn't tell who won."})
