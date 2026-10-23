@@ -138,7 +138,7 @@ func init() {
 	Logger = EngineLogger
 }
 
-// buildChannelCore tees each log entry to stdout and global.log, plus an optional channel-specific file.
+// buildChannelCore tees each log entry to the console (stderr, like the Database service, so the panel shows it) and global.log, plus an optional channel-specific file.
 func buildChannelCore(
 	level zapcore.Level,
 	encode func(bool) zapcore.Encoder,
@@ -146,7 +146,7 @@ func buildChannelCore(
 	channelRotate *lumberjack.Logger,
 ) zapcore.Core {
 	cores := []zapcore.Core{
-		zapcore.NewCore(encode(true), zapcore.Lock(os.Stdout), level),
+		zapcore.NewCore(encode(true), zapcore.Lock(os.Stderr), level),
 		zapcore.NewCore(encode(false), zapcore.AddSync(globalRotate), level),
 	}
 	if channelRotate != nil {

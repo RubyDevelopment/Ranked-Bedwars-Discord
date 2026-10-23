@@ -33,7 +33,7 @@ type Application struct {
 func main() {
 	// Load environment variables from .env if present.
 	if err := godotenv.Load(); err != nil {
-		fmt.Println("No .env file found. Proceeding with system environment variables.")
+		fmt.Fprintln(os.Stderr, "No .env file found. Proceeding with system environment variables.")
 	}
 
 	app := &Application{
