@@ -674,6 +674,7 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	if emb == nil {
 		return
 	}
+	WithGuildFooterIconForGuild(s, g.GuildID, emb)
 	live := embedKinds[key].Live
 	if live && msgID != "" {
 		embeds := []*discordgo.MessageEmbed{emb}
@@ -853,7 +854,9 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	for _, p := range g.Players {
 		v.weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
 	}
-	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{v.embed(false)}, Components: v.components(g.ID, false)})
+	embed := v.embed(false)
+	WithGuildFooterIconForGuild(s, g.GuildID, embed)
+	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(g.ID, false)})
 	if err != nil {
 		return "", err
 	}
@@ -876,8 +879,9 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	d.mu.Lock()
 	winner := v.winner()
 	d.mu.Unlock()
-	embed := v.embed(true)
+	embed = v.embed(true)
 	embed.Description = fmt.Sprintf("Voting is over: **%s** wins.", winner.Name)
+	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Channel: msg.ChannelID, ID: msg.ID, Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &[]discordgo.MessageComponent{},
 	})
@@ -971,9 +975,11 @@ func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
 		return
 	}
 	ui := &draftUI{channelID: g.Channels.Text}
+	embed := draftEmbed(g, view)
+	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{
 		Content:    draftPing(view),
-		Embeds:     []*discordgo.MessageEmbed{draftEmbed(g, view)},
+		Embeds:     []*discordgo.MessageEmbed{embed},
 		Components: draftComponents(g, view),
 	})
 	if err != nil {
@@ -1027,12 +1033,15 @@ func (d *gameDiscord) refreshDraft(s *discordgo.Session, gameID uint, ui *draftU
 		d.mu.Unlock()
 		done := draftEmbed(g, view)
 		done.Description = "The draft is complete."
+		WithGuildFooterIconForGuild(s, g.GuildID, done)
 		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: ui.channelID, ID: ui.messageID, Embeds: &[]*discordgo.MessageEmbed{done}, Components: &[]discordgo.MessageComponent{}})
 		return
 	}
+	embed := draftEmbed(g, view)
+	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Channel: ui.channelID, ID: ui.messageID, Content: ptr(draftPing(view)),
-		Embeds: &[]*discordgo.MessageEmbed{draftEmbed(g, view)}, Components: ptr(draftComponents(g, view)),
+		Embeds: &[]*discordgo.MessageEmbed{embed}, Components: ptr(draftComponents(g, view)),
 	})
 	d.armDraftTimer(s, gameID, ui)
 }
@@ -1138,6 +1147,7 @@ func (d *gameDiscord) handleMapVote(s *discordgo.Session, i *discordgo.Interacti
 	all := len(v.votes) >= len(v.game.Players)
 	embed := v.embed(false)
 	d.mu.Unlock()
+	WithGuildFooterIconForGuild(s, v.game.GuildID, embed)
 
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
@@ -3694,16 +3704,26 @@ func (m *GameManager) voidLive(lg *liveGame, actor, reason string, o VoidOptions
 		lg.mu.Unlock()
 		return ErrAlreadyVoided
 	}
+	guildID, id := lg.g.GuildID, lg.g.ID
+	lg.busy = true
+	lg.mu.Unlock()
+
+	if _, err := m.api().EndGame(actor, guildID, id, string(types.GameStatusVoided)); err != nil {
+		lg.mu.Lock()
+		lg.busy = false
+		lg.mu.Unlock()
+		return fmt.Errorf("end game: %w", err)
+	}
+
+	lg.mu.Lock()
 	lg.g.End, lg.g.VoidReason, lg.g.VoidedBy = EndVoided, reason, actor
 	m.transitionLocked(lg, GameVoided)
 	lg.draft = nil
+	lg.busy = false
 	g := lg.g.clone()
 	lg.mu.Unlock()
 
 	m.logf("game %d voided by %s: %s", g.ID, actor, reason)
-	if _, err := m.api().EndGame(actor, g.GuildID, g.ID, string(types.GameStatusVoided)); err != nil {
-		m.logf("end voided game %d: %v", g.ID, err)
-	}
 	m.sync(lg)
 	m.notify(g, GameEvent{Kind: EventVoided, Reason: reason})
 	if o.KeepChannels {
@@ -4320,6 +4340,22 @@ func (m *GameManager) ByNumber(guildID string, number int) (Game, bool) {
 		}
 	}
 	return Game{}, false
+}
+
+// FindByNumber finds a live game or, for staff recovery actions, a stored game
+// in the active season.
+func (m *GameManager) FindByNumber(guildID string, number int) (Game, bool, error) {
+	if game, ok := m.ByNumber(guildID, number); ok {
+		return game, true, nil
+	}
+	rec, err := m.api().GameByNumber(guildID, number)
+	if err != nil {
+		if isNotFound(err) {
+			return Game{}, false, nil
+		}
+		return Game{}, false, err
+	}
+	return Game{ID: rec.ID, Number: rec.GameNumber, GuildID: guildID, SeasonID: rec.SeasonID}, true, nil
 }
 
 func isNotFound(err error) bool { return sdk.IsNotFound(err) }

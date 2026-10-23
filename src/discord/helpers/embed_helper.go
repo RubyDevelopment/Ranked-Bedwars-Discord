@@ -586,7 +586,15 @@ func responseVars(vars map[string]string, command, sub, slug, look string, emb *
 // WithGuildFooterIcon gives each embed that has a footer the server's icon as its footer icon, unless it already has
 // one: every command answer then carries the server's icon without each builder having to know the guild.
 func WithGuildFooterIcon(s *discordgo.Session, i *discordgo.InteractionCreate, embeds ...*discordgo.MessageEmbed) {
-	if s == nil || s.State == nil || i == nil || i.Interaction == nil || i.GuildID == "" {
+	if i == nil || i.Interaction == nil {
+		return
+	}
+	WithGuildFooterIconForGuild(s, i.GuildID, embeds...)
+}
+
+// WithGuildFooterIconForGuild gives embeds with a footer the server's icon unless they already have one.
+func WithGuildFooterIconForGuild(s *discordgo.Session, guildID string, embeds ...*discordgo.MessageEmbed) {
+	if s == nil || s.State == nil || guildID == "" {
 		return
 	}
 	var icon string
@@ -595,7 +603,7 @@ func WithGuildFooterIcon(s *discordgo.Session, i *discordgo.InteractionCreate, e
 			continue
 		}
 		if icon == "" {
-			g, err := s.State.Guild(i.GuildID)
+			g, err := s.State.Guild(guildID)
 			if err != nil || g == nil || g.Icon == "" {
 				return
 			}
