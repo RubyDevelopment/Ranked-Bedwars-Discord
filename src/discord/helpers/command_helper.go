@@ -48,10 +48,18 @@ type PipelineOptions = types.PipelineOptions
 // gc must come from a single LoadGuildContext call made by the caller (the
 // prefix/slash dispatcher, which already needs its Settings for its own
 // access checks before the pipeline runs) — RunCommandPipeline itself never
-// touches the database, so a guild's registration, config and command
-// permissions are each read exactly once per invocation rather than once per
-// pipeline stage.
+// checks database health before running command-specific middleware or code.
 func RunCommandPipeline(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command, gc GuildContext, opts PipelineOptions) error {
+	if err := database.CheckHealth(); err != nil {
+		apputil.DiscordLogger.Warn("Command blocked because the Database API is unavailable",
+			zap.String("command", cmd.Name),
+			zap.String("guild_id", i.GuildID),
+			zap.Error(err),
+		)
+		RespondSimpleError(s, i, cmd.Ephemeral, "The database is temporarily unavailable. Please try again later.")
+		return nil
+	}
+
 	if i.GuildID != "" {
 		EnsureInteractionMember(s, i)
 	}

@@ -209,6 +209,15 @@ func Set(svc *sdk.Services) { global.Store(svc) }
 // Get returns the process-wide SDK instance, or nil if not initialized.
 func Get() *sdk.Services { return global.Load() }
 
+// CheckHealth verifies that the process-wide Database API is reachable.
+func CheckHealth() error {
+	svc := Get()
+	if svc == nil {
+		return errors.New("database SDK is not initialized")
+	}
+	return svc.Health()
+}
+
 // Must returns the process-wide SDK instance or panics if it is unavailable.
 // Safe in command handlers when RequiresDatabase middleware is enabled.
 func Must() *sdk.Services {
