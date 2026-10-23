@@ -238,7 +238,7 @@ func (c *ChatStream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // params of each (see Ranked-Bedwars-Engine/src/console.js).
 
 const (
-	controlTimeout   = 20 * time.Second
+	controlTimeout   = 35 * time.Second
 	controlBodyLimit = 8 << 10
 )
 
