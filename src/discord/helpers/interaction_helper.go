@@ -1462,7 +1462,11 @@ func renderHistoryPage(guildID string, kind HistoryPageKind, snowflake string, p
 		entries := FilterGameHistoryEntries(participants, seasonID, duration, hideVoided)
 		totalPages := HistoryTotalPages(len(entries))
 		page = clampHistoryPage(page, totalPages)
-		emb := BuildGameHistoryEmbed(username, entries, page-1)
+		playersByGame, err := LoadGameHistoryPlayers(svc, guildID, entries, page-1)
+		if err != nil {
+			return nil, nil, err
+		}
+		emb := BuildGameHistoryEmbedWithPlayers(username, entries, page-1, playersByGame)
 		components := BuildHistoryPageComponents(HistoryPageGames, snowflake, page, totalPages, opts)
 		return emb, components, nil
 	}

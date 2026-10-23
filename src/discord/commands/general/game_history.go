@@ -114,12 +114,16 @@ func executeGameHistoryCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	// 6. Render First Page
+	playersByGame, err := helpers.LoadGameHistoryPlayers(database.Must(), i.GuildID, entries, 0)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
+	}
 	voidedFlag := "0"
 	if hideVoided {
 		voidedFlag = "1"
 	}
 	totalPages := helpers.HistoryTotalPages(len(entries))
-	embed := helpers.BuildGameHistoryEmbed(view.Config.Username, entries, 0)
+	embed := helpers.BuildGameHistoryEmbedWithPlayers(view.Config.Username, entries, 0, playersByGame)
 	components := helpers.BuildHistoryPageComponents(helpers.HistoryPageGames, target.ID, 1, totalPages, []string{filterInput, voidedFlag})
 	return helpers.EditInteractionComponents(s, i, embed, components)
 }

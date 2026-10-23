@@ -709,12 +709,13 @@ func BuildStrikeHistoryEmbed(username string, entries []models.PlayerStrikesMode
 	description := fmt.Sprintf("This player has a total of **%d** strike(s) on record.", len(entries))
 	if len(entries) == 0 {
 		description = "No strike history was found for this player."
+	} else {
+		description += "\n\n" + strings.Join(BuildStrikeHistoryDescriptionsDirect(entries, page), "\n\n")
 	}
 	return Preset("success", types.PresetOptions{
 		Title:       fmt.Sprintf("%s's Strike History • Page %d of %d", username, page+1, totalPages),
 		Description: description,
 		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildStrikeHistoryFieldsDirect(entries, page),
 		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
 	})
 }
@@ -736,12 +737,13 @@ func BuildDecayHistoryEmbed(username string, entries []models.PlayerDecaysModel,
 	}
 	if len(entries) == 0 {
 		description = "No decay history was found for this player."
+	} else {
+		description += "\n\n" + strings.Join(BuildDecayHistoryDescriptionsDirect(entries, page), "\n\n")
 	}
 	return Preset("success", types.PresetOptions{
 		Title:       fmt.Sprintf("%s's ELO Decay History • Page %d of %d", username, page+1, totalPages),
 		Description: description,
 		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildDecayHistoryFieldsDirect(entries, page),
 		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
 	})
 }
@@ -752,6 +754,8 @@ func BuildPunishmentHistoryEmbed(username string, entries []models.PlayerPunishm
 	description := fmt.Sprintf("This player has a total of **%d** punishment(s) on record.", len(entries))
 	if len(entries) == 0 {
 		description = "No punishment history was found for this player."
+	} else {
+		description += "\n\n" + strings.Join(BuildPunishmentHistoryDescriptionsDirect(entries, page), "\n\n")
 	}
 	titlePrefix := "Punishment History"
 	if activeOnly {
@@ -761,23 +765,28 @@ func BuildPunishmentHistoryEmbed(username string, entries []models.PlayerPunishm
 		Title:       fmt.Sprintf("%s's %s • Page %d of %d", username, titlePrefix, page+1, totalPages),
 		Description: description,
 		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildPunishmentHistoryFieldsDirect(entries, page),
 		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
 	})
 }
 
 // BuildGameHistoryEmbed renders the game history embed for one page.
 func BuildGameHistoryEmbed(username string, entries []sdk.GameHistory, page int) *discordgo.MessageEmbed {
+	return BuildGameHistoryEmbedWithPlayers(username, entries, page, nil)
+}
+
+// BuildGameHistoryEmbedWithPlayers renders game history with the full participant lists.
+func BuildGameHistoryEmbedWithPlayers(username string, entries []sdk.GameHistory, page int, players map[uint][]GameHistoryPlayer) *discordgo.MessageEmbed {
 	totalPages := HistoryTotalPages(len(entries))
 	description := fmt.Sprintf("This player has a total of **%d** game(s) on record for the current season.", len(entries))
 	if len(entries) == 0 {
 		description = "No game history was found for this player."
+	} else {
+		description += "\n\n" + strings.Join(buildGameHistoryDescriptions(entries, page, players), "\n\n")
 	}
 	return Preset("success", types.PresetOptions{
 		Title:       fmt.Sprintf("%s's Game History • Page %d of %d", username, page+1, totalPages),
 		Description: description,
 		Thumbnail:   MinecraftBustAvatarURL(username),
-		Fields:      BuildGameHistoryFieldsDirect(entries, page),
 		FooterText:  HistoryPageFooter(page, totalPages, len(entries)),
 	})
 }

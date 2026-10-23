@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -510,8 +511,8 @@ func formatStaffDisplay(staffID string) string {
 	return fmt.Sprintf("<@%s>", staffID)
 }
 
-// BuildStrikeHistoryFieldsDirect builds embed fields for one page of strike history (direct type)
-func BuildStrikeHistoryFieldsDirect(entries []models.PlayerStrikesModel, page int) []*discordgo.MessageEmbedField {
+// BuildStrikeHistoryDescriptionsDirect builds description blocks for one page of strike history.
+func BuildStrikeHistoryDescriptionsDirect(entries []models.PlayerStrikesModel, page int) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -521,32 +522,50 @@ func BuildStrikeHistoryFieldsDirect(entries []models.PlayerStrikesModel, page in
 		end = len(entries)
 	}
 
-	fields := make([]*discordgo.MessageEmbedField, 0, end-start)
+	descriptions := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
 		strike := entries[i]
-		emoji := EmojiYellowDot
-		if strike.IsVoided {
-			emoji = EmojiRedDot
+		emoji := DotGreen
+		status := strikeHistoryStatus(strike, time.Now())
+		switch {
+		case strike.IsVoided:
+			emoji = DotGray
+		case status != "Active":
+			emoji = DotRed
 		}
 
 		valueLines := []string{
-			fmt.Sprintf("> **ID:** `#%d`", strike.ID),
 			fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(strike.StaffID)),
 			fmt.Sprintf("> **Reason:** %s", strike.Reason),
 			fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(strike.CreatedAt)),
+			"> **Expires:** Never",
+		}
+		if strike.ExpiresAt != nil {
+			valueLines[len(valueLines)-1] = fmt.Sprintf("> **Expires:** %s", DiscordRelativeTimestamp(*strike.ExpiresAt))
 		}
 
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s Strike #%d", emoji, strike.ID),
-			Value:  strings.Join(valueLines, "\n"),
-			Inline: false,
-		})
+		descriptions = append(descriptions, fmt.Sprintf("%s **Strike #%d | %s**\n%s", emoji, strike.ID, status, strings.Join(valueLines, "\n")))
 	}
-	return fields
+	return descriptions
 }
 
-// BuildDecayHistoryFieldsDirect builds embed fields for one page of ELO decay history
-func BuildDecayHistoryFieldsDirect(entries []models.PlayerDecaysModel, page int) []*discordgo.MessageEmbedField {
+func strikeHistoryStatus(strike models.PlayerStrikesModel, now time.Time) string {
+	switch {
+	case strike.IsVoided:
+		return "Voided"
+	case strike.IsAppealed:
+		return "Appealed"
+	case strike.ExpiresAt != nil && !strike.ExpiresAt.After(now):
+		return "Expired"
+	case !strike.IsEnabled:
+		return "Disabled"
+	default:
+		return "Active"
+	}
+}
+
+// BuildDecayHistoryDescriptionsDirect builds description blocks for one page of ELO decay history.
+func BuildDecayHistoryDescriptionsDirect(entries []models.PlayerDecaysModel, page int) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -556,12 +575,12 @@ func BuildDecayHistoryFieldsDirect(entries []models.PlayerDecaysModel, page int)
 		end = len(entries)
 	}
 
-	fields := make([]*discordgo.MessageEmbedField, 0, end-start)
+	descriptions := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
 		decay := entries[i]
-		emoji := EmojiYellowDot
+		emoji := DotGreen
 		if decay.IsVoided {
-			emoji = EmojiRedDot
+			emoji = DotGray
 		}
 
 		valueLines := []string{
@@ -577,17 +596,13 @@ func BuildDecayHistoryFieldsDirect(entries []models.PlayerDecaysModel, page int)
 			valueLines = append(valueLines, "> **Status:** Voided")
 		}
 
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s Decay #%d", emoji, decay.ID),
-			Value:  strings.Join(valueLines, "\n"),
-			Inline: false,
-		})
+		descriptions = append(descriptions, fmt.Sprintf("%s **Decay #%d**\n%s", emoji, decay.ID, strings.Join(valueLines, "\n")))
 	}
-	return fields
+	return descriptions
 }
 
-// BuildPunishmentHistoryFieldsDirect builds embed fields for one page of punishment history (direct type)
-func BuildPunishmentHistoryFieldsDirect(entries []models.PlayerPunishmentsModel, page int) []*discordgo.MessageEmbedField {
+// BuildPunishmentHistoryDescriptionsDirect builds description blocks for one page of punishment history.
+func BuildPunishmentHistoryDescriptionsDirect(entries []models.PlayerPunishmentsModel, page int) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -597,41 +612,123 @@ func BuildPunishmentHistoryFieldsDirect(entries []models.PlayerPunishmentsModel,
 		end = len(entries)
 	}
 
-	fields := make([]*discordgo.MessageEmbedField, 0, end-start)
+	descriptions := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
 		punishment := entries[i]
-		emoji := EmojiYellowDot
-		if !punishment.IsEnabled || punishment.IsVoided {
-			emoji = EmojiRedDot
+		emoji := DotGreen
+		status := punishmentHistoryStatus(punishment, time.Now())
+		switch {
+		case punishment.IsVoided || status == "Revoked":
+			emoji = DotGray
+		case status != "Active":
+			emoji = DotRed
 		}
 
 		valueLines := []string{
-			fmt.Sprintf("> **ID:** `#%d`", punishment.ID),
 			fmt.Sprintf("> **Type:** `%s`", punishment.Type),
 			fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(punishment.StaffID)),
 			fmt.Sprintf("> **Reason:** %s", punishment.Reason),
 			fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(punishment.CreatedAt)),
+			"> **Expires:** Never",
 		}
-
 		if punishment.ExpiresAt != nil {
-			if punishment.ExpiresAt.Before(time.Now()) {
-				valueLines = append(valueLines, fmt.Sprintf("> **Expired:** %s", DiscordRelativeTimestamp(*punishment.ExpiresAt)))
-			} else {
-				valueLines = append(valueLines, fmt.Sprintf("> **Expires:** %s", DiscordRelativeTimestamp(*punishment.ExpiresAt)))
+			expiryLabel := "Expires"
+			if !punishment.ExpiresAt.After(time.Now()) {
+				expiryLabel = "Expired"
 			}
+			valueLines[len(valueLines)-1] = fmt.Sprintf("> **%s:** %s", expiryLabel, DiscordRelativeTimestamp(*punishment.ExpiresAt))
 		}
 
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s %s #%d", emoji, strings.Title(punishment.Type), punishment.ID),
-			Value:  strings.Join(valueLines, "\n"),
-			Inline: false,
-		})
+		descriptions = append(descriptions, fmt.Sprintf("%s **%s #%d | %s**\n%s", emoji, strings.Title(punishment.Type), punishment.ID, status, strings.Join(valueLines, "\n")))
 	}
-	return fields
+	return descriptions
 }
 
-// BuildGameHistoryFieldsDirect builds embed fields for one page of game history.
-func BuildGameHistoryFieldsDirect(entries []sdk.GameHistory, page int) []*discordgo.MessageEmbedField {
+func punishmentHistoryStatus(punishment models.PlayerPunishmentsModel, now time.Time) string {
+	switch {
+	case punishment.IsVoided:
+		return "Voided"
+	case punishment.IsAppealed:
+		return "Appealed"
+	case punishment.RevokedAt != nil || punishment.RevokedBy != nil:
+		return "Revoked"
+	case punishment.ExpiresAt != nil && !punishment.ExpiresAt.After(now):
+		return "Expired"
+	case !punishment.IsEnabled:
+		return "Disabled"
+	default:
+		return "Active"
+	}
+}
+
+// BuildGameHistoryDescriptionsDirect builds description blocks for one page of game history.
+func BuildGameHistoryDescriptionsDirect(entries []sdk.GameHistory, page int) []string {
+	return buildGameHistoryDescriptions(entries, page, nil)
+}
+
+type GameHistoryPlayer struct {
+	Username string
+	IsWinner bool
+}
+
+type gameHistoryParticipantView struct {
+	models.GamePlayersModel
+	Username    string `json:"username"`
+	SnowflakeID string `json:"snowflake_id"`
+}
+
+// LoadGameHistoryPlayers fetches the names for the games displayed on one history page.
+func LoadGameHistoryPlayers(svc *sdk.Services, guildID string, entries []sdk.GameHistory, page int) (map[uint][]GameHistoryPlayer, error) {
+	start := page * HistoryPerPage
+	if start >= len(entries) {
+		return map[uint][]GameHistoryPlayer{}, nil
+	}
+	end := start + HistoryPerPage
+	if end > len(entries) {
+		end = len(entries)
+	}
+
+	gameIDs := make([]string, 0, end-start)
+	for _, entry := range entries[start:end] {
+		if entry.Game == nil {
+			continue
+		}
+		gameIDs = append(gameIDs, strconv.FormatUint(uint64(entry.Game.ID), 10))
+	}
+	if len(gameIDs) == 0 {
+		return map[uint][]GameHistoryPlayer{}, nil
+	}
+
+	var participants map[string][]gameHistoryParticipantView
+	path := fmt.Sprintf("/v1/guilds/%s/games/participants?ids=%s", url.PathEscape(guildID), strings.Join(gameIDs, ","))
+	if err := svc.Client().API.Do(context.Background(), http.MethodGet, path, nil, &participants); err != nil {
+		return nil, fmt.Errorf("load game history participants: %w", err)
+	}
+
+	playersByGame := make(map[uint][]GameHistoryPlayer, len(participants))
+	for gameID, players := range participants {
+		id, err := strconv.ParseUint(gameID, 10, strconv.IntSize)
+		if err != nil {
+			return nil, fmt.Errorf("parse game id %q from participants response: %w", gameID, err)
+		}
+		for _, player := range players {
+			name := strings.TrimSpace(player.Username)
+			if name == "" {
+				name = strings.TrimSpace(player.SnowflakeID)
+			}
+			if name == "" {
+				name = "Unknown player"
+			}
+			playersByGame[uint(id)] = append(playersByGame[uint(id)], GameHistoryPlayer{
+				Username: name,
+				IsWinner: player.IsWinner,
+			})
+		}
+	}
+	return playersByGame, nil
+}
+
+func buildGameHistoryDescriptions(entries []sdk.GameHistory, page int, playersByGame map[uint][]GameHistoryPlayer) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -641,7 +738,7 @@ func BuildGameHistoryFieldsDirect(entries []sdk.GameHistory, page int) []*discor
 		end = len(entries)
 	}
 
-	fields := make([]*discordgo.MessageEmbedField, 0, end-start)
+	descriptions := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
 		entry := entries[i]
 		game := entry.Game
@@ -650,56 +747,52 @@ func BuildGameHistoryFieldsDirect(entries []sdk.GameHistory, page int) []*discor
 		}
 		participant := entry.GamePlayersModel
 
-		emoji := EmojiYellowDot
-		if game.Status == string(types.GameStatusVoided) || game.Status == string(types.GameStatusCancelled) {
-			emoji = EmojiRedDot
+		resultEmoji := DotRed
+		switch {
+		case game.Status == string(types.GameStatusVoided) || game.Status == string(types.GameStatusCancelled):
+			resultEmoji = DotGray
+		case participant.IsWinner:
+			resultEmoji = DotGreen
+		}
+
+		eloSummary := fmt.Sprintf("`%d` → `%d`", participant.EloBefore, participant.EloAfter)
+		switch {
+		case participant.EloChange > 0:
+			eloSummary += fmt.Sprintf(" · gained +%d", participant.EloChange)
+		case participant.EloChange < 0:
+			eloSummary += fmt.Sprintf(" · lost %d", -participant.EloChange)
+		default:
+			eloSummary += " · no change"
 		}
 
 		valueLines := []string{
-			fmt.Sprintf("> **Map:** `%s` • **Mode:** `%s`", game.MapName, game.ModeName),
-			fmt.Sprintf("> **Team:** `%s` • **Result:** %s", participant.Team, formatGameResult(game.Status, participant.IsWinner)),
-			fmt.Sprintf("> **ELO:** `%s`", formatEloChange(participant.EloChange)),
-			fmt.Sprintf("> **K/D:** `%d/%d` • **Finals:** `%d` • **Beds:** `%d/%d`", participant.Kills, participant.Deaths, participant.FinalKills, participant.BedsDestroyed, participant.BedsLost),
-			fmt.Sprintf("> **Date:** %s", DiscordRelativeTimestamp(gameWhen(*game))),
+			fmt.Sprintf("> **Recap:** `%d` Kills, `%d` Deaths, `%d` Beds", participant.Kills, participant.Deaths, participant.BedsDestroyed),
+			fmt.Sprintf("> **ELO:** %s", eloSummary),
+		}
+		if players := playersByGame[game.ID]; len(players) > 0 {
+			winners, losers := make([]string, 0, len(players)), make([]string, 0, len(players))
+			for _, player := range players {
+				name := strings.ReplaceAll(player.Username, "`", "'")
+				if player.IsWinner {
+					winners = append(winners, "`"+name+"`")
+				} else {
+					losers = append(losers, "`"+name+"`")
+				}
+			}
+			if len(winners) > 0 {
+				valueLines = append(valueLines, "> **Winners:** "+strings.Join(winners, ", "))
+			}
+			if len(losers) > 0 {
+				valueLines = append(valueLines, "> **Losers:** "+strings.Join(losers, ", "))
+			}
 		}
 
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   fmt.Sprintf("%s Game #%d", emoji, game.GameNumber),
-			Value:  strings.Join(valueLines, "\n"),
-			Inline: false,
-		})
+		descriptions = append(descriptions, fmt.Sprintf(
+			"%s **Game #%d | %s | %s | %s**\n%s",
+			resultEmoji, game.GameNumber, game.MapName, game.ModeName, DiscordRelativeTimestamp(gameWhen(*game)), strings.Join(valueLines, "\n"),
+		))
 	}
-	return fields
-}
-
-// formatGameResult renders the match outcome label for a game history entry.
-func formatGameResult(status string, isWinner bool) string {
-	switch status {
-	case string(types.GameStatusCompleted):
-		if isWinner {
-			return "Victory"
-		}
-		return "Defeat"
-	case string(types.GameStatusVoided):
-		return "Voided"
-	case string(types.GameStatusCancelled):
-		return "Cancelled"
-	case string(types.GameStatusInProgress):
-		return "In Progress"
-	default:
-		return "Waiting"
-	}
-}
-
-// formatEloChange renders a signed ELO delta for display.
-func formatEloChange(change int) string {
-	if change > 0 {
-		return fmt.Sprintf("+%d", change)
-	}
-	if change < 0 {
-		return fmt.Sprintf("%d", change)
-	}
-	return "±0"
+	return descriptions
 }
 
 // gameWhen resolves the effective timestamp for a game history entry.
