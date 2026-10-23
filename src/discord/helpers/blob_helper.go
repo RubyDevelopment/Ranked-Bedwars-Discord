@@ -21,8 +21,8 @@ import (
 // reads game logs from). It is switched on by BLOB_READ_WRITE_TOKEN; without
 // the token every upload is skipped, so the bot runs fine without logs.
 //
-// Blob URLs are public but unguessable (a random suffix is added to every
-// pathname), and only ever handed out through the dashboard's guild-checked API.
+// Blob URLs are private and only ever read through the dashboard's
+// guild-checked API.
 type BlobStore struct {
 	Token  string
 	APIURL string // https://vercel.com/api/blob unless VERCEL_BLOB_API_URL says otherwise
@@ -34,7 +34,7 @@ var Blobs = NewBlobStoreFromEnv()
 
 const (
 	blobDefaultAPI = "https://vercel.com/api/blob"
-	blobAPIVersion = "11" // the version @vercel/blob 1.x speaks
+	blobAPIVersion = "13"
 )
 
 // NewBlobStoreFromEnv reads BLOB_READ_WRITE_TOKEN (and VERCEL_BLOB_API_URL).
@@ -49,7 +49,7 @@ func NewBlobStoreFromEnv() *BlobStore {
 // Enabled reports whether uploads will be attempted.
 func (b *BlobStore) Enabled() bool { return b != nil && b.Token != "" }
 
-// PutJSON stores v as JSON at pathname and returns its public URL.
+// PutJSON stores v as JSON at pathname and returns its private URL.
 func (b *BlobStore) PutJSON(ctx context.Context, pathname string, v any) (string, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -70,6 +70,7 @@ func (b *BlobStore) Put(ctx context.Context, pathname, contentType string, data 
 	req.Header.Set("authorization", "Bearer "+b.Token)
 	req.Header.Set("x-api-version", blobAPIVersion)
 	req.Header.Set("x-content-type", contentType)
+	req.Header.Set("x-vercel-blob-access", "private")
 	req.Header.Set("x-add-random-suffix", "1")
 	req.Header.Set("x-cache-control-max-age", "31536000")
 

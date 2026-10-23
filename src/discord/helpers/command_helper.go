@@ -478,7 +478,7 @@ func convertMapToSlice(m map[string]bool) []string {
 // ============================================================================
 
 // CheckSlashAccess validates guild slash command permissions.
-func CheckSlashAccess(settings types.GuildSettings, commandName, subcommandPath, channelID string, member *discordgo.Member, isAdmin bool) types.AccessDecision {
+func CheckSlashAccess(settings types.GuildSettings, guildID, commandName, subcommandPath, channelID string, member *discordgo.Member, isAdmin bool) types.AccessDecision {
 	if !settings.SlashEnabled {
 		return types.AccessDecision{Allowed: false, Title: "Slash Commands Disabled", Message: "Slash commands are disabled in this server. Please try again later or contact a server administrator."}
 	}
@@ -486,11 +486,11 @@ func CheckSlashAccess(settings types.GuildSettings, commandName, subcommandPath,
 	// A command with no settings has no allowed roles, so only administrators get through (see checkRoleAccess).
 	perm := settings.Commands[commandName]
 
-	return checkAccess(perm, subcommandPath, channelID, member, isAdmin, false, roleGateFor(settings, commandName))
+	return checkAccess(perm, guildID, subcommandPath, channelID, member, isAdmin, false, roleGateFor(settings, commandName))
 }
 
 // CheckPrefixAccess validates guild prefix command permissions.
-func CheckPrefixAccess(settings types.GuildSettings, commandName, subcommandPath, channelID string, member *discordgo.Member, isAdmin bool) types.AccessDecision {
+func CheckPrefixAccess(settings types.GuildSettings, guildID, commandName, subcommandPath, channelID string, member *discordgo.Member, isAdmin bool) types.AccessDecision {
 	if !settings.PrefixEnabled {
 		return types.AccessDecision{Allowed: false, Title: "Prefix Commands Disabled", Message: "Prefix commands are disabled in this server. Please try again later or contact a server administrator."}
 	}
@@ -498,10 +498,10 @@ func CheckPrefixAccess(settings types.GuildSettings, commandName, subcommandPath
 	// A command with no settings has no allowed roles, so only administrators get through (see checkRoleAccess).
 	perm := settings.Commands[commandName]
 
-	return checkAccess(perm, subcommandPath, channelID, member, isAdmin, true, roleGateFor(settings, commandName))
+	return checkAccess(perm, guildID, subcommandPath, channelID, member, isAdmin, true, roleGateFor(settings, commandName))
 }
 
-func checkAccess(perm types.GuildCommandPermission, subcommandPath, channelID string, member *discordgo.Member, isAdmin, isPrefix bool, gate roleGate) types.AccessDecision {
+func checkAccess(perm types.GuildCommandPermission, guildID, subcommandPath, channelID string, member *discordgo.Member, isAdmin, isPrefix bool, gate roleGate) types.AccessDecision {
 	// Check if command is enabled
 	if perm.Disabled != nil && *perm.Disabled {
 		return types.AccessDecision{Allowed: false, Title: "Command Disabled", Message: "This command is disabled in this server."}
@@ -550,16 +550,16 @@ func checkAccess(perm types.GuildCommandPermission, subcommandPath, channelID st
 				return decision
 			}
 			if len(sub.AllowedRoles) > 0 {
-				return checkRoleAccess(sub.AllowedRoles, nil, member, isAdmin, gate)
+				return checkRoleAccess(sub.AllowedRoles, nil, guildID, member, isAdmin, gate)
 			}
-			return checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, member, isAdmin, gate)
+			return checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, guildID, member, isAdmin, gate)
 		}
 	}
 
 	if decision := checkChannelAccess(perm.AllowedChannels, perm.DeniedChannels, channelID); !decision.Allowed {
 		return decision
 	}
-	return checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, member, isAdmin, gate)
+	return checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, guildID, member, isAdmin, gate)
 }
 
 func checkChannelAccess(allowed, denied []string, channelID string) types.AccessDecision {
@@ -582,7 +582,7 @@ func checkChannelAccess(allowed, denied []string, channelID string) types.Access
 	return types.AccessDecision{Allowed: false, Title: "Channel Not Allowed", Message: "This command cannot be used in this channel."}
 }
 
-func checkRoleAccess(allowed, denied []string, member *discordgo.Member, isAdmin bool, gate roleGate) types.AccessDecision {
+func checkRoleAccess(allowed, denied []string, guildID string, member *discordgo.Member, isAdmin bool, gate roleGate) types.AccessDecision {
 	if isAdmin {
 		return types.AccessDecision{Allowed: true}
 	}
@@ -593,6 +593,9 @@ func checkRoleAccess(allowed, denied []string, member *discordgo.Member, isAdmin
 	roleSet := make(map[string]struct{}, len(member.Roles))
 	for _, roleID := range member.Roles {
 		roleSet[roleID] = struct{}{}
+	}
+	if guildID != "" {
+		roleSet[guildID] = struct{}{}
 	}
 
 	for _, roleID := range denied {
@@ -940,7 +943,7 @@ func RunSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 	}
 
 	subPath := SubcommandPathFromInteraction(i.ApplicationCommandData())
-	if decision := CheckSlashAccess(gc.Settings, cmd.Name, subPath, i.ChannelID, i.Member, MemberIsAdministrator(s, i)); !decision.Allowed {
+	if decision := CheckSlashAccess(gc.Settings, i.GuildID, cmd.Name, subPath, i.ChannelID, i.Member, MemberIsAdministrator(s, i)); !decision.Allowed {
 		RespondAccessDenied(s, i, true, decision)
 		return
 	}
@@ -1305,7 +1308,7 @@ func HandlePrefixCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	interaction := BuildPrefixInteraction(s, m.Message, cmd, route)
 	isAdmin := MemberIsAdministrator(s, interaction)
-	if decision := CheckPrefixAccess(settings, cmd.Name, route.SubcommandPath, m.ChannelID, interaction.Member, isAdmin); !decision.Allowed {
+	if decision := CheckPrefixAccess(settings, m.GuildID, cmd.Name, route.SubcommandPath, m.ChannelID, interaction.Member, isAdmin); !decision.Allowed {
 		replyPrefixEmbed(s, m, AccessDeniedEmbed(decision.Title, decision.Message))
 		return
 	}
@@ -1658,7 +1661,7 @@ func roleRequirementDenial(s *discordgo.Session, i *discordgo.InteractionCreate,
 	gate := roleGateFor(settings, cmd.Name)
 	if gate.staff {
 		perm := settings.Commands[cmd.Name]
-		if decision := checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, i.Member, MemberIsAdministrator(s, i), gate); !decision.Allowed {
+		if decision := checkRoleAccess(perm.AllowedRoles, perm.DeniedRoles, i.GuildID, i.Member, MemberIsAdministrator(s, i), gate); !decision.Allowed {
 			return Preset("error", types.PresetOptions{Title: decision.Title, Description: decision.Message, Thumbnail: ThumbFlag})
 		}
 	}

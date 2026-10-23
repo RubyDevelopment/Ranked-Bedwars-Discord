@@ -481,7 +481,7 @@ func (r *runner) commandList(category string) (string, string) {
 		if perm, ok := gc.Settings.Commands[name]; ok && perm.Disabled != nil && *perm.Disabled {
 			continue
 		}
-		if !helpers.CheckSlashAccess(gc.Settings, name, "", r.i.ChannelID, r.i.Member, admin).Allowed {
+		if !helpers.CheckSlashAccess(gc.Settings, r.i.GuildID, name, "", r.i.ChannelID, r.i.Member, admin).Allowed {
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("`/%s` %s", name, c.Description))
