@@ -246,7 +246,7 @@ const (
 var controlActions = map[string]bool{
 	"chat": true, "hotbar.select": true, "hotbar.use": true, "window.click": true, "window.close": true, "window.state": true,
 	"inventory": true, "state": true, "control": true, "control.stop": true, "look": true, "swing": true, "block.use": true,
-	"respawn": true, "connect": true, "disconnect": true,
+	"respawn": true, "connect": true, "disconnect": true, "keepalive": true,
 }
 
 type controlResult struct {
