@@ -943,7 +943,6 @@ func HandleGuildSetup(s *discordgo.Session, r *discordgo.Ready) {
 
 	// Mark initial setup as complete so guild_create events can now process new guilds
 	setInitialSetupComplete()
-	logger.Info("Initial guild setup complete, guild_create events will now process new guild joins")
 }
 
 func notifyUnassignedGuild(s *discordgo.Session, guildID string, logger baseutility.AppLogger) {
