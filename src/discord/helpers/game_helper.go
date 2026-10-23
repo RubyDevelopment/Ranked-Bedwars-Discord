@@ -51,6 +51,45 @@ func GameNumberAutocomplete(states ...GameState) func(s *discordgo.Session, i *d
 	}
 }
 
+// ForceVoidGameNumberAutocomplete includes persisted open games and completed
+// games from the active season, along with the current in-memory game snapshots.
+func ForceVoidGameNumberAutocomplete() func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		games, err := Games.ForceVoidCandidates(i.GuildID)
+		if err != nil {
+			appLog.EngineLogger.Error("[forcevoid] autocomplete: " + err.Error())
+			respondGameNumberAutocomplete(s, i, nil)
+			return
+		}
+
+		sort.Slice(games, func(i, j int) bool {
+			if games[i].Number == games[j].Number {
+				return games[i].ID > games[j].ID
+			}
+			return games[i].Number > games[j].Number
+		})
+
+		choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, maxAutocompleteChoices)
+		for _, game := range games {
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  fmt.Sprintf("#%d | %s | %s", game.Number, game.Mode.Name, game.State),
+				Value: game.Number,
+			})
+			if len(choices) == maxAutocompleteChoices {
+				break
+			}
+		}
+		respondGameNumberAutocomplete(s, i, choices)
+	}
+}
+
+func respondGameNumberAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate, choices []*discordgo.ApplicationCommandOptionChoice) {
+	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{Choices: choices},
+	})
+}
+
 // ============================================================================
 // Game channels
 // ============================================================================
@@ -2287,6 +2326,30 @@ func (a sdkGameAPI) ListGames(g, status string) ([]models.GamesModel, error) {
 	}
 }
 
+func (a sdkGameAPI) ListForceVoidGames(guildID string) ([]models.GamesModel, error) {
+	season, err := a.s.Season.Active(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("get active season: %w", err)
+	}
+
+	var all []models.GamesModel
+	for offset := 0; ; offset += 100 {
+		page, err := a.s.Client().ListGames(a.ctx(), guildID, sdk.Q(
+			"status", "waiting,in_progress,completed",
+			"season_id", season.ID,
+			"limit", 100,
+			"offset", offset,
+		))
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page.Data...)
+		if len(page.Data) < 100 {
+			return all, nil
+		}
+	}
+}
+
 func (a sdkGameAPI) RecentGames(g, status string, limit int) ([]models.GamesModel, error) {
 	page, err := a.s.Client().ListGames(a.ctx(), g, sdk.Q("status", status, "limit", limit))
 	if err != nil {
@@ -2702,6 +2765,64 @@ func (m *GameManager) GuildGames(guildID string) []Game {
 		}
 	}
 	return out
+}
+
+type forceVoidGamesAPI interface {
+	ListForceVoidGames(guildID string) ([]models.GamesModel, error)
+}
+
+// ForceVoidCandidates returns open or completed non-voided games in the active
+// season, preferring live snapshots when a game is also in the runtime registry.
+func (m *GameManager) ForceVoidCandidates(guildID string) ([]Game, error) {
+	api, ok := m.api().(forceVoidGamesAPI)
+	if !ok {
+		return nil, errors.New("game API does not support force-void game listing")
+	}
+	records, err := api.ListForceVoidGames(guildID)
+	if err != nil {
+		return nil, fmt.Errorf("list games for forcevoid: %w", err)
+	}
+
+	liveByID := make(map[uint]Game)
+	for _, game := range m.GuildGames(guildID) {
+		liveByID[game.ID] = game
+	}
+
+	seen := make(map[uint]struct{}, len(records))
+	candidates := make([]Game, 0, len(records))
+	for _, record := range records {
+		switch record.Status {
+		case string(types.GameStatusWaiting), string(types.GameStatusInProgress), string(types.GameStatusCompleted):
+		default:
+			continue
+		}
+		if _, exists := seen[record.ID]; exists {
+			continue
+		}
+		seen[record.ID] = struct{}{}
+
+		game := Game{
+			ID:       record.ID,
+			Number:   record.GameNumber,
+			GuildID:  guildID,
+			SeasonID: record.SeasonID,
+			Map:      record.MapName,
+			Mode:     types.Mode{Name: record.ModeName},
+		}
+		switch record.Status {
+		case string(types.GameStatusWaiting):
+			game.State = GameWaiting
+		case string(types.GameStatusInProgress):
+			game.State = GameInGame
+		case string(types.GameStatusCompleted):
+			game.State = GameCleanup
+		}
+		if live, exists := liveByID[record.ID]; exists {
+			game = live
+		}
+		candidates = append(candidates, game)
+	}
+	return candidates, nil
 }
 
 // ---- persistence ------------------------------------------------------------

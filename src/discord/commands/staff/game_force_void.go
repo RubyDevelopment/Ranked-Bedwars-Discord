@@ -48,7 +48,7 @@ var GameForceVoidCommand = &types.Command{
 			},
 		},
 	},
-	Autocomplete: helpers.GameNumberAutocomplete(),
+	Autocomplete: helpers.ForceVoidGameNumberAutocomplete(),
 	Execute:      executeGameForceVoidCommand,
 }
 
