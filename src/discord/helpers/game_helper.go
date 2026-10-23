@@ -2026,7 +2026,7 @@ func logMessage(msg *discordgo.Message) DiscordLogMessage {
 	}
 	out.Pinned = msg.Pinned
 	if a := msg.Author; a != nil {
-		out.Author = DiscordLogAuthor{ID: a.ID, Name: firstNonEmpty(a.GlobalName, a.Username), Avatar: a.AvatarURL("64"), Bot: a.Bot}
+		out.Author = DiscordLogAuthor{ID: a.ID, Name: firstNonEmpty(a.GlobalName, a.Username), Username: a.Username, Avatar: a.AvatarURL("64"), Bot: a.Bot}
 	}
 	if msg.Member != nil && msg.Member.Nick != "" {
 		out.Author.Name = msg.Member.Nick
@@ -2067,9 +2067,13 @@ func logMessage(msg *discordgo.Message) DiscordLogMessage {
 		})
 	}
 	if len(msg.Mentions) > 0 {
-		out.Mentions = make(map[string]string, len(msg.Mentions))
+		out.Mentions = make(map[string]types.DiscordLogMention, len(msg.Mentions))
 		for _, u := range msg.Mentions {
-			out.Mentions[u.ID] = firstNonEmpty(u.GlobalName, u.Username)
+			out.Mentions[u.ID] = types.DiscordLogMention{
+				ID:       u.ID,
+				Name:     firstNonEmpty(u.GlobalName, u.Username),
+				Username: u.Username,
+			}
 		}
 	}
 	return out

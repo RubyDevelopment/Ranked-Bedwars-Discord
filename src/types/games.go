@@ -153,10 +153,17 @@ type CustomSpec struct {
 
 // DiscordLogAuthor is who wrote a Discord log message.
 type DiscordLogAuthor struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Avatar string `json:"avatar,omitempty"`
-	Bot    bool   `json:"bot,omitempty"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Username string `json:"username,omitempty"`
+	Avatar   string `json:"avatar,omitempty"`
+	Bot      bool   `json:"bot,omitempty"`
+}
+
+type DiscordLogMention struct {
+	ID       string `json:"id"`
+	Name     string `json:"name,omitempty"`
+	Username string `json:"username,omitempty"`
 }
 
 type DiscordLogEmbedField struct {
@@ -194,17 +201,17 @@ type DiscordLogReaction struct {
 
 // DiscordLogMessage is one message of the game's Discord chat.
 type DiscordLogMessage struct {
-	ID          string                 `json:"id"`
-	At          time.Time              `json:"at"`
-	EditedAt    *time.Time             `json:"edited_at,omitempty"`
-	Author      DiscordLogAuthor       `json:"author"`
-	Content     string                 `json:"content,omitempty"`
-	Embeds      []DiscordLogEmbed      `json:"embeds,omitempty"`
-	Components  []string               `json:"components,omitempty"`
-	Attachments []DiscordLogAttachment `json:"attachments,omitempty"`
-	Mentions    map[string]string      `json:"mentions,omitempty"` // user id -> name
-	Reactions   []DiscordLogReaction   `json:"reactions,omitempty"`
-	Pinned      bool                   `json:"pinned,omitempty"`
+	ID          string                       `json:"id"`
+	At          time.Time                    `json:"at"`
+	EditedAt    *time.Time                   `json:"edited_at,omitempty"`
+	Author      DiscordLogAuthor             `json:"author"`
+	Content     string                       `json:"content,omitempty"`
+	Embeds      []DiscordLogEmbed            `json:"embeds,omitempty"`
+	Components  []string                     `json:"components,omitempty"`
+	Attachments []DiscordLogAttachment       `json:"attachments,omitempty"`
+	Mentions    map[string]DiscordLogMention `json:"mentions,omitempty"` // user id -> display and username
+	Reactions   []DiscordLogReaction         `json:"reactions,omitempty"`
+	Pinned      bool                         `json:"pinned,omitempty"`
 }
 
 // DraftConfig is the captain flow's settings.

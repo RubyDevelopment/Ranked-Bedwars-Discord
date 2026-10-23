@@ -26,7 +26,7 @@ func TestLogMessagePreservesStructuredDiscordData(t *testing.T) {
 		Attachments: []*discordgo.MessageAttachment{{
 			Filename: "image.png", URL: "https://cdn.example/image.png", ContentType: "image/png", Size: 123,
 		}},
-		Mentions:  []*discordgo.User{{ID: "mentioned-id", Username: "mentioned"}},
+		Mentions:  []*discordgo.User{{ID: "mentioned-id", Username: "mentioned", GlobalName: "Mentioned Person"}},
 		Reactions: []*discordgo.MessageReactions{{Count: 2, Me: true, Emoji: &discordgo.Emoji{Name: "wave", ID: "emoji-id"}}},
 	}
 
@@ -48,8 +48,12 @@ func TestLogMessagePreservesStructuredDiscordData(t *testing.T) {
 	if len(archived.Attachments) != 1 || archived.Attachments[0].Name != "image.png" || archived.Attachments[0].Size != 123 {
 		t.Fatalf("attachment metadata was not preserved: %+v", archived.Attachments)
 	}
-	if archived.Mentions["mentioned-id"] != "mentioned" {
+	mention := archived.Mentions["mentioned-id"]
+	if mention.ID != "mentioned-id" || mention.Name != "Mentioned Person" || mention.Username != "mentioned" {
 		t.Fatalf("mention data was not preserved: %+v", archived.Mentions)
+	}
+	if archived.Author.Username != "author" {
+		t.Fatalf("author username was not preserved: %+v", archived.Author)
 	}
 	if archived.EditedAt == nil || !archived.EditedAt.Equal(editedAt) || !archived.Pinned {
 		t.Fatalf("edited and pinned metadata was not preserved: %+v", archived)
