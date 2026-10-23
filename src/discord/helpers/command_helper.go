@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
-	dbjson "github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/utility"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
+	dbjson "github.com/RubyDevelopment/Ranked-Bedwars-Database/src/utility"
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 

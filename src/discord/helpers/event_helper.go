@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"

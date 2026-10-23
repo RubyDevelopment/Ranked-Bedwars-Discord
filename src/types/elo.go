@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 )
 
 // Adjustment is the outcome of a manual ELO change.

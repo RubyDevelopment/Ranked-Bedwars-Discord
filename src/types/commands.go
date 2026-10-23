@@ -3,7 +3,7 @@ package types
 import (
 	"encoding/json"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/bwmarrin/discordgo"
 )
 

@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 )
 
 // PartiesConfig is the guild config's "flows.party" section (the dashboard's

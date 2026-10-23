@@ -1,5 +1,5 @@
 // Package database holds the process-wide Ranked Bedwars Database API client
-// (see github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk). Every command
+// (see github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk). Every command
 // and event handler reaches the database through database.Get() or
 // database.Must(), then the domain fields on *sdk.Services directly, e.g.
 // database.Must().Player.Register(...) or database.Must().Stats.Get(...).
@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 
 	"ranked-bedwars/src/utility"
 )

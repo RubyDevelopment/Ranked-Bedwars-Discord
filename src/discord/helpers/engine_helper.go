@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database-Go/src/sdk"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/gorilla/websocket"
 
 	"ranked-bedwars/src/database"
