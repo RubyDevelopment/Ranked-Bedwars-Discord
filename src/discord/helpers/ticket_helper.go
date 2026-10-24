@@ -2339,8 +2339,8 @@ func TicketSettingsScreen(panel *types.InteractivePanel, notice string) []discor
 	}
 
 	text := fmt.Sprintf(
-		"## %s Settings\n- **Ticket Channel:** %s\n- **Log Channel:** %s\n- **Open Tickets Per Member:** %s\n- **Claiming:** %s\n- **DM Transcript To Owner:** %s\n- **Delete Thread On Close:** %s\n- **Owner Can Close:** %s\n- **Inactivity Management:** %s (remind every %d hours; close after %d hours)",
-		panel.Name, threads, logs, limit, onOff(settings.ClaimEnabled), onOff(settings.DMTranscript), onOff(settings.DeleteOnClose), onOff(settings.OwnerCanClose), onOff(settings.InactivityEnabled), settings.InactivityReminderHours, settings.InactivityCloseHours,
+		"## %s Settings\n- **Ticket Channel:** %s\n- **Log Channel:** %s\n- **Open Tickets Per Member:** %s\n- **Claiming:** %s\n- **DM Transcript To Owner:** %s\n- **Delete Thread On Close:** %s\n- **Owner Can Close:** %s\n- **Inline Category Buttons:** %s\n- **Inactivity Management:** %s (remind every %d hours; close after %d hours)",
+		panel.Name, threads, logs, limit, onOff(settings.ClaimEnabled), onOff(settings.DMTranscript), onOff(settings.DeleteOnClose), onOff(settings.OwnerCanClose), onOff(settings.InlineCategoryButtons), onOff(settings.InactivityEnabled), settings.InactivityReminderHours, settings.InactivityCloseHours,
 	)
 	inner := []discordgo.MessageComponent{v2Text(text)}
 	if notice != "" {
@@ -2378,6 +2378,7 @@ func TicketSettingsScreen(panel *types.InteractivePanel, notice string) []discor
 		v2Row(
 			v2Button(id("inactivity"), "Inactivity: "+onOff(settings.InactivityEnabled), "⏳", discordgo.SecondaryButton),
 			v2Button(id("inactivity-settings"), "Configure Inactivity", "⚙️", discordgo.PrimaryButton),
+			v2Button(id("inline-categories"), "Inline Category Buttons: "+onOff(settings.InlineCategoryButtons), "↔️", discordgo.SecondaryButton),
 			v2Button(fmt.Sprintf("%s:%s:edit", TicketIDPanelEdit, panel.ID), "Back", "", discordgo.SecondaryButton),
 		),
 	)
@@ -2985,6 +2986,20 @@ func builderSettings(s *discordgo.Session, i *discordgo.InteractionCreate, panel
 			return
 		}
 		edit("")
+	case "inline-categories":
+		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
+			if p.Ticket != nil {
+				p.Ticket.Settings.InlineCategoryButtons = !p.Ticket.Settings.InlineCategoryButtons
+			}
+			return nil
+		})
+		if err != nil {
+			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+			return
+		}
+		if updated != nil {
+			_ = UpdateV2(s, i, TicketSettingsScreen(updated, "")...)
+		}
 	case "limit":
 		_ = RespondModal(s, i, id, "Ticket Limit Per Member",
 			ModalTextInput("limit", "Max tickets per member (0 for unlimited)", "", "0", false, true, 2),

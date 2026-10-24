@@ -74,7 +74,7 @@ type TicketSettings struct {
 	InactivityReminderHours int      `json:"inactivity_reminder_hours"`
 	InactivityCloseHours    int      `json:"inactivity_close_hours"`
 	InactivityMessage       string   `json:"inactivity_message"`
-	InlineCategoryButtons   bool   `json:"inline_category_buttons"`
+	InlineCategoryButtons   bool     `json:"inline_category_buttons"`
 }
 
 // TicketState is the runtime state of every ticket panel in a guild.
