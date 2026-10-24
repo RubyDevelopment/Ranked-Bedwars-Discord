@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
@@ -545,20 +546,26 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 }
 
 var (
-	invalidChannelNameChars = regexp.MustCompile(`[^a-z0-9_-]+`)
+	invalidChannelNameChars = regexp.MustCompile(`[^a-z0-9-]+`)
 	repeatedChannelHyphens  = regexp.MustCompile(`-+`)
 )
 
 func channelTicketName(name, reference string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
-	name = strings.ReplaceAll(name, " ", "-")
+	name = strings.Map(func(char rune) rune {
+		if unicode.IsSpace(char) {
+			return '-'
+		}
+		return char
+	}, name)
 	name = invalidChannelNameChars.ReplaceAllString(name, "")
 	name = repeatedChannelHyphens.ReplaceAllString(name, "-")
 	name = strings.Trim(name, "-")
 	if name == "" {
 		name = "ticket-" + strings.ToLower(reference)
 	}
-	return name
+	name = truncate(name, 100)
+	return strings.TrimRight(name, "-")
 }
 
 // ticketMentions limits pings to the ticket's owner and (when enabled) its staff roles.
