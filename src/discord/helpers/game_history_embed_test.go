@@ -167,6 +167,40 @@ func TestBuildGameHistoryFieldsUsesRedForLossAndGrayForVoided(t *testing.T) {
 	}
 }
 
+func TestBuildGameHistoryShowsTieWhenNoPlayersWon(t *testing.T) {
+	startedAt := time.Now()
+	entry := sdk.GameHistory{
+		GamePlayersModel: models.GamePlayersModel{GameID: 3},
+		Game: &models.GamesModel{
+			Identity:   base.Identity{ID: 3},
+			GameNumber: 3,
+			Status:     "completed",
+			StartedAt:  &startedAt,
+		},
+	}
+	players := map[uint][]GameHistoryPlayer{
+		3: {
+			{Username: "PlayerOne"},
+			{Username: "PlayerTwo"},
+		},
+	}
+
+	descriptions := buildGameHistoryDescriptions([]sdk.GameHistory{entry}, 0, players)
+	if len(descriptions) != 1 {
+		t.Fatalf("expected one game description, got %d", len(descriptions))
+	}
+	description := descriptions[0]
+	if !strings.HasPrefix(description, DotYellow) {
+		t.Errorf("tied game should use yellow dot, got %q", description)
+	}
+	if !strings.Contains(description, "> **Tied:** `PlayerOne`, `PlayerTwo`") {
+		t.Errorf("description %q does not list tied players", description)
+	}
+	if strings.Contains(description, "**Losers:**") {
+		t.Errorf("tied game should not list losers: %q", description)
+	}
+}
+
 func TestHistoryDotsUseGrayForVoidedAndRedForInactiveEntries(t *testing.T) {
 	expiredAt := time.Now().Add(-time.Hour)
 	strikes := BuildStrikeHistoryDescriptionsDirect([]models.PlayerStrikesModel{

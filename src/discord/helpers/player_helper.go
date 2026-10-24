@@ -746,11 +746,17 @@ func buildGameHistoryDescriptions(entries []sdk.GameHistory, page int, playersBy
 			continue
 		}
 		participant := entry.GamePlayersModel
+		players := playersByGame[game.ID]
+		tied := game.Status == string(types.GameStatusCompleted) &&
+			len(players) > 0 &&
+			!slices.ContainsFunc(players, func(player GameHistoryPlayer) bool { return player.IsWinner })
 
 		resultEmoji := DotRed
 		switch {
 		case game.Status == string(types.GameStatusVoided) || game.Status == string(types.GameStatusCancelled):
 			resultEmoji = DotGray
+		case tied:
+			resultEmoji = DotYellow
 		case participant.IsWinner:
 			resultEmoji = DotGreen
 		}
@@ -769,17 +775,23 @@ func buildGameHistoryDescriptions(entries []sdk.GameHistory, page int, playersBy
 			fmt.Sprintf("> **Recap:** `%d` Kills, `%d` Deaths, `%d` Beds", participant.Kills, participant.Deaths, participant.BedsDestroyed),
 			fmt.Sprintf("> **ELO:** %s", eloSummary),
 		}
-		if players := playersByGame[game.ID]; len(players) > 0 {
+		if len(players) > 0 {
 			winners, losers := make([]string, 0, len(players)), make([]string, 0, len(players))
 			for _, player := range players {
 				name := strings.ReplaceAll(player.Username, "`", "'")
 				if player.IsWinner {
 					winners = append(winners, "`"+name+"`")
-				} else {
+				} else if !tied {
 					losers = append(losers, "`"+name+"`")
 				}
 			}
-			if len(winners) > 0 {
+			if tied {
+				tiedPlayers := make([]string, 0, len(players))
+				for _, player := range players {
+					tiedPlayers = append(tiedPlayers, "`"+strings.ReplaceAll(player.Username, "`", "'")+"`")
+				}
+				valueLines = append(valueLines, "> **Tied:** "+strings.Join(tiedPlayers, ", "))
+			} else if len(winners) > 0 {
 				valueLines = append(valueLines, "> **Winners:** "+strings.Join(winners, ", "))
 			}
 			if len(losers) > 0 {
