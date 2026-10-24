@@ -552,7 +552,11 @@ func TicketLogsMessage(entries []*types.Ticket, filter string) *discordgo.Messag
 		if ticket.ClaimedBy != "" {
 			claimed = fmt.Sprintf(" - claimed by <@%s>", ticket.ClaimedBy)
 		}
-		fmt.Fprintf(&list, "**#%s** %s - <@%s> - closed <t:%d:R> by <@%s>%s\n", ticket.Ref, ticket.CategoryLabel, ticket.OwnerID, ticket.ClosedAt, ticket.ClosedBy, claimed)
+		closer := "<@" + ticket.ClosedBy + ">"
+		if ticket.ClosedBy == inactivityCloser {
+			closer = "inactivity policy"
+		}
+		fmt.Fprintf(&list, "**#%s** %s - <@%s> - closed <t:%d:R> by %s%s\n", ticket.Ref, ticket.CategoryLabel, ticket.OwnerID, ticket.ClosedAt, closer, claimed)
 	}
 	description := list.String()
 	if filter != "" {

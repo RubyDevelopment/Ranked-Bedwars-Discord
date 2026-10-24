@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"log"
 	"regexp"
 	"sort"
 	"strconv"
@@ -46,14 +47,20 @@ const (
 	refAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 	defaultPanelColor = 0x55FFFF
+
+	defaultInactivityReminderHours = 12
+	defaultInactivityCloseHours    = 24
+	maxInactivityHours             = 8760
+	inactivityCloser               = "inactivity"
 )
 
 // Default ticket copy, written in the same voice as the bot's own messages.
 const (
-	defaultWelcomeTitle = "Ticket Created: {category}"
-	defaultWelcomeBody  = "Hello {user},\n\nThank you for reaching out! Our support team has been notified and will be with you shortly.\n\nPlease explain your issue in detail and our support team will assist you."
-	defaultNameFormat   = "{username} - Ticket: {category}"
-	defaultPanelFooter  = "**Getting Started:**\nUse the buttons below to open a ticket and select the right category for faster support."
+	defaultWelcomeTitle      = "Ticket Created: {category}"
+	defaultWelcomeBody       = "Hello {user},\n\nThank you for reaching out! Our support team has been notified and will be with you shortly.\n\nPlease explain your issue in detail and our support team will assist you."
+	defaultNameFormat        = "{username} - Ticket: {category}"
+	defaultPanelFooter       = "**Getting Started:**\nUse the buttons below to open a ticket and select the right category for faster support."
+	defaultInactivityMessage = "This ticket has been inactive for {inactive_hours} hours. It will be closed in {hours_until_close} hours if no new messages are sent."
 )
 
 // Ticket component custom IDs are namespaced `tkt:` and colon separated.
@@ -84,6 +91,7 @@ var (
 	ErrTicketAlreadyClaimed   = errors.New("ticket already claimed")
 	ErrTicketNotClaimed       = errors.New("ticket not claimed")
 	ErrTicketClaimDisabled    = errors.New("claiming is disabled")
+	ErrTicketActivityChanged  = errors.New("ticket activity changed before it could be closed")
 )
 
 // TicketLimitError reports the tickets a member already has open.
@@ -109,6 +117,42 @@ type TicketStore struct {
 
 // Tickets is the shared store used by the ticket commands and their handlers.
 var Tickets = &TicketStore{locks: map[string]*sync.Mutex{}}
+
+var ticketActivityIndex = struct {
+	sync.RWMutex
+	channels map[string]struct{}
+}{channels: map[string]struct{}{}}
+
+func ticketActivityKey(guildID, channelID string) string {
+	return guildID + ":" + channelID
+}
+
+func setGuildTicketActivityChannels(guildID string, channels map[string]struct{}) {
+	prefix := guildID + ":"
+	ticketActivityIndex.Lock()
+	defer ticketActivityIndex.Unlock()
+	for key := range ticketActivityIndex.channels {
+		if strings.HasPrefix(key, prefix) {
+			delete(ticketActivityIndex.channels, key)
+		}
+	}
+	for channelID := range channels {
+		ticketActivityIndex.channels[ticketActivityKey(guildID, channelID)] = struct{}{}
+	}
+}
+
+func ticketTracksActivity(guildID, channelID string) bool {
+	ticketActivityIndex.RLock()
+	_, ok := ticketActivityIndex.channels[ticketActivityKey(guildID, channelID)]
+	ticketActivityIndex.RUnlock()
+	return ok
+}
+
+func removeTicketActivityChannel(guildID, channelID string) {
+	ticketActivityIndex.Lock()
+	delete(ticketActivityIndex.channels, ticketActivityKey(guildID, channelID))
+	ticketActivityIndex.Unlock()
+}
 
 func (st *TicketStore) guildLock(guildID string) *sync.Mutex {
 	st.mu.Lock()
@@ -178,6 +222,17 @@ func normalizeInteractivePanels(ip *types.InteractivePanels) {
 		if panel.Type == types.PanelTypeTicket && panel.Ticket == nil {
 			panel.Ticket = &types.TicketPanelConfig{}
 		}
+		if panel.Type == types.PanelTypeTicket && panel.Ticket != nil {
+			settings := &panel.Ticket.Settings
+			if settings.InactivityReminderHours == 0 && settings.InactivityCloseHours == 0 {
+				settings.InactivityEnabled = true
+				settings.InactivityReminderHours = defaultInactivityReminderHours
+				settings.InactivityCloseHours = defaultInactivityCloseHours
+			}
+			if settings.InactivityMessage == "" {
+				settings.InactivityMessage = defaultInactivityMessage
+			}
+		}
 	}
 }
 
@@ -233,11 +288,15 @@ func NewTicketPanel(name, title, actorID string) *types.InteractivePanel {
 		},
 		Ticket: &types.TicketPanelConfig{
 			Settings: types.TicketSettings{
-				MaxOpenPerUser: 1,
-				ClaimEnabled:   true,
-				DMTranscript:   true,
-				DeleteOnClose:  true,
-				OwnerCanClose:  true,
+				MaxOpenPerUser:          1,
+				ClaimEnabled:            true,
+				DMTranscript:            true,
+				DeleteOnClose:           true,
+				OwnerCanClose:           true,
+				InactivityEnabled:       true,
+				InactivityReminderHours: defaultInactivityReminderHours,
+				InactivityCloseHours:    defaultInactivityCloseHours,
+				InactivityMessage:       defaultInactivityMessage,
 			},
 		},
 		CreatedBy: actorID,
@@ -414,15 +473,17 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		mode = types.TicketModeThread // Default to thread mode
 	}
 
+	createdAt := time.Now().Unix()
 	ticket := &types.Ticket{
-		PanelID:       panel.ID,
-		CategoryID:    category.ID,
-		CategoryLabel: category.Label,
-		OwnerID:       owner.ID,
-		OwnerName:     owner.Username,
-		Status:        types.TicketStatusOpen,
-		CreatedAt:     time.Now().Unix(),
-		Mode:          mode,
+		PanelID:        panel.ID,
+		CategoryID:     category.ID,
+		CategoryLabel:  category.Label,
+		OwnerID:        owner.ID,
+		OwnerName:      owner.Username,
+		Status:         types.TicketStatusOpen,
+		CreatedAt:      createdAt,
+		LastActivityAt: createdAt,
+		Mode:           mode,
 	}
 
 	// Reserve the number and reference first so the thread name can use them.
@@ -532,6 +593,9 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 	}); err != nil {
 		return nil, err
 	}
+	ticketActivityIndex.Lock()
+	ticketActivityIndex.channels[ticketActivityKey(guildID, ticket.ThreadID)] = struct{}{}
+	ticketActivityIndex.Unlock()
 
 	PostTicketLog(s, panel, TicketLogMessage(ColorSuccess, "Ticket Opened", "A new ticket was opened.", []string{
 		"- **Thread:** <#" + ticket.ThreadID + ">",
@@ -679,6 +743,14 @@ func SetPendingCloseReason(actorID, guildID, threadID, reason string) error {
 // CloseTicket archives the ticket, saves its transcript to the log channel (and
 // the owner's DMs, when enabled), then deletes or locks the thread.
 func CloseTicket(s *discordgo.Session, guildID, threadID, closerID string, closerIsStaff bool) (*types.Ticket, error) {
+	return closeTicket(s, guildID, threadID, closerID, closerIsStaff, 0)
+}
+
+func closeInactiveTicket(s *discordgo.Session, guildID, threadID string, now time.Time) (*types.Ticket, error) {
+	return closeTicket(s, guildID, threadID, inactivityCloser, false, now.Unix())
+}
+
+func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, closerIsStaff bool, inactivityCutoff int64) (*types.Ticket, error) {
 	var ticket *types.Ticket
 	var panel *types.InteractivePanel
 	err := Tickets.Update(closerID, guildID, func(ip *types.InteractivePanels) error {
@@ -687,6 +759,20 @@ func CloseTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 			return ErrTicketNotFound
 		}
 		panel = ip.Panels[found.PanelID]
+		if inactivityCutoff > 0 {
+			if panel == nil || panel.Ticket == nil {
+				return ErrTicketActivityChanged
+			}
+			settings := panel.Ticket.Settings
+			if !settings.InactivityEnabled || !validInactivitySettings(settings) {
+				return ErrTicketActivityChanged
+			}
+			cutoff := time.Unix(inactivityCutoff, 0).Add(-time.Duration(settings.InactivityCloseHours) * time.Hour).Unix()
+			if ticketLastActivity(found) > cutoff {
+				return ErrTicketActivityChanged
+			}
+			found.CloseReason = "Automatically closed after inactivity."
+		}
 		found.Status = types.TicketStatusClosed
 		found.ClosedAt = time.Now().Unix()
 		found.ClosedBy = closerID
@@ -701,6 +787,7 @@ func CloseTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 	if err != nil {
 		return nil, err
 	}
+	removeTicketActivityChannel(guildID, threadID)
 
 	settings := types.TicketSettings{}
 	if panel != nil && panel.Ticket != nil {
@@ -737,6 +824,210 @@ func CloseTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 		_, _ = s.ChannelEditComplex(threadID, &discordgo.ChannelEdit{Archived: &archived, Locked: &locked})
 	}
 	return ticket, nil
+}
+
+func ticketLastActivity(ticket *types.Ticket) int64 {
+	if ticket.LastActivityAt > 0 {
+		return ticket.LastActivityAt
+	}
+	return ticket.CreatedAt
+}
+
+type ticketInactivityAction uint8
+
+const (
+	ticketInactivityNone ticketInactivityAction = iota
+	ticketInactivityRemind
+	ticketInactivityClose
+)
+
+func ticketInactivityActionFor(settings types.TicketSettings, ticket *types.Ticket, now time.Time) ticketInactivityAction {
+	if ticket == nil || !settings.InactivityEnabled || !validInactivitySettings(settings) {
+		return ticketInactivityNone
+	}
+	lastActive := ticketLastActivity(ticket)
+	idle := now.Sub(time.Unix(lastActive, 0))
+	if idle >= time.Duration(settings.InactivityCloseHours)*time.Hour {
+		return ticketInactivityClose
+	}
+	if idle < time.Duration(settings.InactivityReminderHours)*time.Hour {
+		return ticketInactivityNone
+	}
+	if ticket.LastInactivityNoticeAt >= lastActive &&
+		now.Sub(time.Unix(ticket.LastInactivityNoticeAt, 0)) < time.Duration(settings.InactivityReminderHours)*time.Hour {
+		return ticketInactivityNone
+	}
+	return ticketInactivityRemind
+}
+
+// HandleTicketMessage resets the inactivity clock for human messages in an open ticket.
+func HandleTicketMessage(_ *discordgo.Session, m *discordgo.MessageCreate) {
+	if m == nil || m.Message == nil || m.GuildID == "" || m.Author == nil || m.Author.Bot || m.WebhookID != "" {
+		return
+	}
+	if !ticketTracksActivity(m.GuildID, m.ChannelID) {
+		return
+	}
+	err := Tickets.Update(m.Author.ID, m.GuildID, func(ip *types.InteractivePanels) error {
+		if ticket := ip.Tickets.Open[m.ChannelID]; ticket != nil {
+			ticket.LastActivityAt = time.Now().Unix()
+			ticket.LastInactivityNoticeAt = 0
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("[Tickets] could not update activity for ticket %s in guild %s: %v", m.ChannelID, m.GuildID, err)
+	}
+}
+
+var ticketInactivitySweepOnce sync.Once
+
+// StartTicketInactivitySweeper checks configured open tickets once a minute.
+func StartTicketInactivitySweeper(s *discordgo.Session) {
+	ticketInactivitySweepOnce.Do(func() {
+		go func() {
+			sweepTicketInactivity(s)
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			for range ticker.C {
+				sweepTicketInactivity(s)
+			}
+		}()
+	})
+}
+
+func sweepTicketInactivity(s *discordgo.Session) {
+	if s == nil || s.State == nil {
+		return
+	}
+	for _, guild := range s.State.Guilds {
+		if guild == nil {
+			continue
+		}
+		ip, err := Tickets.Load(guild.ID)
+		if err != nil {
+			log.Printf("[Tickets] could not load inactivity settings for guild %s: %v", guild.ID, err)
+			continue
+		}
+		activeChannels := make(map[string]struct{}, len(ip.Tickets.Open))
+		for channelID := range ip.Tickets.Open {
+			activeChannels[channelID] = struct{}{}
+		}
+		setGuildTicketActivityChannels(guild.ID, activeChannels)
+		now := time.Now()
+		for _, candidate := range ip.Tickets.Open {
+			if candidate == nil {
+				continue
+			}
+			panel := ip.Panels[candidate.PanelID]
+			if panel == nil || panel.Ticket == nil {
+				continue
+			}
+			if candidate.LastActivityAt == 0 {
+				var migrated *types.Ticket
+				err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
+					ticket := current.Tickets.Open[candidate.ThreadID]
+					if ticket == nil {
+						return nil
+					}
+					if ticket.LastActivityAt == 0 {
+						ticket.LastActivityAt = now.Unix()
+					}
+					migrated = copyTicket(ticket)
+					return nil
+				})
+				if err != nil {
+					log.Printf("[Tickets] could not initialize inactivity timestamp for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+					continue
+				}
+				if migrated == nil {
+					continue
+				}
+				candidate = migrated
+			}
+			settings := panel.Ticket.Settings
+			if !settings.InactivityEnabled {
+				continue
+			}
+			if !validInactivitySettings(settings) {
+				log.Printf("[Tickets] invalid inactivity settings for panel %s in guild %s", panel.ID, guild.ID)
+				continue
+			}
+			action := ticketInactivityActionFor(settings, candidate, now)
+			if action == ticketInactivityNone {
+				continue
+			}
+
+			if action == ticketInactivityClose {
+				if _, err := closeInactiveTicket(s, guild.ID, candidate.ThreadID, now); err != nil &&
+					!errors.Is(err, ErrTicketNotFound) && !errors.Is(err, ErrTicketActivityChanged) {
+					log.Printf("[Tickets] could not automatically close ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+				}
+				continue
+			}
+
+			notify := false
+			err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
+				ticket := current.Tickets.Open[candidate.ThreadID]
+				if ticket == nil {
+					return nil
+				}
+				currentPanel := current.Panels[ticket.PanelID]
+				if currentPanel == nil || currentPanel.Ticket == nil {
+					return nil
+				}
+				currentSettings := currentPanel.Ticket.Settings
+				if ticketInactivityActionFor(currentSettings, ticket, now) != ticketInactivityRemind {
+					return nil
+				}
+				ticket.LastInactivityNoticeAt = now.Unix()
+				candidate = copyTicket(ticket)
+				panel = currentPanel
+				settings = currentSettings
+				notify = true
+				return nil
+			})
+			if err != nil {
+				log.Printf("[Tickets] could not schedule inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+				continue
+			}
+			if !notify {
+				continue
+			}
+			elapsedHours := int(now.Sub(time.Unix(ticketLastActivity(candidate), 0)).Hours())
+			hoursUntilClose := settings.InactivityCloseHours - elapsedHours
+			if hoursUntilClose < 1 {
+				hoursUntilClose = 1
+			}
+			message := strings.NewReplacer(
+				"{user}", "<@"+candidate.OwnerID+">",
+				"{inactive_hours}", strconv.Itoa(elapsedHours),
+				"{hours_until_close}", strconv.Itoa(hoursUntilClose),
+				"{close_hours}", strconv.Itoa(settings.InactivityCloseHours),
+			).Replace(settings.InactivityMessage)
+			if _, err := s.ChannelMessageSendComplex(candidate.ThreadID, &discordgo.MessageSend{
+				Content: message,
+				AllowedMentions: &discordgo.MessageAllowedMentions{
+					Parse: []discordgo.AllowedMentionType{},
+					Users: []string{candidate.OwnerID},
+				},
+			}); err != nil {
+				log.Printf("[Tickets] could not send inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+			}
+		}
+	}
+}
+
+func validInactivitySettings(settings types.TicketSettings) bool {
+	return settings.InactivityReminderHours > 0 &&
+		settings.InactivityReminderHours <= maxInactivityHours &&
+		settings.InactivityCloseHours > settings.InactivityReminderHours &&
+		settings.InactivityCloseHours <= maxInactivityHours
+}
+
+func copyTicket(ticket *types.Ticket) *types.Ticket {
+	copied := *ticket
+	return &copied
 }
 
 // ============================================================================
@@ -1646,7 +1937,28 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 		if strings.TrimSpace(b.Text) == "" {
 			return nil
 		}
-		if b.ThumbnailURL == "" { // a section needs its image: without one it is plain text
+		if b.AccessoryType == "ticket_button" {
+			category := FindTicketCategory(panel, b.AccessoryCategoryID)
+			if category == nil {
+				return one(v2Text(b.Text))
+			}
+			buttonLabel := category.ButtonLabel
+			if buttonLabel == "" {
+				buttonLabel = category.Label
+			}
+			button := v2Button(
+				fmt.Sprintf("%s:%s:%s", TicketIDOpen, panel.ID, category.ID),
+				buttonLabel,
+				category.Emoji,
+				discordgo.ButtonStyle(category.ButtonStyle),
+			)
+			button.Disabled = preview
+			return one(discordgo.Section{
+				Components: []discordgo.MessageComponent{v2Text(b.Text)},
+				Accessory:  button,
+			})
+		}
+		if b.ThumbnailURL == "" {
 			return one(v2Text(b.Text))
 		}
 		return one(discordgo.Section{
@@ -1770,10 +2082,14 @@ func TicketTranscriptMessage(color int, title, description string, lines []strin
 
 // TicketClosedLines is the summary shared by the closed-ticket log and the owner's DM.
 func TicketClosedLines(ticket *types.Ticket, guildName string) []string {
+	closedBy := "<@" + ticket.ClosedBy + ">"
+	if ticket.ClosedBy == inactivityCloser {
+		closedBy = "Inactivity policy"
+	}
 	lines := []string{
 		"- **Thread:** `" + ticket.ThreadName + "`",
 		"- **Server:** `" + guildName + "`",
-		"- **Closed By:** <@" + ticket.ClosedBy + ">",
+		"- **Closed By:** " + closedBy,
 	}
 	return lines
 }
@@ -1991,8 +2307,8 @@ func TicketSettingsScreen(panel *types.InteractivePanel, notice string) []discor
 	}
 
 	text := fmt.Sprintf(
-		"## %s Settings\n- **Ticket Channel:** %s\n- **Log Channel:** %s\n- **Open Tickets Per Member:** %s\n- **Claiming:** %s\n- **DM Transcript To Owner:** %s\n- **Delete Thread On Close:** %s\n- **Owner Can Close:** %s",
-		panel.Name, threads, logs, limit, onOff(settings.ClaimEnabled), onOff(settings.DMTranscript), onOff(settings.DeleteOnClose), onOff(settings.OwnerCanClose),
+		"## %s Settings\n- **Ticket Channel:** %s\n- **Log Channel:** %s\n- **Open Tickets Per Member:** %s\n- **Claiming:** %s\n- **DM Transcript To Owner:** %s\n- **Delete Thread On Close:** %s\n- **Owner Can Close:** %s\n- **Inactivity Management:** %s (remind every %d hours; close after %d hours)",
+		panel.Name, threads, logs, limit, onOff(settings.ClaimEnabled), onOff(settings.DMTranscript), onOff(settings.DeleteOnClose), onOff(settings.OwnerCanClose), onOff(settings.InactivityEnabled), settings.InactivityReminderHours, settings.InactivityCloseHours,
 	)
 	inner := []discordgo.MessageComponent{v2Text(text)}
 	if notice != "" {
@@ -2027,7 +2343,11 @@ func TicketSettingsScreen(panel *types.InteractivePanel, notice string) []discor
 			v2Button(id("owner"), "Owner Can Close", "🔒", discordgo.SecondaryButton),
 			v2Button(id("limit"), "Ticket Limit", "🔢", discordgo.SecondaryButton),
 		),
-		v2Row(v2Button(fmt.Sprintf("%s:%s:edit", TicketIDPanelEdit, panel.ID), "Back", "", discordgo.SecondaryButton)),
+		v2Row(
+			v2Button(id("inactivity"), "Inactivity: "+onOff(settings.InactivityEnabled), "⏳", discordgo.SecondaryButton),
+			v2Button(id("inactivity-settings"), "Configure Inactivity", "⚙️", discordgo.PrimaryButton),
+			v2Button(fmt.Sprintf("%s:%s:edit", TicketIDPanelEdit, panel.ID), "Back", "", discordgo.SecondaryButton),
+		),
 	)
 	return []discordgo.MessageComponent{v2Container(ColorInfo, inner...)}
 }
@@ -2637,6 +2957,27 @@ func builderSettings(s *discordgo.Session, i *discordgo.InteractionCreate, panel
 		_ = RespondModal(s, i, id, "Ticket Limit Per Member",
 			ModalTextInput("limit", "Max tickets per member (0 for unlimited)", "", "0", false, true, 2),
 		)
+	case "inactivity":
+		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
+			if p.Ticket != nil {
+				p.Ticket.Settings.InactivityEnabled = !p.Ticket.Settings.InactivityEnabled
+			}
+			return nil
+		})
+		if err != nil {
+			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+			return
+		}
+		if updated != nil {
+			_ = UpdateV2(s, i, TicketSettingsScreen(updated, "")...)
+		}
+	case "inactivity-settings":
+		settings := panel.Ticket.Settings
+		_ = RespondModal(s, i, fmt.Sprintf("%s:inactivity:%s", TicketIDModal, panel.ID), "Ticket Inactivity Settings",
+			ModalTextInput("reminder_hours", "Reminder interval in hours", strconv.Itoa(settings.InactivityReminderHours), "12", false, true, 4),
+			ModalTextInput("close_hours", "Close after inactivity (hours)", strconv.Itoa(settings.InactivityCloseHours), "24", false, true, 4),
+			ModalTextInput("message", "Reminder message", settings.InactivityMessage, "Use {inactive_hours}, {hours_until_close}, {close_hours}, {user}", true, true, 1800),
+		)
 	}
 }
 
@@ -2738,6 +3079,10 @@ func HandleTicketModal(s *discordgo.Session, i *discordgo.InteractionCreate, cus
 	case "lim":
 		if len(parts) == 4 {
 			modalLimit(s, i, parts[3], values)
+		}
+	case "inactivity":
+		if len(parts) == 4 {
+			modalInactivity(s, i, parts[3], values)
 		}
 	}
 	return true
@@ -2901,6 +3246,34 @@ func modalLimit(s *discordgo.Session, i *discordgo.InteractionCreate, panelID st
 	})
 	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
 		return TicketSettingsScreen(panel, "")
+	})
+}
+
+func modalInactivity(s *discordgo.Session, i *discordgo.InteractionCreate, panelID string, values map[string]string) {
+	reminderHours, reminderErr := strconv.Atoi(values["reminder_hours"])
+	closeHours, closeErr := strconv.Atoi(values["close_hours"])
+	if reminderErr != nil || closeErr != nil ||
+		reminderHours < 1 || reminderHours > maxInactivityHours ||
+		closeHours <= reminderHours || closeHours > maxInactivityHours {
+		modalError(s, i, "Invalid Inactivity Period", fmt.Sprintf("Set a reminder interval from `1` to `%d` hours, and a close period longer than the reminder interval (up to `%d` hours).", maxInactivityHours, maxInactivityHours))
+		return
+	}
+	message := strings.TrimSpace(values["message"])
+	if message == "" {
+		modalError(s, i, "Reminder Message Required", "Enter the message to post when a ticket reaches its inactivity reminder interval.")
+		return
+	}
+	updated, err := mutatePanel(i, panelID, func(p *types.InteractivePanel) error {
+		if p.Ticket == nil {
+			return ErrTicketPanelNotFound
+		}
+		p.Ticket.Settings.InactivityReminderHours = reminderHours
+		p.Ticket.Settings.InactivityCloseHours = closeHours
+		p.Ticket.Settings.InactivityMessage = message
+		return nil
+	})
+	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
+		return TicketSettingsScreen(panel, "Inactivity settings saved.")
 	})
 }
 

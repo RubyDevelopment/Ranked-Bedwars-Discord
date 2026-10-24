@@ -61,15 +61,19 @@ type TicketField struct {
 
 // TicketSettings holds the behaviour shared by every category of a panel.
 type TicketSettings struct {
-	ThreadChannelID string   `json:"thread_channel_id"`
-	LogChannelID    string   `json:"log_channel_id"`
-	StaffRoleIDs    []string `json:"staff_role_ids"`
-	MaxOpenPerUser  int      `json:"max_open_per_user"`
-	ClaimEnabled    bool     `json:"claim_enabled"`
-	DMTranscript    bool     `json:"dm_transcript"`
-	DeleteOnClose   bool     `json:"delete_on_close"`
-	OwnerCanClose   bool     `json:"owner_can_close"`
-	Mode            string   `json:"mode"` // "thread" or "channel"
+	ThreadChannelID         string   `json:"thread_channel_id"`
+	LogChannelID            string   `json:"log_channel_id"`
+	StaffRoleIDs            []string `json:"staff_role_ids"`
+	MaxOpenPerUser          int      `json:"max_open_per_user"`
+	ClaimEnabled            bool     `json:"claim_enabled"`
+	DMTranscript            bool     `json:"dm_transcript"`
+	DeleteOnClose           bool     `json:"delete_on_close"`
+	OwnerCanClose           bool     `json:"owner_can_close"`
+	Mode                    string   `json:"mode"` // "thread" or "channel"
+	InactivityEnabled       bool     `json:"inactivity_enabled"`
+	InactivityReminderHours int      `json:"inactivity_reminder_hours"`
+	InactivityCloseHours    int      `json:"inactivity_close_hours"`
+	InactivityMessage       string   `json:"inactivity_message"`
 }
 
 // TicketState is the runtime state of every ticket panel in a guild.
@@ -93,24 +97,26 @@ type TicketBlacklistEntry struct {
 
 // Ticket is one support ticket, keyed in TicketState.Open by its thread ID.
 type Ticket struct {
-	Ref              string `json:"ref"`
-	Number           int    `json:"number"`
-	ThreadID         string `json:"thread_id"`
-	ThreadName       string `json:"thread_name"`
-	PanelID          string `json:"panel_id"`
-	CategoryID       string `json:"category_id"`
-	CategoryLabel    string `json:"category_label"`
-	OwnerID          string `json:"owner_id"`
-	OwnerName        string `json:"owner_name"`
-	Status           string `json:"status"`
-	ClaimedBy        string `json:"claimed_by"`
-	ClaimedAt        int64  `json:"claimed_at"`
-	CreatedAt        int64  `json:"created_at"`
-	ClosedAt         int64  `json:"closed_at"`
-	ClosedBy         string `json:"closed_by"`
-	CloseReason      string `json:"close_reason"`
-	WelcomeMessageID string `json:"welcome_message_id"`
-	Mode             string `json:"mode"` // "thread" or "channel"
+	Ref                    string `json:"ref"`
+	Number                 int    `json:"number"`
+	ThreadID               string `json:"thread_id"`
+	ThreadName             string `json:"thread_name"`
+	PanelID                string `json:"panel_id"`
+	CategoryID             string `json:"category_id"`
+	CategoryLabel          string `json:"category_label"`
+	OwnerID                string `json:"owner_id"`
+	OwnerName              string `json:"owner_name"`
+	Status                 string `json:"status"`
+	ClaimedBy              string `json:"claimed_by"`
+	ClaimedAt              int64  `json:"claimed_at"`
+	CreatedAt              int64  `json:"created_at"`
+	ClosedAt               int64  `json:"closed_at"`
+	ClosedBy               string `json:"closed_by"`
+	CloseReason            string `json:"close_reason"`
+	WelcomeMessageID       string `json:"welcome_message_id"`
+	Mode                   string `json:"mode"` // "thread" or "channel"
+	LastActivityAt         int64  `json:"last_activity_at,omitempty"`
+	LastInactivityNoticeAt int64  `json:"last_inactivity_notice_at,omitempty"`
 }
 
 // TicketStaffStats feeds the ticket leaderboard.

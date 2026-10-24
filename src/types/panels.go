@@ -45,13 +45,15 @@ type PanelBlock struct {
 	ID   string `json:"id"`
 	Type string `json:"type"` // banner, title, description, categories, footer, buttons, text, separator, gallery, section, links
 
-	Content      string      `json:"content,omitempty"`       // text
-	Divider      *bool       `json:"divider,omitempty"`       // separator: a visible line (default true)
-	Large        bool        `json:"large,omitempty"`         // separator: large spacing
-	Items        []PanelItem `json:"items,omitempty"`         // gallery
-	Text         string      `json:"text,omitempty"`          // section
-	ThumbnailURL string      `json:"thumbnail_url,omitempty"` // section
-	Links        []PanelLink `json:"links,omitempty"`         // links
+	Content             string      `json:"content,omitempty"`               // text
+	Divider             *bool       `json:"divider,omitempty"`               // separator: a visible line (default true)
+	Large               bool        `json:"large,omitempty"`                 // separator: large spacing
+	Items               []PanelItem `json:"items,omitempty"`                 // gallery
+	Text                string      `json:"text,omitempty"`                  // section
+	ThumbnailURL        string      `json:"thumbnail_url,omitempty"`         // section
+	AccessoryType       string      `json:"accessory_type,omitempty"`        // section: thumbnail or ticket_button
+	AccessoryCategoryID string      `json:"accessory_category_id,omitempty"` // section ticket button
+	Links               []PanelLink `json:"links,omitempty"`                 // links
 }
 
 // PanelItem is one image of a gallery block.
