@@ -774,17 +774,17 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 	}
 	ticket.ArchiveURL = ""
 	archive := struct {
-		SchemaVersion    int                       `json:"schema_version"`
-		Ticket           *types.Ticket             `json:"ticket"`
-		Messages         []types.DiscordLogMessage `json:"messages"`
-		TranscriptComplete bool                    `json:"transcript_complete"`
-		ArchivedAt       int64                     `json:"archived_at"`
+		SchemaVersion      int                       `json:"schema_version"`
+		Ticket             *types.Ticket             `json:"ticket"`
+		Messages           []types.DiscordLogMessage `json:"messages"`
+		TranscriptComplete bool                      `json:"transcript_complete"`
+		ArchivedAt         int64                     `json:"archived_at"`
 	}{
-		SchemaVersion: 1,
-		Ticket: ticket,
-		Messages: messages,
+		SchemaVersion:      1,
+		Ticket:             ticket,
+		Messages:           messages,
 		TranscriptComplete: transcriptErr == nil && len(messages) < 5000,
-		ArchivedAt: time.Now().Unix(),
+		ArchivedAt:         time.Now().Unix(),
 	}
 	if !Blobs.Enabled() {
 		log.Printf("[Tickets] JSON archive not saved for ticket %s in guild %s: blob storage is not configured", threadID, guildID)

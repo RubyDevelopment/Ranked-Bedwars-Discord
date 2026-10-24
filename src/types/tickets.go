@@ -100,27 +100,27 @@ type TicketBlacklistEntry struct {
 
 // Ticket is one support ticket, keyed in TicketState.Open by its thread ID.
 type Ticket struct {
-	Ref                    string `json:"ref"`
-	Number                 int    `json:"number"`
-	ThreadID               string `json:"thread_id"`
-	ThreadName             string `json:"thread_name"`
-	PanelID                string `json:"panel_id"`
-	CategoryID             string `json:"category_id"`
-	CategoryLabel          string `json:"category_label"`
-	OwnerID                string `json:"owner_id"`
-	OwnerName              string `json:"owner_name"`
-	Status                 string `json:"status"`
-	ClaimedBy              string `json:"claimed_by"`
-	ClaimedAt              int64  `json:"claimed_at"`
-	CreatedAt              int64  `json:"created_at"`
-	ClosedAt               int64  `json:"closed_at"`
-	ClosedBy               string `json:"closed_by"`
-	CloseReason            string `json:"close_reason"`
-	WelcomeMessageID       string `json:"welcome_message_id"`
-	Mode                   string `json:"mode"` // "thread" or "channel"
-	LastActivityAt         int64  `json:"last_activity_at,omitempty"`
-	LastInactivityNoticeAt int64  `json:"last_inactivity_notice_at,omitempty"`
-	ArchiveURL             string `json:"archive_url,omitempty"`
+	Ref                    string           `json:"ref"`
+	Number                 int              `json:"number"`
+	ThreadID               string           `json:"thread_id"`
+	ThreadName             string           `json:"thread_name"`
+	PanelID                string           `json:"panel_id"`
+	CategoryID             string           `json:"category_id"`
+	CategoryLabel          string           `json:"category_label"`
+	OwnerID                string           `json:"owner_id"`
+	OwnerName              string           `json:"owner_name"`
+	Status                 string           `json:"status"`
+	ClaimedBy              string           `json:"claimed_by"`
+	ClaimedAt              int64            `json:"claimed_at"`
+	CreatedAt              int64            `json:"created_at"`
+	ClosedAt               int64            `json:"closed_at"`
+	ClosedBy               string           `json:"closed_by"`
+	CloseReason            string           `json:"close_reason"`
+	WelcomeMessageID       string           `json:"welcome_message_id"`
+	Mode                   string           `json:"mode"` // "thread" or "channel"
+	LastActivityAt         int64            `json:"last_activity_at,omitempty"`
+	LastInactivityNoticeAt int64            `json:"last_inactivity_notice_at,omitempty"`
+	ArchiveURL             string           `json:"archive_url,omitempty"`
 	Logs                   []TicketLogEntry `json:"logs,omitempty"`
 }
 
