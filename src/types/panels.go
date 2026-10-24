@@ -27,14 +27,18 @@ type InteractivePanel struct {
 // PanelAppearance controls how the panel message looks. Text fields accept
 // Discord markdown.
 type PanelAppearance struct {
-	Format           string `json:"format,omitempty"` // message, embed or component (Components V2)
-	Title            string `json:"title"`
-	Description      string `json:"description"`
-	Footer           string `json:"footer"`
-	Color            int    `json:"color"`
-	NoColor          bool   `json:"no_color,omitempty"` // no side colour: the panel is one plain block, without the bar on its left
-	BannerURL        string `json:"banner_url"`
-	HideCategoryList bool   `json:"hide_category_list"`
+	Format                string                `json:"format,omitempty"` // message, embed or component (Components V2)
+	DiscordID             uint32                `json:"discord_id,omitempty"`
+	AllowedMentions       *PanelAllowedMentions `json:"allowed_mentions,omitempty"`
+	SuppressEmbeds        bool                  `json:"suppress_embeds,omitempty"`
+	SuppressNotifications bool                  `json:"suppress_notifications,omitempty"`
+	Title                 string                `json:"title"`
+	Description           string                `json:"description"`
+	Footer                string                `json:"footer"`
+	Color                 int                   `json:"color"`
+	NoColor               bool                  `json:"no_color,omitempty"` // no side colour: the panel is one plain block, without the bar on its left
+	BannerURL             string                `json:"banner_url"`
+	HideCategoryList      bool                  `json:"hide_category_list"`
 	// Layout is the order of everything in the panel message. Empty: the standard layout (see StandardPanelLayout).
 	Layout []PanelBlock `json:"layout,omitempty"`
 }
@@ -42,15 +46,17 @@ type PanelAppearance struct {
 // PanelBlock is one part of a panel message. The built-in types (banner, title, description, categories, footer,
 // buttons) show what the panel's own fields hold; the others carry their own content.
 type PanelBlock struct {
-	ID   string `json:"id"`
-	Type string `json:"type"` // banner, title, description, categories, footer, buttons, text, separator, gallery, section, links
+	ID        string `json:"id"`
+	Type      string `json:"type"` // banner, title, description, categories, footer, buttons, text, separator, gallery, section, links
+	DiscordID uint32 `json:"discord_id,omitempty"`
 
-	Content             string      `json:"content,omitempty"`               // text
-	Divider             *bool       `json:"divider,omitempty"`               // separator: a visible line (default true)
-	Large               bool        `json:"large,omitempty"`                 // separator: large spacing
-	Items               []PanelItem `json:"items,omitempty"`                 // gallery
-	Text                string      `json:"text,omitempty"`                  // section
-	ThumbnailURL        string      `json:"thumbnail_url,omitempty"`         // section
+	Content             string      `json:"content,omitempty"`       // text
+	Divider             *bool       `json:"divider,omitempty"`       // separator: a visible line (default true)
+	Large               bool        `json:"large,omitempty"`         // separator: large spacing
+	Items               []PanelItem `json:"items,omitempty"`         // gallery
+	Text                string      `json:"text,omitempty"`          // section
+	ThumbnailURL        string      `json:"thumbnail_url,omitempty"` // section
+	ThumbnailDiscordID  uint32      `json:"thumbnail_discord_id,omitempty"`
 	AccessoryType       string      `json:"accessory_type,omitempty"`        // section: thumbnail or ticket_button
 	AccessoryCategoryID string      `json:"accessory_category_id,omitempty"` // section ticket button
 	Links               []PanelLink `json:"links,omitempty"`                 // links
@@ -60,10 +66,19 @@ type PanelBlock struct {
 type PanelItem struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
+	DiscordID   uint32 `json:"discord_id,omitempty"`
 }
 
 // PanelLink is one link button of a links block.
 type PanelLink struct {
-	Label string `json:"label"`
-	URL   string `json:"url"`
+	Label     string `json:"label"`
+	URL       string `json:"url"`
+	DiscordID uint32 `json:"discord_id,omitempty"`
+}
+
+type PanelAllowedMentions struct {
+	Parse       []string `json:"parse"`
+	Users       []string `json:"users"`
+	Roles       []string `json:"roles"`
+	RepliedUser bool     `json:"replied_user"`
 }

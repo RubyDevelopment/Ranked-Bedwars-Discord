@@ -512,7 +512,14 @@ func (r *runner) buttonRow(rep reply) []discordgo.MessageComponent {
 }
 
 func (r *runner) replyPayload(rep reply) map[string]any {
-	doc := &helpers.MessageDoc{AllowMentions: false}
+	doc := &helpers.MessageDoc{
+		AllowMentions:         rep.AllowMentions,
+		SuppressEmbeds:        rep.SuppressEmbeds,
+		SuppressNotifications: rep.SuppressNotifications,
+	}
+	if rep.AllowedMentions != nil {
+		doc.AllowedMentions = rep.AllowedMentions
+	}
 	switch rep.Type {
 	case "component":
 		doc.Mode = "v2"
@@ -740,18 +747,22 @@ type step struct {
 type replyButton = types.LinkButton
 
 type reply struct {
-	Type       string         `json:"type"`
-	Text       string         `json:"text"`
-	Content    string         `json:"content"`
-	MessageID  string         `json:"messageId"`
-	Ephemeral  bool           `json:"ephemeral"`
-	Title      string         `json:"title"`
-	Color      string         `json:"color"`
-	Footer     string         `json:"footer"`
-	Thumbnail  string         `json:"thumbnail"`
-	Buttons    []replyButton  `json:"buttons"`
-	Embeds     []types.Embed  `json:"embeds"`
-	Components []types.V2Item `json:"components"`
+	Type                  string                   `json:"type"`
+	Text                  string                   `json:"text"`
+	Content               string                   `json:"content"`
+	MessageID             string                   `json:"messageId"`
+	Ephemeral             bool                     `json:"ephemeral"`
+	AllowMentions         bool                     `json:"allow_mentions"`
+	AllowedMentions       *helpers.AllowedMentions `json:"allowed_mentions"`
+	SuppressEmbeds        bool                     `json:"suppress_embeds"`
+	SuppressNotifications bool                     `json:"suppress_notifications"`
+	Title                 string                   `json:"title"`
+	Color                 string                   `json:"color"`
+	Footer                string                   `json:"footer"`
+	Thumbnail             string                   `json:"thumbnail"`
+	Buttons               []replyButton            `json:"buttons"`
+	Embeds                []types.Embed            `json:"embeds"`
+	Components            []types.V2Item           `json:"components"`
 }
 
 type replyRule struct {

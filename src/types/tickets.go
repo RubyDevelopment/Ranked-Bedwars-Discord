@@ -40,13 +40,16 @@ type TicketCategory struct {
 // Body and Footer accept the placeholders {user}, {username}, {category},
 // {reference}, {number}, {staff} and {server}.
 type TicketWelcome struct {
-	Title        string `json:"title"`
-	Body         string `json:"body"`
-	Footer       string `json:"footer"`
-	Color        int    `json:"color"`
-	NoColor      bool   `json:"no_color,omitempty"` // no side colour: the bar takes the embed's own background colour
-	ThumbnailURL string `json:"thumbnail_url"`
-	HideDetails  bool   `json:"hide_details"`
+	Title                 string                `json:"title"`
+	Body                  string                `json:"body"`
+	Footer                string                `json:"footer"`
+	Color                 int                   `json:"color"`
+	NoColor               bool                  `json:"no_color,omitempty"` // no side colour: the bar takes the embed's own background colour
+	ThumbnailURL          string                `json:"thumbnail_url"`
+	HideDetails           bool                  `json:"hide_details"`
+	AllowedMentions       *PanelAllowedMentions `json:"allowed_mentions,omitempty"`
+	SuppressEmbeds        bool                  `json:"suppress_embeds,omitempty"`
+	SuppressNotifications bool                  `json:"suppress_notifications,omitempty"`
 	// Fields are the embed fields under the welcome text (name, value and whether they sit side by side). Name and value
 	// take the same placeholders as the text, plus {created} and {status}. Without Fields (nil) the ticket details are
 	// shown as the standard five (Reference, Category, Owner, Created At, Status) unless HideDetails is on. An empty list

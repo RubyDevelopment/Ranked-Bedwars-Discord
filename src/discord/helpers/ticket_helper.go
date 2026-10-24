@@ -514,6 +514,7 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		Embeds:          []*discordgo.MessageEmbed{embed},
 		Components:      buttons,
 		AllowedMentions: ticketMentions(ticket, panel, category),
+		Flags:           ticketWelcomeFlags(category.Welcome),
 	})
 	if err != nil {
 		_, _ = s.ChannelDelete(channelID)
@@ -574,14 +575,54 @@ func channelTicketName(name, reference string) string {
 
 // ticketMentions limits pings to the ticket's owner and (when enabled) its staff roles.
 func ticketMentions(ticket *types.Ticket, panel *types.InteractivePanel, category *types.TicketCategory) *discordgo.MessageAllowedMentions {
-	mentions := &discordgo.MessageAllowedMentions{
-		Parse: []discordgo.AllowedMentionType{},
-		Users: []string{ticket.OwnerID},
+	config := category.Welcome.AllowedMentions
+	if config == nil {
+		mentions := &discordgo.MessageAllowedMentions{
+			Parse: []discordgo.AllowedMentionType{},
+			Users: []string{ticket.OwnerID},
+		}
+		if category.PingStaff {
+			mentions.Roles = staffRoleIDs(panel, category)
+		}
+		return mentions
 	}
-	if category.PingStaff {
-		mentions.Roles = staffRoleIDs(panel, category)
+	users := validMentionIDs(config.Users)
+	roles := validMentionIDs(config.Roles)
+	parse := make([]discordgo.AllowedMentionType, 0, 3)
+	seen := map[string]bool{}
+	for _, kind := range config.Parse {
+		if kind != "everyone" && kind != "users" && kind != "roles" || seen[kind] {
+			continue
+		}
+		if kind == "users" && len(users) > 0 || kind == "roles" && len(roles) > 0 {
+			continue
+		}
+		seen[kind] = true
+		parse = append(parse, discordgo.AllowedMentionType(kind))
 	}
-	return mentions
+	if !seen["users"] {
+		users = validMentionIDs(append([]string{ticket.OwnerID}, users...))
+	}
+	if !seen["roles"] && category.PingStaff {
+		roles = validMentionIDs(append(staffRoleIDs(panel, category), roles...))
+	}
+	return &discordgo.MessageAllowedMentions{
+		Parse:       parse,
+		Users:       users,
+		Roles:       roles,
+		RepliedUser: config.RepliedUser,
+	}
+}
+
+func ticketWelcomeFlags(welcome types.TicketWelcome) discordgo.MessageFlags {
+	var flags discordgo.MessageFlags
+	if welcome.SuppressEmbeds {
+		flags |= discordgo.MessageFlagsSuppressEmbeds
+	}
+	if welcome.SuppressNotifications {
+		flags |= discordgo.MessageFlagsSuppressNotifications
+	}
+	return flags
 }
 
 // GuildDisplayName returns the guild's name, or a neutral fallback.
@@ -689,6 +730,7 @@ func RefreshTicketWelcome(s *discordgo.Session, guildID string, ticket *types.Ti
 		Embeds:          &[]*discordgo.MessageEmbed{embed},
 		Components:      &buttons,
 		AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{}},
+		Flags:           ticketWelcomeFlags(category.Welcome),
 	})
 }
 
@@ -1735,13 +1777,7 @@ func TicketPanelMessage(panel *types.InteractivePanel) []discordgo.MessageCompon
 		color = defaultPanelColor
 	}
 
-	layout := look.Layout
-	if len(layout) == 0 {
-		layout = StandardPanelLayout(panel)
-	} else if len(panel.Ticket.Categories) > 0 && !layoutHas(layout, "buttons") && !ticketCategoryButtonsInline(panel) {
-		layout = append(append([]types.PanelBlock{}, layout...), types.PanelBlock{Type: "buttons"}) // members could not open tickets otherwise
-	}
-
+	layout := ticketPanelLayout(panel)
 	var inner []discordgo.MessageComponent
 	for _, block := range layout {
 		inner = append(inner, panelBlockComponents(panel, block)...)
@@ -1750,6 +1786,17 @@ func TicketPanelMessage(panel *types.InteractivePanel) []discordgo.MessageCompon
 		return []discordgo.MessageComponent{discordgo.Container{Components: inner}}
 	}
 	return []discordgo.MessageComponent{v2Container(color, inner...)}
+}
+
+func ticketPanelLayout(panel *types.InteractivePanel) []types.PanelBlock {
+	layout := panel.Appearance.Layout
+	if len(layout) == 0 {
+		return StandardPanelLayout(panel)
+	}
+	if len(panel.Ticket.Categories) > 0 && !layoutHas(layout, "buttons") && !ticketCategoryButtonsInline(panel) {
+		layout = append(append([]types.PanelBlock{}, layout...), types.PanelBlock{Type: "buttons"})
+	}
+	return layout
 }
 
 func ticketPanelSend(panel *types.InteractivePanel) *discordgo.MessageSend {
@@ -1824,6 +1871,130 @@ func ticketPanelSend(panel *types.InteractivePanel) *discordgo.MessageSend {
 			Components:      TicketPanelMessage(panel),
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}
+	}
+}
+
+func ticketPanelPayload(panel *types.InteractivePanel) (map[string]any, error) {
+	serialized, err := json.Marshal(ticketPanelSend(panel))
+	if err != nil {
+		return nil, fmt.Errorf("serialize ticket panel message: %w", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(serialized, &payload); err != nil {
+		return nil, fmt.Errorf("decode ticket panel message: %w", err)
+	}
+	payload["allowed_mentions"] = ticketPanelAllowedMentions(panel.Appearance.AllowedMentions)
+	flags := 0
+	if panel.Appearance.SuppressEmbeds {
+		flags |= 1 << 2
+	}
+	if panel.Appearance.SuppressNotifications {
+		flags |= 1 << 12
+	}
+	if panel.Appearance.Format == "component" || panel.Appearance.Format == "" {
+		flags |= V2Flag
+		applyTicketPanelComponentIDs(panel, payload)
+	}
+	if flags != 0 {
+		payload["flags"] = flags
+	}
+	return payload, nil
+}
+
+func ticketPanelAllowedMentions(config *types.PanelAllowedMentions) map[string]any {
+	if config == nil {
+		return map[string]any{"parse": []string{}}
+	}
+	users := validMentionIDs(config.Users)
+	roles := validMentionIDs(config.Roles)
+	parse := make([]string, 0, 3)
+	seen := map[string]bool{}
+	for _, kind := range config.Parse {
+		if kind != "everyone" && kind != "users" && kind != "roles" || seen[kind] {
+			continue
+		}
+		if kind == "users" && len(users) > 0 || kind == "roles" && len(roles) > 0 {
+			continue
+		}
+		seen[kind] = true
+		parse = append(parse, kind)
+	}
+	out := map[string]any{"parse": parse, "replied_user": config.RepliedUser}
+	if len(users) > 0 {
+		out["users"] = users
+	}
+	if len(roles) > 0 {
+		out["roles"] = roles
+	}
+	return out
+}
+
+func applyTicketPanelComponentIDs(panel *types.InteractivePanel, payload map[string]any) {
+	components, ok := payload["components"].([]any)
+	if !ok || len(components) == 0 {
+		return
+	}
+	container, ok := components[0].(map[string]any)
+	if !ok {
+		return
+	}
+	setDiscordComponentID(container, panel.Appearance.DiscordID)
+	children, ok := container["components"].([]any)
+	if !ok {
+		return
+	}
+	layout := ticketPanelLayout(panel)
+	position := 0
+	for _, block := range layout {
+		rendered := panelBlockComponents(panel, block)
+		for range rendered {
+			if position >= len(children) {
+				return
+			}
+			child, ok := children[position].(map[string]any)
+			if !ok {
+				position++
+				continue
+			}
+			if block.Type != "categories" && block.Type != "buttons" {
+				setDiscordComponentID(child, block.DiscordID)
+			}
+			switch block.Type {
+			case "gallery":
+				if items, ok := child["items"].([]any); ok {
+					for idx, item := range block.Items {
+						if idx < len(items) {
+							if itemPayload, ok := items[idx].(map[string]any); ok {
+								setDiscordComponentID(itemPayload, item.DiscordID)
+							}
+						}
+					}
+				}
+			case "section":
+				if block.AccessoryType == "thumbnail" {
+					if accessory, ok := child["accessory"].(map[string]any); ok {
+						setDiscordComponentID(accessory, block.ThumbnailDiscordID)
+					}
+				}
+			case "links":
+				if rows, ok := child["components"].([]any); ok {
+					for idx, link := range block.Links {
+						if idx < len(rows) {
+							if button, ok := rows[idx].(map[string]any); ok {
+								setDiscordComponentID(button, link.DiscordID)
+							}
+						}
+					}
+				}
+			}
+			position++
+		}
+	}
+}
+
+func setDiscordComponentID(payload map[string]any, id uint32) {
+	if id != 0 {
+		payload["id"] = id
 	}
 }
 
@@ -2286,7 +2457,12 @@ func handleTicketPublish(s *discordgo.Session, i *discordgo.InteractionCreate, p
 		return
 	}
 
-	message, err := s.ChannelMessageSendComplex(channelID, ticketPanelSend(panel))
+	payload, err := ticketPanelPayload(panel)
+	if err != nil {
+		_ = UpdateV2(s, i, TicketPublishChannelErrorScreen(panel, "Could not build the ticket panel message. Please review its configuration and try again.")...)
+		return
+	}
+	messageID, err := SendPayload(s, channelID, payload)
 	if err != nil {
 		_ = UpdateV2(s, i, TicketPublishChannelErrorScreen(panel, "Could not publish the panel there. Check that I can view and send messages in the selected channel.")...)
 		return
@@ -2298,18 +2474,18 @@ func handleTicketPublish(s *discordgo.Session, i *discordgo.InteractionCreate, p
 			return ErrTicketPanelNotFound
 		}
 		stored.ChannelID = channelID
-		stored.MessageID = message.ID
+		stored.MessageID = messageID
 		stored.UpdatedAt = time.Now().Unix()
 		return nil
 	})
 	if err != nil {
-		if deleteErr := s.ChannelMessageDelete(channelID, message.ID); deleteErr != nil {
-			log.Printf("[Tickets] could not remove unpublished panel message %s in channel %s after config save failed: %v", message.ID, channelID, deleteErr)
+		if deleteErr := s.ChannelMessageDelete(channelID, messageID); deleteErr != nil {
+			log.Printf("[Tickets] could not remove unpublished panel message %s in channel %s after config save failed: %v", messageID, channelID, deleteErr)
 		}
 		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
 		return
 	}
-	if oldChannelID != "" && oldMessageID != "" && (oldChannelID != channelID || oldMessageID != message.ID) {
+	if oldChannelID != "" && oldMessageID != "" && (oldChannelID != channelID || oldMessageID != messageID) {
 		if err := s.ChannelMessageDelete(oldChannelID, oldMessageID); err != nil {
 			log.Printf("[Tickets] could not remove previous published panel message %s in channel %s: %v", oldMessageID, oldChannelID, err)
 		}

@@ -972,15 +972,25 @@ func (l *FieldsLayout) Render(names, values []string) string {
 
 // MessageDoc is a saved message.
 type MessageDoc struct {
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	AllowMentions  bool          `json:"allow_mentions"`
-	Mode           string        `json:"mode"`
-	Content        string        `json:"content"`
-	Embeds         []Embed       `json:"embeds"`
-	Buttons        []LinkButton  `json:"buttons"`
-	V2             []V2Item      `json:"v2"`
-	ResponseFields *FieldsLayout `json:"response_fields"`
+	ID                    string           `json:"id"`
+	Name                  string           `json:"name"`
+	AllowMentions         bool             `json:"allow_mentions,omitempty"`
+	AllowedMentions       *AllowedMentions `json:"allowed_mentions,omitempty"`
+	SuppressEmbeds        bool             `json:"suppress_embeds,omitempty"`
+	SuppressNotifications bool             `json:"suppress_notifications,omitempty"`
+	Mode                  string           `json:"mode"`
+	Content               string           `json:"content"`
+	Embeds                []Embed          `json:"embeds"`
+	Buttons               []LinkButton     `json:"buttons"`
+	V2                    []V2Item         `json:"v2"`
+	ResponseFields        *FieldsLayout    `json:"response_fields"`
+}
+
+type AllowedMentions struct {
+	Parse       []string `json:"parse"`
+	Users       []string `json:"users"`
+	Roles       []string `json:"roles"`
+	RepliedUser bool     `json:"replied_user"`
 }
 
 // ParseMessageDoc reads a stored message document. A document that does not parse is an error; missing fields are empty.
@@ -1024,6 +1034,9 @@ func colorInt(hex string) (int, bool) {
 
 func link(b LinkButton, f func(string) string) map[string]any {
 	out := map[string]any{"type": 2, "style": 5, "label": f(b.Label), "url": f(b.URL)}
+	if b.DiscordID != 0 {
+		out["id"] = b.DiscordID
+	}
 	if b.Emoji != "" {
 		out["emoji"] = map[string]any{"name": b.Emoji}
 	}
@@ -1031,6 +1044,13 @@ func link(b LinkButton, f func(string) string) map[string]any {
 		out["disabled"] = true
 	}
 	return out
+}
+
+func componentID(payload map[string]any, id uint32) map[string]any {
+	if id != 0 {
+		payload["id"] = id
+	}
+	return payload
 }
 
 func leaf(l V2Item, f func(string) string) map[string]any {
@@ -1041,9 +1061,9 @@ func leaf(l V2Item, f func(string) string) map[string]any {
 			for _, t := range l.Texts {
 				texts = append(texts, map[string]any{"type": 10, "content": f(t)})
 			}
-			acc := link(LinkButton{Label: l.Accessory.Label, URL: l.Accessory.URL, Emoji: l.Accessory.Emoji, Disabled: l.Accessory.Disabled}, f)
+			acc := link(LinkButton{Label: l.Accessory.Label, URL: l.Accessory.URL, DiscordID: l.Accessory.DiscordID, Emoji: l.Accessory.Emoji, Disabled: l.Accessory.Disabled}, f)
 			if l.Accessory.Kind == "thumbnail" {
-				acc = map[string]any{"type": 11, "media": map[string]any{"url": f(l.Accessory.URL)}}
+				acc = componentID(map[string]any{"type": 11, "media": map[string]any{"url": f(l.Accessory.URL)}}, l.Accessory.DiscordID)
 				if l.Accessory.Description != "" {
 					acc["description"] = f(l.Accessory.Description)
 				}
@@ -1051,18 +1071,21 @@ func leaf(l V2Item, f func(string) string) map[string]any {
 					acc["spoiler"] = true
 				}
 			}
-			return map[string]any{"type": 9, "components": texts, "accessory": acc}
+			return componentID(map[string]any{"type": 9, "components": texts, "accessory": acc}, l.DiscordID)
 		}
 		// Discord requires an accessory on a section: without one it is plain text.
 		parts := make([]string, 0, len(l.Texts))
 		for _, t := range l.Texts {
 			parts = append(parts, f(t))
 		}
-		return map[string]any{"type": 10, "content": strings.Join(parts, "\n")}
+		return componentID(map[string]any{"type": 10, "content": strings.Join(parts, "\n")}, l.DiscordID)
 	case "gallery":
 		items := make([]map[string]any, 0, len(l.Items))
 		for _, it := range l.Items {
 			item := map[string]any{"media": map[string]any{"url": f(it.URL)}}
+			if it.DiscordID != 0 {
+				item["id"] = it.DiscordID
+			}
 			if it.Description != "" {
 				item["description"] = f(it.Description)
 			}
@@ -1071,33 +1094,37 @@ func leaf(l V2Item, f func(string) string) map[string]any {
 			}
 			items = append(items, item)
 		}
-		return map[string]any{"type": 12, "items": items}
+		return componentID(map[string]any{"type": 12, "items": items}, l.DiscordID)
 	case "separator":
 		spacing := 1
 		if l.Spacing == 2 {
 			spacing = 2
 		}
-		return map[string]any{"type": 14, "divider": l.Divider == nil || *l.Divider, "spacing": spacing}
+		return componentID(map[string]any{"type": 14, "divider": l.Divider == nil || *l.Divider, "spacing": spacing}, l.DiscordID)
 	case "buttons":
 		row := make([]map[string]any, 0, len(l.Buttons))
 		for _, b := range l.Buttons {
 			row = append(row, link(b, f))
 		}
-		return map[string]any{"type": 1, "components": row}
+		return componentID(map[string]any{"type": 1, "components": row}, l.DiscordID)
 	default:
-		return map[string]any{"type": 10, "content": f(l.Content)}
+		return componentID(map[string]any{"type": 10, "content": f(l.Content)}, l.DiscordID)
 	}
 }
 
 // Payload is the JSON body Discord takes for a message, with {{variables}} filled in by f. Pings are off unless the
 // document allows mentions.
 func (d *MessageDoc) Payload(f func(string) string) map[string]any {
-	body := map[string]any{"allowed_mentions": map[string]any{"parse": []string{}}}
-	if d.AllowMentions {
-		body["allowed_mentions"] = map[string]any{"parse": []string{"users", "roles"}}
+	body := map[string]any{"allowed_mentions": d.allowedMentionsPayload()}
+	flags := 0
+	if d.SuppressEmbeds {
+		flags |= 1 << 2
+	}
+	if d.SuppressNotifications {
+		flags |= 1 << 12
 	}
 	if d.Mode == "v2" {
-		body["flags"] = V2Flag
+		flags |= V2Flag
 		comps := make([]map[string]any, 0, len(d.V2))
 		for _, it := range d.V2 {
 			if it.Type != "container" {
@@ -1108,14 +1135,18 @@ func (d *MessageDoc) Payload(f func(string) string) map[string]any {
 			for _, c := range it.Children {
 				children = append(children, leaf(c, f))
 			}
-			c := map[string]any{"type": 17, "spoiler": it.Spoiler, "components": children}
+			c := componentID(map[string]any{"type": 17, "spoiler": it.Spoiler, "components": children}, it.DiscordID)
 			if n, ok := colorInt(it.Accent); ok {
 				c["accent_color"] = n
 			}
 			comps = append(comps, c)
 		}
 		body["components"] = comps
+		body["flags"] = flags
 		return body
+	}
+	if flags != 0 {
+		body["flags"] = flags
 	}
 	if d.Content != "" {
 		body["content"] = f(d.Content)
@@ -1182,6 +1213,64 @@ func (d *MessageDoc) Payload(f func(string) string) map[string]any {
 		body["components"] = []map[string]any{{"type": 1, "components": row}}
 	}
 	return body
+}
+
+func (d *MessageDoc) allowedMentionsPayload() map[string]any {
+	if d.AllowedMentions == nil {
+		parse := []string{}
+		if d.AllowMentions {
+			parse = []string{"users", "roles"}
+		}
+		return map[string]any{"parse": parse}
+	}
+
+	users := validMentionIDs(d.AllowedMentions.Users)
+	roles := validMentionIDs(d.AllowedMentions.Roles)
+	parse := make([]string, 0, 3)
+	seen := map[string]bool{}
+	for _, kind := range d.AllowedMentions.Parse {
+		if kind != "everyone" && kind != "users" && kind != "roles" {
+			continue
+		}
+		if (kind == "users" && len(users) > 0) || (kind == "roles" && len(roles) > 0) || seen[kind] {
+			continue
+		}
+		seen[kind] = true
+		parse = append(parse, kind)
+	}
+	out := map[string]any{"parse": parse, "replied_user": d.AllowedMentions.RepliedUser}
+	if len(users) > 0 {
+		out["users"] = users
+	}
+	if len(roles) > 0 {
+		out["roles"] = roles
+	}
+	return out
+}
+
+func validMentionIDs(ids []string) []string {
+	out := make([]string, 0, min(len(ids), 100))
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if len(out) == 100 {
+			break
+		}
+		if len(id) < 17 || len(id) > 20 || seen[id] {
+			continue
+		}
+		valid := true
+		for _, char := range id {
+			if char < '0' || char > '9' {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			out = append(out, id)
+			seen[id] = true
+		}
+	}
+	return out
 }
 
 // SendPayload posts payload in channelID and returns the new message's id.

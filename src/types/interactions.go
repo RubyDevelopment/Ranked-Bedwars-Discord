@@ -178,10 +178,11 @@ type Embed struct {
 type HistoryPageKind string
 
 type LinkButton struct {
-	Label    string `json:"label"`
-	URL      string `json:"url"`
-	Emoji    string `json:"emoji"`    // a unicode emoji before the label
-	Disabled bool   `json:"disabled"` // greyed out
+	Label     string `json:"label"`
+	URL       string `json:"url"`
+	DiscordID uint32 `json:"discord_id,omitempty"`
+	Emoji     string `json:"emoji"`    // a unicode emoji before the label
+	Disabled  bool   `json:"disabled"` // greyed out
 }
 
 // RoleHierarchyIssue describes why a role mutation is not allowed.
@@ -190,6 +191,7 @@ type RoleHierarchyIssue string
 // V2Item is one Components V2 item: a container (with Children) or one of its leaves. Only the fields of its Type are used.
 type V2Item struct {
 	Type      string   `json:"type"`
+	DiscordID uint32   `json:"discord_id,omitempty"`
 	Content   string   `json:"content"`
 	Texts     []string `json:"texts"`
 	Accessory struct {
@@ -200,11 +202,13 @@ type V2Item struct {
 		Emoji       string `json:"emoji"`
 		Disabled    bool   `json:"disabled"`
 		Spoiler     bool   `json:"spoiler"`
+		DiscordID   uint32 `json:"discord_id,omitempty"`
 	} `json:"accessory"`
 	Items []struct {
 		URL         string `json:"url"`
 		Description string `json:"description"`
 		Spoiler     bool   `json:"spoiler"`
+		DiscordID   uint32 `json:"discord_id,omitempty"`
 	} `json:"items"`
 	Divider  *bool        `json:"divider"`
 	Spacing  int          `json:"spacing"`
