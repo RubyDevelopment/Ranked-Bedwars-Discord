@@ -23,17 +23,17 @@ func init() {
 // Command Definition
 // ============================================================================
 
-// TicketManageCommand is the support ticket system: a panel builder for administrators
+// TicketManageCommand is the support ticket system: dashboard panel publishing
 // and claim, close, leaderboard and log tools for staff.
 var TicketManageCommand = &types.Command{
 	Name:         "ticket",
 	Requirements: types.StaffRequirements,
-	Description:  "Manages the support ticket system: panels, claims, members, and logs.",
+	Description:  "Manages ticket panel publishing, claims, members, and logs.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
-			{Name: "panel", Description: "Create, customise, and send ticket panels", Type: discordgo.ApplicationCommandOptionSubCommand},
+			{Name: "panel", Description: "Publish a ticket panel created in the dashboard", Type: discordgo.ApplicationCommandOptionSubCommand},
 			{Name: "leaderboard", Description: "View the staff members who claimed the most tickets", Type: discordgo.ApplicationCommandOptionSubCommand},
 			{
 				Name: "stats", Description: "View a staff member's ticket statistics", Type: discordgo.ApplicationCommandOptionSubCommand,
@@ -99,17 +99,17 @@ func executeTicketManageCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	return helpers.EditInteractionEmbed(s, i, helpers.TicketManageInvalidSubcommandEmbed(i))
 }
 
-// executeTicketPanel opens the panel manager for administrators.
+// executeTicketPanel opens the panel publishing flow for administrators.
 func executeTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if !helpers.InteractionIsAdmin(i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only administrators can manage ticket panels."))
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only administrators can publish ticket panels. Create and edit panels in the dashboard."))
 	}
 
 	ip, err := helpers.Tickets.Load(i.GuildID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
 	}
-	return helpers.EditInteractionV2(s, i, helpers.TicketManagerScreen(helpers.SortedTicketPanels(ip))...)
+	return helpers.EditInteractionV2(s, i, helpers.TicketPublishPanelScreen(helpers.SortedTicketPanels(ip))...)
 }
 
 // executeTicketLeaderboard ranks staff by claimed tickets.

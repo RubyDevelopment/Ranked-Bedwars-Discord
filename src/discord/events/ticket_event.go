@@ -11,12 +11,11 @@ func init() {
 	helpers.RegisterEvent(TicketsEvent)
 }
 
-// TicketsEvent listens for every ticket button, select menu and modal
-// submission (panel builder, open, claim, close). Ticket panels themselves are
-// created and sent from `/ticket panel`; nothing is published in the background.
+// TicketsEvent handles ticket opening and management buttons, plus the
+// dashboard-panel publish menus.
 var TicketsEvent = &types.Event{
 	Name:        "Tickets",
-	Description: "Handles the ticket panel's buttons, select menus and forms: opening, claiming and closing tickets.",
+	Description: "Handles ticket buttons and the panel selection/channel menus used to publish dashboard-created panels.",
 	Type:        "interaction_create",
 	Once:        false,
 	Disabled:    false,

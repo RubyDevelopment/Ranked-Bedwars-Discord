@@ -22,10 +22,7 @@ import (
 	"ranked-bedwars/src/types"
 )
 
-// Everything behind the ticket system that is not the slash command itself:
-// the ticket buttons (open, claim, close), the `/ticket panel` builder's
-// buttons, selects and modals, and the shared embeds. The "Tickets"
-// event (events/ticket_interaction.go) routes interactions here.
+// Ticket persistence, panel publishing, ticket interactions, and shared embeds.
 
 // ============================================================================
 // Constants & Configuration
@@ -38,11 +35,6 @@ const (
 	// MaxTicketHistory caps how many closed tickets are kept for /ticket logs.
 	MaxTicketHistory = 200
 
-	// MaxPanelsPerGuild and MaxCategoriesPerPanel keep a panel within what a
-	// single Discord message can render.
-	MaxPanelsPerGuild     = 10
-	MaxCategoriesPerPanel = 10
-
 	idAlphabet  = "abcdefghijklmnopqrstuvwxyz0123456789"
 	refAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -54,30 +46,18 @@ const (
 	inactivityCloser               = "inactivity"
 )
 
-// Default ticket copy, written in the same voice as the bot's own messages.
-const (
-	defaultWelcomeTitle      = "Ticket Created: {category}"
-	defaultWelcomeBody       = "Hello {user},\n\nThank you for reaching out! Our support team has been notified and will be with you shortly.\n\nPlease explain your issue in detail and our support team will assist you."
-	defaultNameFormat        = "{username} - Ticket: {category}"
-	defaultPanelFooter       = "**Getting Started:**\nUse the buttons below to open a ticket and select the right category for faster support."
-	defaultInactivityMessage = "This ticket has been inactive for {inactive_hours} hours. It will be closed in {hours_until_close} hours if no new messages are sent."
-)
+const defaultInactivityMessage = "This ticket has been inactive for {inactive_hours} hours. It will be closed in {hours_until_close} hours if no new messages are sent."
 
 // Ticket component custom IDs are namespaced `tkt:` and colon separated.
 const (
 	TicketIDPrefix = "tkt:"
 
-	TicketIDOpen      = "tkt:open"      // tkt:open:<panel>:<category>
-	TicketIDClaim     = "tkt:claim"     // in-ticket
-	TicketIDUnclaim   = "tkt:unclaim"   // in-ticket
-	TicketIDClose     = "tkt:close"     // in-ticket, asks for confirmation
-	TicketIDCloseYes  = "tkt:close:yes" // confirmation
-	TicketIDCloseNo   = "tkt:close:no"  // confirmation
-	TicketIDBuilder   = "tkt:b"         // panel manager
-	TicketIDPanelEdit = "tkt:e"         // tkt:e:<panel>:<action>
-	TicketIDCategory  = "tkt:c"         // tkt:c:<panel>:<category>:<action>
-	TicketIDSettings  = "tkt:s"         // tkt:s:<panel>:<action>
-	TicketIDModal     = "tkt:m"         // tkt:m:<kind>:<panel>[:<category>]
+	TicketIDOpen     = "tkt:open"      // tkt:open:<panel>:<category>
+	TicketIDClaim    = "tkt:claim"     // in-ticket
+	TicketIDUnclaim  = "tkt:unclaim"   // in-ticket
+	TicketIDClose    = "tkt:close"     // in-ticket, asks for confirmation
+	TicketIDCloseYes = "tkt:close:yes" // confirmation
+	TicketIDCloseNo  = "tkt:close:no"  // confirmation
 )
 
 // ============================================================================
@@ -270,62 +250,6 @@ func FindTicketCategory(panel *types.InteractivePanel, categoryID string) *types
 	return nil
 }
 
-// NewTicketPanel builds a fresh ticket panel pre-filled with friendly defaults.
-func NewTicketPanel(name, title, actorID string) *types.InteractivePanel {
-	now := time.Now().Unix()
-	if title == "" {
-		title = name
-	}
-	return &types.InteractivePanel{
-		ID:   randomID(idAlphabet, 6),
-		Type: types.PanelTypeTicket,
-		Name: name,
-		Appearance: types.PanelAppearance{
-			Title:       title,
-			Description: "Need assistance? Open a ticket below and our team will help you out.",
-			Footer:      defaultPanelFooter,
-			Color:       defaultPanelColor,
-		},
-		Ticket: &types.TicketPanelConfig{
-			Settings: types.TicketSettings{
-				MaxOpenPerUser:          1,
-				ClaimEnabled:            true,
-				DMTranscript:            true,
-				DeleteOnClose:           true,
-				OwnerCanClose:           true,
-				InactivityEnabled:       true,
-				InactivityReminderHours: defaultInactivityReminderHours,
-				InactivityCloseHours:    defaultInactivityCloseHours,
-				InactivityMessage:       defaultInactivityMessage,
-			},
-		},
-		CreatedBy: actorID,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-}
-
-// NewTicketCategory builds a category with the default welcome message.
-func NewTicketCategory(label string) *types.TicketCategory {
-	return &types.TicketCategory{
-		ID:          randomID(idAlphabet, 4),
-		Label:       label,
-		ButtonStyle: 2,
-		NameFormat:  defaultNameFormat,
-		PingStaff:   true,
-		Welcome: types.TicketWelcome{
-			Title: defaultWelcomeTitle,
-			Body:  defaultWelcomeBody,
-			Color: defaultPanelColor,
-		},
-	}
-}
-
-// ============================================================================
-// Ticket Helpers
-// ============================================================================
-
-// OpenTicketsFor returns the open tickets owned by userID in the guild.
 func OpenTicketsFor(ip *types.InteractivePanels, userID string) []*types.Ticket {
 	var owned []*types.Ticket
 	for _, ticket := range ip.Tickets.Open {
@@ -558,14 +482,14 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		}
 	}
 
-	embed := TicketWelcomeMessage(ticket, panel, category, guildName, false)
+	embed := TicketWelcomeMessage(ticket, panel, category, guildName)
 	ping := "<@" + ticket.OwnerID + ">"
 	if category.PingStaff && ticket.Status != types.TicketStatusClosed {
 		for _, roleID := range staffRoleIDs(panel, category) {
 			ping += " <@&" + roleID + ">"
 		}
 	}
-	buttons := ticketWelcomeButtons(ticket, panel, false)
+	buttons := ticketWelcomeButtons(ticket, panel)
 	message, err := s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content:         ping,
 		Embeds:          []*discordgo.MessageEmbed{embed},
@@ -713,8 +637,8 @@ func RefreshTicketWelcome(s *discordgo.Session, guildID string, ticket *types.Ti
 	if category == nil {
 		return
 	}
-	embed := TicketWelcomeMessage(ticket, panel, category, GuildDisplayName(s, guildID), false)
-	buttons := ticketWelcomeButtons(ticket, panel, false)
+	embed := TicketWelcomeMessage(ticket, panel, category, GuildDisplayName(s, guildID))
+	buttons := ticketWelcomeButtons(ticket, panel)
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		ID:              ticket.WelcomeMessageID,
 		Channel:         ticket.ThreadID,
@@ -1528,48 +1452,6 @@ func RespondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 	})
 }
 
-// ParseHexColor reads `#55FFFF`, `55FFFF` or `0x55FFFF`.
-func ParseHexColor(raw string) (int, bool) {
-	raw = strings.TrimSpace(strings.ToLower(raw))
-	raw = strings.TrimPrefix(strings.TrimPrefix(raw, "#"), "0x")
-	if len(raw) != 6 {
-		return 0, false
-	}
-	value, err := strconv.ParseInt(raw, 16, 32)
-	if err != nil {
-		return 0, false
-	}
-	return int(value), true
-}
-
-// ParseButtonStyle reads a colour name into a button style.
-func ParseButtonStyle(raw string) (int, bool) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "grey", "gray", "secondary":
-		return int(discordgo.SecondaryButton), true
-	case "blue", "blurple", "primary":
-		return int(discordgo.PrimaryButton), true
-	case "green", "success":
-		return int(discordgo.SuccessButton), true
-	case "red", "danger":
-		return int(discordgo.DangerButton), true
-	}
-	return 0, false
-}
-
-// ButtonStyleName is the inverse of ParseButtonStyle, for pre-filling modals.
-func ButtonStyleName(style int) string {
-	switch discordgo.ButtonStyle(style) {
-	case discordgo.PrimaryButton:
-		return "blue"
-	case discordgo.SuccessButton:
-		return "green"
-	case discordgo.DangerButton:
-		return "red"
-	}
-	return "grey"
-}
-
 // HexColor formats a colour for display and for pre-filling modals.
 func HexColor(color int) string {
 	return fmt.Sprintf("#%06X", color)
@@ -1697,12 +1579,11 @@ func TicketPlaceholders(text string, ticket *types.Ticket, panel *types.Interact
 	).Replace(text)
 }
 
-// TicketPanelMessage renders the public panel members open tickets from. With
-// preview set the buttons are disabled, for the builder's live preview.
+// TicketPanelMessage renders the published panel members open tickets from.
 //
 // The panel is a list of blocks (look.Layout): the built-in ones show the panel's fields, the others are free text,
 // lines, galleries, sections and link buttons. A panel without a layout has the standard one.
-func TicketPanelMessage(panel *types.InteractivePanel, preview bool) []discordgo.MessageComponent {
+func TicketPanelMessage(panel *types.InteractivePanel) []discordgo.MessageComponent {
 	look := panel.Appearance
 	color := look.Color
 	if color == 0 {
@@ -1718,7 +1599,7 @@ func TicketPanelMessage(panel *types.InteractivePanel, preview bool) []discordgo
 
 	var inner []discordgo.MessageComponent
 	for _, block := range layout {
-		inner = append(inner, panelBlockComponents(panel, block, preview)...)
+		inner = append(inner, panelBlockComponents(panel, block)...)
 	}
 	if look.NoColor { // a container without an accent has no bar
 		return []discordgo.MessageComponent{discordgo.Container{Components: inner}}
@@ -1726,7 +1607,7 @@ func TicketPanelMessage(panel *types.InteractivePanel, preview bool) []discordgo
 	return []discordgo.MessageComponent{v2Container(color, inner...)}
 }
 
-func ticketPanelSend(panel *types.InteractivePanel, preview bool) *discordgo.MessageSend {
+func ticketPanelSend(panel *types.InteractivePanel) *discordgo.MessageSend {
 	look := panel.Appearance
 	switch look.Format {
 	case "message":
@@ -1751,7 +1632,7 @@ func ticketPanelSend(panel *types.InteractivePanel, preview bool) *discordgo.Mes
 		}
 		return &discordgo.MessageSend{
 			Content:         truncate(strings.Join(parts, "\n\n"), 2000),
-			Components:      ticketPanelButtons(panel, preview),
+			Components:      ticketPanelButtons(panel),
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}
 	case "embed":
@@ -1789,19 +1670,19 @@ func ticketPanelSend(panel *types.InteractivePanel, preview bool) *discordgo.Mes
 		}
 		return &discordgo.MessageSend{
 			Embeds:          []*discordgo.MessageEmbed{embed},
-			Components:      ticketPanelButtons(panel, preview),
+			Components:      ticketPanelButtons(panel),
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}
 	default:
 		return &discordgo.MessageSend{
 			Flags:           discordgo.MessageFlagsIsComponentsV2,
-			Components:      TicketPanelMessage(panel, preview),
+			Components:      TicketPanelMessage(panel),
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}
 	}
 }
 
-func ticketPanelButtons(panel *types.InteractivePanel, preview bool) []discordgo.MessageComponent {
+func ticketPanelButtons(panel *types.InteractivePanel) []discordgo.MessageComponent {
 	buttons := make([]discordgo.MessageComponent, 0, len(panel.Ticket.Categories))
 	for _, category := range panel.Ticket.Categories {
 		label := category.ButtonLabel
@@ -1814,7 +1695,6 @@ func ticketPanelButtons(panel *types.InteractivePanel, preview bool) []discordgo
 			category.Emoji,
 			discordgo.ButtonStyle(category.ButtonStyle),
 		)
-		button.Disabled = preview
 		buttons = append(buttons, button)
 	}
 	return v2ButtonRows(buttons)
@@ -1870,7 +1750,7 @@ func StandardPanelLayout(panel *types.InteractivePanel) []types.PanelBlock {
 }
 
 // panelBlockComponents renders one block; a block with nothing to show (an empty title, an unknown type) renders nothing.
-func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, preview bool) []discordgo.MessageComponent {
+func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock) []discordgo.MessageComponent {
 	look := panel.Appearance
 	categories := panel.Ticket.Categories
 	one := func(c discordgo.MessageComponent) []discordgo.MessageComponent {
@@ -1909,7 +1789,6 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 						category.Emoji,
 						discordgo.ButtonStyle(category.ButtonStyle),
 					)
-					button.Disabled = preview
 					out = append(out, discordgo.Section{
 						Components: []discordgo.MessageComponent{v2Text(text)},
 						Accessory:  button,
@@ -1938,7 +1817,6 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 				buttonLabel = category.Label
 			}
 			button := v2Button(fmt.Sprintf("%s:%s:%s", TicketIDOpen, panel.ID, category.ID), buttonLabel, category.Emoji, discordgo.ButtonStyle(category.ButtonStyle))
-			button.Disabled = preview
 			buttons = append(buttons, button)
 		}
 		return v2ButtonRows(buttons)
@@ -1984,7 +1862,6 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 				category.Emoji,
 				discordgo.ButtonStyle(category.ButtonStyle),
 			)
-			button.Disabled = preview
 			return one(discordgo.Section{
 				Components: []discordgo.MessageComponent{v2Text(b.Text)},
 				Accessory:  button,
@@ -2034,14 +1911,13 @@ func TicketStatusLabel(ticket *types.Ticket) string {
 	return "🟡 Awaiting Staff"
 }
 
-func ticketWelcomeButtons(ticket *types.Ticket, panel *types.InteractivePanel, preview bool) []discordgo.MessageComponent {
+func ticketWelcomeButtons(ticket *types.Ticket, panel *types.InteractivePanel) []discordgo.MessageComponent {
 	closeButton := discordgo.Button{
 		Label:    "Close Ticket",
 		Style:    discordgo.DangerButton,
 		Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
 		CustomID: TicketIDClose,
 	}
-	closeButton.Disabled = preview
 	buttons := []discordgo.MessageComponent{closeButton}
 
 	if panel != nil && panel.Ticket != nil && panel.Ticket.Settings.ClaimEnabled {
@@ -2059,7 +1935,6 @@ func ticketWelcomeButtons(ticket *types.Ticket, panel *types.InteractivePanel, p
 				CustomID: TicketIDUnclaim,
 			}
 		}
-		claim.Disabled = preview
 		buttons = append(buttons, claim)
 	}
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
@@ -2127,304 +2002,69 @@ func TicketClosedLines(ticket *types.Ticket, guildName string) []string {
 }
 
 // ============================================================================
-// Builder Views
+// Panel Publishing
 // ============================================================================
 
-// TicketManagerScreen lists the guild's ticket panels.
-func TicketManagerScreen(panels []*types.InteractivePanel) []discordgo.MessageComponent {
-	intro := "Design the panels your members use to open tickets. Every panel has its own look, categories, welcome messages and settings."
-	inner := []discordgo.MessageComponent{v2Text("## Ticket Panels\n" + intro), v2Divider(true, false)}
-
+func TicketPublishPanelScreen(panels []*types.InteractivePanel) []discordgo.MessageComponent {
+	inner := []discordgo.MessageComponent{
+		v2Text("## Publish a Ticket Panel\nCreate and customize ticket panels in the Ranked Bedwars Dashboard. This Discord command only publishes an existing panel; to make changes, use the dashboard."),
+		v2Divider(true, false),
+	}
 	if len(panels) == 0 {
-		inner = append(inner, v2Text("No panels yet. Press **New Panel** to create your first one."))
-	} else {
-		var list strings.Builder
-		options := make([]discordgo.SelectMenuOption, 0, len(panels))
-		for _, panel := range panels {
-			fmt.Fprintf(&list, "**%s** - %d categories - %s\n", panel.Name, len(panel.Ticket.Categories), panelSentLabel(panel))
-			options = append(options, discordgo.SelectMenuOption{
-				Label:       truncate(panel.Name, 100),
-				Value:       panel.ID,
-				Description: fmt.Sprintf("%d categories", len(panel.Ticket.Categories)),
-			})
-		}
-		inner = append(inner, v2Text(list.String()), v2Row(discordgo.SelectMenu{
-			CustomID:    TicketIDBuilder + ":select",
-			Placeholder: "Select a panel to edit",
-			Options:     options,
-		}))
+		inner = append(inner, v2Text("No ticket panels are configured yet. Create one in the dashboard, then use `/ticket panel` to publish it."))
+		return []discordgo.MessageComponent{v2Container(ColorDefault, inner...)}
 	}
 
-	newButton := v2Button(TicketIDBuilder+":new", "New Panel", "➕", discordgo.SuccessButton)
-	newButton.Disabled = len(panels) >= MaxPanelsPerGuild
-	inner = append(inner, v2Row(newButton))
+	options := make([]discordgo.SelectMenuOption, 0, len(panels))
+	for _, panel := range panels {
+		options = append(options, discordgo.SelectMenuOption{
+			Label:       truncate(panel.Name, 100),
+			Value:       panel.ID,
+			Description: fmt.Sprintf("%d categories", len(panel.Ticket.Categories)),
+		})
+	}
+	inner = append(inner,
+		v2Text("**1. Choose the panel to publish**"),
+		v2Row(discordgo.SelectMenu{
+			CustomID:    "tkt:publish:panel",
+			Placeholder: "Select a dashboard ticket panel",
+			Options:     options,
+		}),
+	)
 	return []discordgo.MessageComponent{v2Container(ColorDefault, inner...)}
 }
 
-func panelSentLabel(panel *types.InteractivePanel) string {
-	if panel.ChannelID == "" || panel.MessageID == "" {
-		return "not sent yet"
-	}
-	return "sent in <#" + panel.ChannelID + ">"
-}
-
-// TicketEditorScreen shows a live preview of the panel with its editing controls.
-func TicketEditorScreen(panel *types.InteractivePanel, notice string) []discordgo.MessageComponent {
-	id := func(action string) string { return fmt.Sprintf("%s:%s:%s", TicketIDPanelEdit, panel.ID, action) }
-	categories := panel.Ticket.Categories
-
-	addCategory := v2Button(id("addcat"), "Add Category", "➕", discordgo.SuccessButton)
-	addCategory.Disabled = len(categories) >= MaxCategoriesPerPanel
-	refresh := v2Button(id("refresh"), "Update Sent Panel", "🔄", discordgo.SecondaryButton)
-	refresh.Disabled = panel.MessageID == ""
-
-	editor := []discordgo.MessageComponent{
-		v2Text(fmt.Sprintf("## Editing %s\n%s", panel.Name, panelSentLabel(panel))),
-	}
-	if notice != "" {
-		editor = append(editor, v2Text(notice))
-	}
-	editor = append(editor, v2Divider(true, false),
-		v2Row(
-			v2Button(id("look"), "Edit Appearance", "🎨", discordgo.PrimaryButton),
-			addCategory,
-			v2Button(id("settings"), "Settings", "⚙️", discordgo.SecondaryButton),
-		),
-	)
-
-	if len(categories) > 0 {
-		options := make([]discordgo.SelectMenuOption, 0, len(categories))
-		for _, category := range categories {
-			description := category.Description
-			if description == "" {
-				description = "No description"
-			}
-			options = append(options, discordgo.SelectMenuOption{
-				Label:       truncate(category.Label, 100),
-				Value:       category.ID,
-				Description: truncate(description, 100),
-				Emoji:       parseComponentEmoji(category.Emoji),
-			})
-		}
-		editor = append(editor, v2Row(discordgo.SelectMenu{
-			CustomID:    id("cat"),
-			Placeholder: "Edit a category",
-			Options:     options,
-		}))
-	}
-
+// TicketPublishChannelScreen asks where to send the selected dashboard panel.
+func TicketPublishChannelScreen(panel *types.InteractivePanel) []discordgo.MessageComponent {
 	one := 1
-	editor = append(editor,
-		v2Row(discordgo.SelectMenu{
-			MenuType:     discordgo.ChannelSelectMenu,
-			CustomID:     id("send"),
-			Placeholder:  "Send this panel to a channel",
-			MinValues:    &one,
-			MaxValues:    1,
-			ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews},
-		}),
-		v2Row(
-			refresh,
-			v2Button(id("delete"), "Delete Panel", "🗑️", discordgo.DangerButton),
-			v2Button(id("back"), "Back", "", discordgo.SecondaryButton),
-		),
-	)
-
-	preview := TicketPanelMessage(panel, true)
-	return []discordgo.MessageComponent{
-		v2Text("-# Live preview - this is how your panel will look"),
-		preview[0],
-		v2Container(ColorInfo, editor...),
-	}
-}
-
-// TicketDeleteConfirmScreen asks before a panel is removed.
-func TicketDeleteConfirmScreen(panel *types.InteractivePanel) []discordgo.MessageComponent {
-	id := func(action string) string { return fmt.Sprintf("%s:%s:%s", TicketIDPanelEdit, panel.ID, action) }
-	return []discordgo.MessageComponent{v2Container(ColorCaution,
-		v2Text(fmt.Sprintf("### Delete %s?\nThis removes the panel and its configuration. Its sent message stops working, but open tickets stay open until they are closed.", panel.Name)),
-		v2Divider(false, false),
-		v2Row(
-			v2Button(id("deleteyes"), "Yes, Delete", "🗑️", discordgo.DangerButton),
-			v2Button(id("edit"), "Cancel", "", discordgo.SecondaryButton),
-		),
-	)}
-}
-
-// TicketCategoryScreen shows one category's settings and controls.
-func TicketCategoryScreen(panel *types.InteractivePanel, category *types.TicketCategory, notice string) []discordgo.MessageComponent {
-	id := func(action string) string {
-		return fmt.Sprintf("%s:%s:%s:%s", TicketIDCategory, panel.ID, category.ID, action)
-	}
-
-	roles := "None (panel-wide staff roles apply)"
-	if len(category.StaffRoleIDs) > 0 {
-		mentions := make([]string, len(category.StaffRoleIDs))
-		for idx, roleID := range category.StaffRoleIDs {
-			mentions[idx] = "<@&" + roleID + ">"
-		}
-		roles = strings.Join(mentions, " ")
-	}
-	description := category.Description
-	if description == "" {
-		description = "None"
-	}
-	emoji := category.Emoji
-	if emoji == "" {
-		emoji = "None"
-	}
-
-	details := fmt.Sprintf(
-		"## %s%s\n- **Description:** %s\n- **Emoji:** %s\n- **Button Colour:** %s\n- **Thread Name:** `%s`\n- **Staff Roles:** %s\n- **Ping Staff:** %s",
-		emojiPrefix(category.Emoji), category.Label, description, emoji, ButtonStyleName(category.ButtonStyle),
-		category.NameFormat, roles, onOff(category.PingStaff),
-	)
-	welcome := fmt.Sprintf(
-		"**Welcome Message**\n- **Title:** %s\n- **Colour:** %s\n- **Body:**\n%s",
-		valueOrNone(category.Welcome.Title), HexColor(category.Welcome.Color), quoteBlock(truncate(category.Welcome.Body, 600)),
-	)
-
-	inner := []discordgo.MessageComponent{v2Text(details)}
-	if notice != "" {
-		inner = append(inner, v2Text(notice))
-	}
-	zero := 0
-	defaults := make([]discordgo.SelectMenuDefaultValue, len(category.StaffRoleIDs))
-	for idx, roleID := range category.StaffRoleIDs {
-		defaults[idx] = discordgo.SelectMenuDefaultValue{ID: roleID, Type: discordgo.SelectMenuDefaultValueRole}
-	}
-	inner = append(inner,
+	inner := []discordgo.MessageComponent{
+		v2Text(fmt.Sprintf("## Publish %s\nCreate and customize ticket panels in the Ranked Bedwars Dashboard. This command only publishes panels; make future changes in the dashboard.", panel.Name)),
 		v2Divider(true, false),
-		v2Text(welcome),
-		v2Text("-# Placeholders: {user} {username} {category} {reference} {number} {staff} {server}"),
-		v2Divider(true, false),
-		v2Row(
-			v2Button(id("info"), "Edit Details", "✏️", discordgo.PrimaryButton),
-			v2Button(id("welcome"), "Edit Welcome", "💬", discordgo.PrimaryButton),
-			v2Button(id("preview"), "Preview Welcome", "👁️", discordgo.SecondaryButton),
-			v2Button(id("ping"), "Toggle Staff Ping", "🔔", discordgo.SecondaryButton),
-		),
+		v2Text("**1. Panel:** " + panel.Name + "\n**2. Choose the channel to send it to**"),
 		v2Row(discordgo.SelectMenu{
-			MenuType:      discordgo.RoleSelectMenu,
-			CustomID:      id("roles"),
-			Placeholder:   "Staff roles for this category",
-			MinValues:     &zero,
-			MaxValues:     10,
-			DefaultValues: defaults,
+			MenuType:    discordgo.ChannelSelectMenu,
+			CustomID:    "tkt:publish:channel:" + panel.ID,
+			Placeholder: "Select a channel",
+			MinValues:   &one,
+			MaxValues:   1,
+			ChannelTypes: []discordgo.ChannelType{
+				discordgo.ChannelTypeGuildText,
+				discordgo.ChannelTypeGuildNews,
+			},
 		}),
-		v2Row(
-			v2Button(id("delete"), "Delete Category", "🗑️", discordgo.DangerButton),
-			v2Button(fmt.Sprintf("%s:%s:edit", TicketIDPanelEdit, panel.ID), "Back", "", discordgo.SecondaryButton),
-		),
-	)
-	return []discordgo.MessageComponent{v2Container(ColorInfo, inner...)}
+	}
+	return []discordgo.MessageComponent{v2Container(ColorDefault, inner...)}
 }
 
-// TicketSettingsScreen shows the panel-wide ticket behaviour.
-func TicketSettingsScreen(panel *types.InteractivePanel, notice string) []discordgo.MessageComponent {
-	id := func(action string) string { return fmt.Sprintf("%s:%s:%s", TicketIDSettings, panel.ID, action) }
-	settings := panel.Ticket.Settings
-
-	threads := "The channel the panel is sent in"
-	if settings.ThreadChannelID != "" {
-		threads = "<#" + settings.ThreadChannelID + ">"
+func TicketPublishChannelErrorScreen(panel *types.InteractivePanel, notice string) []discordgo.MessageComponent {
+	components := TicketPublishChannelScreen(panel)
+	container, ok := components[0].(discordgo.Container)
+	if !ok {
+		return components
 	}
-	logs := "Not set - ticket logs are disabled"
-	if settings.LogChannelID != "" {
-		logs = "<#" + settings.LogChannelID + ">"
-	}
-	limit := "Unlimited"
-	if settings.MaxOpenPerUser > 0 {
-		limit = fmt.Sprintf("%d", settings.MaxOpenPerUser)
-	}
-
-	text := fmt.Sprintf(
-		"## %s Settings\n- **Ticket Channel:** %s\n- **Log Channel:** %s\n- **Open Tickets Per Member:** %s\n- **Claiming:** %s\n- **DM Transcript To Owner:** %s\n- **Delete Thread On Close:** %s\n- **Owner Can Close:** %s\n- **Inline Category Buttons:** %s\n- **Inactivity Management:** %s (remind every %d hours; close after %d hours)",
-		panel.Name, threads, logs, limit, onOff(settings.ClaimEnabled), onOff(settings.DMTranscript), onOff(settings.DeleteOnClose), onOff(settings.OwnerCanClose), onOff(settings.InlineCategoryButtons), onOff(settings.InactivityEnabled), settings.InactivityReminderHours, settings.InactivityCloseHours,
-	)
-	inner := []discordgo.MessageComponent{v2Text(text)}
-	if notice != "" {
-		inner = append(inner, v2Text(notice))
-	}
-
-	zero := 0
-	textChannels := []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews}
-	staffDefaults := make([]discordgo.SelectMenuDefaultValue, len(settings.StaffRoleIDs))
-	for idx, roleID := range settings.StaffRoleIDs {
-		staffDefaults[idx] = discordgo.SelectMenuDefaultValue{ID: roleID, Type: discordgo.SelectMenuDefaultValueRole}
-	}
-
-	inner = append(inner,
-		v2Divider(true, false),
-		v2Row(discordgo.SelectMenu{
-			MenuType: discordgo.ChannelSelectMenu, CustomID: id("threads"), Placeholder: "Channel tickets are created in",
-			MinValues: &zero, MaxValues: 1, ChannelTypes: textChannels, DefaultValues: channelDefault(settings.ThreadChannelID),
-		}),
-		v2Row(discordgo.SelectMenu{
-			MenuType: discordgo.ChannelSelectMenu, CustomID: id("logs"), Placeholder: "Channel ticket logs are sent to",
-			MinValues: &zero, MaxValues: 1, ChannelTypes: textChannels, DefaultValues: channelDefault(settings.LogChannelID),
-		}),
-		v2Row(discordgo.SelectMenu{
-			MenuType: discordgo.RoleSelectMenu, CustomID: id("staff"), Placeholder: "Staff roles for every category",
-			MinValues: &zero, MaxValues: 10, DefaultValues: staffDefaults,
-		}),
-		v2Row(
-			v2Button(id("claim"), "Claiming", "✋", discordgo.SecondaryButton),
-			v2Button(id("dm"), "DM Transcript", "📨", discordgo.SecondaryButton),
-			v2Button(id("deleteclose"), "Delete On Close", "🗑️", discordgo.SecondaryButton),
-			v2Button(id("owner"), "Owner Can Close", "🔒", discordgo.SecondaryButton),
-			v2Button(id("limit"), "Ticket Limit", "🔢", discordgo.SecondaryButton),
-		),
-		v2Row(
-			v2Button(id("inactivity"), "Inactivity: "+onOff(settings.InactivityEnabled), "⏳", discordgo.SecondaryButton),
-			v2Button(id("inactivity-settings"), "Configure Inactivity", "⚙️", discordgo.PrimaryButton),
-			v2Button(id("inline-categories"), "Inline Category Buttons: "+onOff(settings.InlineCategoryButtons), "↔️", discordgo.SecondaryButton),
-			v2Button(fmt.Sprintf("%s:%s:edit", TicketIDPanelEdit, panel.ID), "Back", "", discordgo.SecondaryButton),
-		),
-	)
-	return []discordgo.MessageComponent{v2Container(ColorInfo, inner...)}
+	container.Components = append([]discordgo.MessageComponent{v2Text(notice)}, container.Components...)
+	return []discordgo.MessageComponent{container}
 }
-
-func channelDefault(channelID string) []discordgo.SelectMenuDefaultValue {
-	if channelID == "" {
-		return nil
-	}
-	return []discordgo.SelectMenuDefaultValue{{ID: channelID, Type: discordgo.SelectMenuDefaultValueChannel}}
-}
-
-func onOff(enabled bool) string {
-	if enabled {
-		return "On"
-	}
-	return "Off"
-}
-
-func valueOrNone(text string) string {
-	if strings.TrimSpace(text) == "" {
-		return "None"
-	}
-	return text
-}
-
-func quoteBlock(text string) string {
-	if strings.TrimSpace(text) == "" {
-		return "> None"
-	}
-	lines := strings.Split(text, "\n")
-	for idx, line := range lines {
-		lines[idx] = "> " + line
-	}
-	return strings.Join(lines, "\n")
-}
-
-// ============================================================================
-// Component Routing & Handlers
-// ============================================================================
-
-var (
-	builderCustomEmoji = regexp.MustCompile(`^<a?:[A-Za-z0-9_]+:\d{17,20}>$`)
-	builderASCIIText   = regexp.MustCompile(`[A-Za-z0-9]`)
-)
 
 // HandleTicketComponent routes every `tkt:` button and select menu.
 func HandleTicketComponent(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
@@ -2441,6 +2081,8 @@ func HandleTicketComponent(s *discordgo.Session, i *discordgo.InteractionCreate,
 		if len(parts) == 4 {
 			handleTicketOpen(s, i, parts[2], parts[3])
 		}
+	case "publish":
+		handleTicketPublish(s, i, parts)
 	case "claim":
 		handleTicketClaim(s, i, true)
 	case "unclaim":
@@ -2451,10 +2093,87 @@ func HandleTicketComponent(s *discordgo.Session, i *discordgo.InteractionCreate,
 		} else {
 			handleTicketCloseAnswer(s, i, parts[2] == "yes")
 		}
-	default:
-		handleBuilderComponent(s, i, parts)
 	}
 	return true
+}
+
+func handleTicketPublish(s *discordgo.Session, i *discordgo.InteractionCreate, parts []string) {
+	if !InteractionIsAdmin(i) {
+		_ = RespondEmbed(s, i, TicketPermissionDeniedEmbed("Only administrators can publish ticket panels. Create and edit panels in the dashboard."))
+		return
+	}
+	if len(parts) == 3 && parts[2] == "panel" {
+		ip, err := Tickets.Load(i.GuildID)
+		if err != nil {
+			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+			return
+		}
+		panel := ip.Panels[firstValue(i)]
+		if panel == nil || panel.Ticket == nil {
+			_ = UpdateV2(s, i, TicketPublishPanelScreen(SortedTicketPanels(ip))...)
+			return
+		}
+		_ = UpdateV2(s, i, TicketPublishChannelScreen(panel)...)
+		return
+	}
+	if len(parts) != 4 || parts[2] != "channel" {
+		return
+	}
+	panelID := parts[3]
+	channelID := firstValue(i)
+	if channelID == "" {
+		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+		return
+	}
+
+	ip, err := Tickets.Load(i.GuildID)
+	if err != nil {
+		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+		return
+	}
+	panel := ip.Panels[panelID]
+	if panel == nil || panel.Ticket == nil {
+		_ = UpdateV2(s, i, TicketPublishPanelScreen(SortedTicketPanels(ip))...)
+		return
+	}
+	if len(panel.Ticket.Categories) == 0 {
+		_ = UpdateV2(s, i, TicketPublishChannelErrorScreen(panel, "This panel has no ticket categories. Add categories in the dashboard before publishing.")...)
+		return
+	}
+
+	message, err := s.ChannelMessageSendComplex(channelID, ticketPanelSend(panel))
+	if err != nil {
+		_ = UpdateV2(s, i, TicketPublishChannelErrorScreen(panel, "Could not publish the panel there. Check that I can view and send messages in the selected channel.")...)
+		return
+	}
+	oldChannelID, oldMessageID := panel.ChannelID, panel.MessageID
+	err = Tickets.Update(InteractionUserID(i), i.GuildID, func(current *types.InteractivePanels) error {
+		stored := current.Panels[panelID]
+		if stored == nil || stored.Ticket == nil {
+			return ErrTicketPanelNotFound
+		}
+		stored.ChannelID = channelID
+		stored.MessageID = message.ID
+		stored.UpdatedAt = time.Now().Unix()
+		return nil
+	})
+	if err != nil {
+		if deleteErr := s.ChannelMessageDelete(channelID, message.ID); deleteErr != nil {
+			log.Printf("[Tickets] could not remove unpublished panel message %s in channel %s after config save failed: %v", message.ID, channelID, deleteErr)
+		}
+		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
+		return
+	}
+	if oldChannelID != "" && oldMessageID != "" && (oldChannelID != channelID || oldMessageID != message.ID) {
+		if err := s.ChannelMessageDelete(oldChannelID, oldMessageID); err != nil {
+			log.Printf("[Tickets] could not remove previous published panel message %s in channel %s: %v", oldMessageID, oldChannelID, err)
+		}
+	}
+	_ = UpdateV2(s, i, []discordgo.MessageComponent{
+		v2Container(ColorSuccess,
+			v2Text(fmt.Sprintf("## Panel Published\n**%s** was sent to <#%s>.\n\nTo change the panel’s content, categories, appearance, or settings, make those changes in the Ranked Bedwars Dashboard. `/ticket panel` is only for publishing an existing panel.", panel.Name, channelID)),
+		),
+	}...)
 }
 
 // handleTicketOpen creates a ticket from a panel button.
@@ -2582,34 +2301,6 @@ func handleTicketCloseAnswer(s *discordgo.Session, i *discordgo.InteractionCreat
 	}))
 }
 
-// handleBuilderComponent routes the panel builder's buttons and select menus.
-func handleBuilderComponent(s *discordgo.Session, i *discordgo.InteractionCreate, parts []string) {
-	if !InteractionIsAdmin(i) {
-		_ = RespondEmbed(s, i, TicketPermissionDeniedEmbed("Only administrators can manage ticket panels."))
-		return
-	}
-
-	switch parts[1] {
-	case "b":
-		if len(parts) == 3 {
-			builderManager(s, i, parts[2])
-		}
-	case "e":
-		if len(parts) == 4 {
-			builderEditor(s, i, parts[2], parts[3])
-		}
-	case "c":
-		if len(parts) == 5 {
-			builderCategory(s, i, parts[2], parts[3], parts[4])
-		}
-	case "s":
-		if len(parts) == 4 {
-			builderSettings(s, i, parts[2], parts[3])
-		}
-	}
-}
-
-// selectedValues returns what the clicker picked in a select menu.
 func selectedValues(i *discordgo.InteractionCreate) []string {
 	return i.MessageComponentData().Values
 }
@@ -2622,445 +2313,6 @@ func firstValue(i *discordgo.InteractionCreate) string {
 	return ""
 }
 
-// mutatePanel applies fn to a stored panel and returns the saved result.
-func mutatePanel(i *discordgo.InteractionCreate, panelID string, fn func(panel *types.InteractivePanel) error) (*types.InteractivePanel, error) {
-	var updated *types.InteractivePanel
-	err := Tickets.Update(InteractionUserID(i), i.GuildID, func(ip *types.InteractivePanels) error {
-		panel := ip.Panels[panelID]
-		if panel == nil || panel.Ticket == nil {
-			return ErrTicketPanelNotFound
-		}
-		if err := fn(panel); err != nil {
-			return err
-		}
-		panel.UpdatedAt = time.Now().Unix()
-		updated = panel
-		return nil
-	})
-	return updated, err
-}
-
-// showManager rewrites the message into the panel list.
-func showManager(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ip, err := Tickets.Load(i.GuildID)
-	if err != nil {
-		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-		return
-	}
-	_ = UpdateV2(s, i, TicketManagerScreen(SortedTicketPanels(ip))...)
-}
-
-// loadPanelOrManager loads a panel, sending the clicker back to the list if it is gone.
-func loadPanelOrManager(s *discordgo.Session, i *discordgo.InteractionCreate, panelID string) *types.InteractivePanel {
-	ip, err := Tickets.Load(i.GuildID)
-	if err != nil {
-		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-		return nil
-	}
-	panel := ip.Panels[panelID]
-	if panel == nil || panel.Ticket == nil {
-		_ = UpdateV2(s, i, TicketManagerScreen(SortedTicketPanels(ip))...)
-		return nil
-	}
-	return panel
-}
-
-func builderManager(s *discordgo.Session, i *discordgo.InteractionCreate, action string) {
-	switch action {
-	case "select":
-		if panel := loadPanelOrManager(s, i, firstValue(i)); panel != nil {
-			_ = UpdateV2(s, i, TicketEditorScreen(panel, "")...)
-		}
-	case "new":
-		_ = RespondModal(s, i, TicketIDModal+":new", "New Ticket Panel",
-			ModalTextInput("name", "Panel Name (only you see this)", "", "Support", false, true, 60),
-			ModalTextInput("title", "Panel Title", "", "Support", false, false, 100),
-		)
-	}
-}
-
-func builderEditor(s *discordgo.Session, i *discordgo.InteractionCreate, panelID, action string) {
-	panel := loadPanelOrManager(s, i, panelID)
-	if panel == nil {
-		return
-	}
-	edit := func(notice string) {
-		_ = UpdateV2(s, i, TicketEditorScreen(panel, notice)...)
-	}
-	id := TicketIDModal + ":%s:" + panel.ID
-
-	switch action {
-	case "back":
-		showManager(s, i)
-	case "edit":
-		edit("")
-	case "look":
-		look := panel.Appearance
-		_ = RespondModal(s, i, fmt.Sprintf(id, "look"), "Panel Appearance",
-			ModalTextInput("title", "Title", look.Title, "Support", false, false, 100),
-			ModalTextInput("description", "Description", look.Description, "Shown under the title", true, false, 1500),
-			ModalTextInput("footer", "Footer (markdown)", look.Footer, "Shown above the buttons", true, false, 800),
-			ModalTextInput("color", "Accent Colour (hex)", HexColor(look.Color), "#55FFFF", false, false, 7),
-			ModalTextInput("banner", "Banner Image URL", look.BannerURL, "https://...", false, false, 400),
-		)
-	case "addcat":
-		_ = RespondModal(s, i, fmt.Sprintf(id, "cat")+":new", "Add Category", categoryModalRows(NewTicketCategory(""), true)...)
-	case "cat":
-		cat := FindTicketCategory(panel, firstValue(i))
-		if cat == nil {
-			edit("That category no longer exists.")
-			return
-		}
-		_ = UpdateV2(s, i, TicketCategoryScreen(panel, cat, "")...)
-	case "send":
-		builderSendPanel(s, i, panel, firstValue(i))
-	case "refresh":
-		builderRefreshPanel(s, i, panel)
-	case "settings":
-		_ = UpdateV2(s, i, TicketSettingsScreen(panel, "")...)
-	case "delete":
-		_ = UpdateV2(s, i, TicketDeleteConfirmScreen(panel)...)
-	case "deleteyes":
-		builderDeletePanel(s, i, panel)
-	}
-}
-
-// builderSendPanel posts the panel to a channel and remembers where it went.
-func builderSendPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panel *types.InteractivePanel, channelID string) {
-	if len(panel.Ticket.Categories) == 0 {
-		_ = UpdateV2(s, i, TicketEditorScreen(panel, "Add at least one category before sending the panel.")...)
-		return
-	}
-	message, err := s.ChannelMessageSendComplex(channelID, ticketPanelSend(panel, false))
-	if err != nil {
-		_ = UpdateV2(s, i, TicketEditorScreen(panel, "Could not send the panel to <#"+channelID+">. Make sure I can view and send messages there.")...)
-		return
-	}
-
-	// One panel, one message: the previous copy is removed so stale buttons don't linger.
-	if panel.ChannelID != "" && panel.MessageID != "" {
-		_ = s.ChannelMessageDelete(panel.ChannelID, panel.MessageID)
-	}
-	updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-		p.ChannelID, p.MessageID = channelID, message.ID
-		return nil
-	})
-	if err != nil {
-		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-		return
-	}
-	_ = UpdateV2(s, i, TicketEditorScreen(updated, "Panel sent to <#"+channelID+">.")...)
-}
-
-// builderRefreshPanel rewrites the already-sent panel message with the latest design.
-func builderRefreshPanel(s *discordgo.Session, i *discordgo.InteractionCreate, panel *types.InteractivePanel) {
-	send := ticketPanelSend(panel, false)
-	existing, fetchErr := s.ChannelMessage(panel.ChannelID, panel.MessageID)
-	if fetchErr == nil && (existing.Flags&discordgo.MessageFlagsIsComponentsV2 != 0) != (send.Flags&discordgo.MessageFlagsIsComponentsV2 != 0) {
-		replacement, err := s.ChannelMessageSendComplex(panel.ChannelID, send)
-		if err != nil {
-			_ = UpdateV2(s, i, TicketEditorScreen(panel, "Could not replace the panel message with the selected format.")...)
-			return
-		}
-		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			p.MessageID = replacement.ID
-			return nil
-		})
-		if err != nil {
-			_ = s.ChannelMessageDelete(panel.ChannelID, replacement.ID)
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		_ = s.ChannelMessageDelete(panel.ChannelID, panel.MessageID)
-		_ = UpdateV2(s, i, TicketEditorScreen(updated, "The panel format changed and the panel was reposted in <#"+panel.ChannelID+">.")...)
-		return
-	}
-	content, embeds, components := send.Content, send.Embeds, send.Components
-	_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		ID:              panel.MessageID,
-		Channel:         panel.ChannelID,
-		Content:         &content,
-		Embeds:          &embeds,
-		Components:      &components,
-		Flags:           send.Flags,
-		AllowedMentions: send.AllowedMentions,
-	})
-	if err != nil {
-		_, _ = mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			p.ChannelID, p.MessageID = "", ""
-			return nil
-		})
-		_ = UpdateV2(s, i, TicketEditorScreen(panel, "The sent panel message no longer exists. Send it to a channel again.")...)
-		return
-	}
-	_ = UpdateV2(s, i, TicketEditorScreen(panel, "The sent panel in <#"+panel.ChannelID+"> was updated.")...)
-}
-
-// builderDeletePanel removes the panel and its sent message.
-func builderDeletePanel(s *discordgo.Session, i *discordgo.InteractionCreate, panel *types.InteractivePanel) {
-	if panel.ChannelID != "" && panel.MessageID != "" {
-		_ = s.ChannelMessageDelete(panel.ChannelID, panel.MessageID)
-	}
-	if err := Tickets.Update(InteractionUserID(i), i.GuildID, func(ip *types.InteractivePanels) error {
-		delete(ip.Panels, panel.ID)
-		return nil
-	}); err != nil {
-		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-		return
-	}
-	showManager(s, i)
-}
-
-func builderCategory(s *discordgo.Session, i *discordgo.InteractionCreate, panelID, categoryID, action string) {
-	panel := loadPanelOrManager(s, i, panelID)
-	if panel == nil {
-		return
-	}
-	category := FindTicketCategory(panel, categoryID)
-	if category == nil {
-		_ = UpdateV2(s, i, TicketEditorScreen(panel, "That category no longer exists.")...)
-		return
-	}
-	show := func(panel *types.InteractivePanel, notice string) {
-		if updated := FindTicketCategory(panel, categoryID); updated != nil {
-			_ = UpdateV2(s, i, TicketCategoryScreen(panel, updated, notice)...)
-		}
-	}
-	modalID := func(kind string) string {
-		return fmt.Sprintf("%s:%s:%s:%s", TicketIDModal, kind, panel.ID, category.ID)
-	}
-
-	switch action {
-	case "info":
-		_ = RespondModal(s, i, modalID("cat"), "Edit Category", categoryModalRows(category, false)...)
-	case "welcome":
-		welcome := category.Welcome
-		_ = RespondModal(s, i, modalID("wel"), "Welcome Message",
-			ModalTextInput("title", "Title", welcome.Title, "Ticket Created: {category}", false, false, 200),
-			ModalTextInput("body", "Message", welcome.Body, "Hello {user}, ...", true, false, 1800),
-			ModalTextInput("footer", "Footer", welcome.Footer, "Shown in small text at the bottom", false, false, 200),
-			ModalTextInput("color", "Accent Colour (hex)", HexColor(welcome.Color), "#55FFFF", false, false, 7),
-			ModalTextInput("thumbnail", "Thumbnail Image URL", welcome.ThumbnailURL, "https://...", false, false, 400),
-		)
-	case "preview":
-		builderPreviewWelcome(s, i, panel, category)
-	case "ping":
-		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if target := FindTicketCategory(p, categoryID); target != nil {
-				target.PingStaff = !target.PingStaff
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		show(updated, "")
-	case "roles":
-		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if target := FindTicketCategory(p, categoryID); target != nil {
-				target.StaffRoleIDs = append([]string{}, selectedValues(i)...)
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		show(updated, "")
-	case "delete":
-		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			kept := p.Ticket.Categories[:0]
-			for _, existing := range p.Ticket.Categories {
-				if existing.ID != categoryID {
-					kept = append(kept, existing)
-				}
-			}
-			p.Ticket.Categories = kept
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		_ = UpdateV2(s, i, TicketEditorScreen(updated, "Category deleted.")...)
-	}
-}
-
-func builderSettings(s *discordgo.Session, i *discordgo.InteractionCreate, panelID, action string) {
-	panel := loadPanelOrManager(s, i, panelID)
-	if panel == nil {
-		return
-	}
-	edit := func(notice string) {
-		_ = UpdateV2(s, i, TicketSettingsScreen(panel, notice)...)
-	}
-	id := fmt.Sprintf("%s:%s:%s", TicketIDModal, action, panel.ID)
-
-	switch action {
-	case "edit":
-		edit("")
-	case "back":
-		_ = UpdateV2(s, i, TicketEditorScreen(panel, "")...)
-	case "threads":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.ThreadChannelID = firstValue(i)
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "logs":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.LogChannelID = firstValue(i)
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "staff":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.StaffRoleIDs = append([]string{}, selectedValues(i)...)
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "claim":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.ClaimEnabled = !p.Ticket.Settings.ClaimEnabled
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "dm":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.DMTranscript = !p.Ticket.Settings.DMTranscript
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "deleteclose":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.DeleteOnClose = !p.Ticket.Settings.DeleteOnClose
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "owner":
-		_, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.OwnerCanClose = !p.Ticket.Settings.OwnerCanClose
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		edit("")
-	case "inline-categories":
-		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.InlineCategoryButtons = !p.Ticket.Settings.InlineCategoryButtons
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		if updated != nil {
-			_ = UpdateV2(s, i, TicketSettingsScreen(updated, "")...)
-		}
-	case "limit":
-		_ = RespondModal(s, i, id, "Ticket Limit Per Member",
-			ModalTextInput("limit", "Max tickets per member (0 for unlimited)", "", "0", false, true, 2),
-		)
-	case "inactivity":
-		updated, err := mutatePanel(i, panel.ID, func(p *types.InteractivePanel) error {
-			if p.Ticket != nil {
-				p.Ticket.Settings.InactivityEnabled = !p.Ticket.Settings.InactivityEnabled
-			}
-			return nil
-		})
-		if err != nil {
-			_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-			return
-		}
-		if updated != nil {
-			_ = UpdateV2(s, i, TicketSettingsScreen(updated, "")...)
-		}
-	case "inactivity-settings":
-		settings := panel.Ticket.Settings
-		_ = RespondModal(s, i, fmt.Sprintf("%s:inactivity:%s", TicketIDModal, panel.ID), "Ticket Inactivity Settings",
-			ModalTextInput("reminder_hours", "Reminder interval in hours", strconv.Itoa(settings.InactivityReminderHours), "12", false, true, 4),
-			ModalTextInput("close_hours", "Close after inactivity (hours)", strconv.Itoa(settings.InactivityCloseHours), "24", false, true, 4),
-			ModalTextInput("message", "Reminder message", settings.InactivityMessage, "Use {inactive_hours}, {hours_until_close}, {close_hours}, {user}", true, true, 1800),
-		)
-	}
-}
-
-func categoryModalRows(category *types.TicketCategory, isNew bool) []discordgo.MessageComponent {
-	label, description, emoji, nameFormat := category.Label, category.Description, category.Emoji, category.NameFormat
-	style := ButtonStyleName(category.ButtonStyle)
-	if isNew {
-		label, description, emoji = "", "", ""
-	}
-	return []discordgo.MessageComponent{
-		ModalTextInput("label", "Button Label", label, "General Support", false, true, 80),
-		ModalTextInput("emoji", "Emoji", emoji, "📌", false, false, 60),
-		ModalTextInput("description", "Description (shown on the panel)", description, "For general questions and help.", false, false, 100),
-		ModalTextInput("style", "Button Colour (blue, grey, green, red)", style, "grey", false, false, 10),
-		ModalTextInput("name_format", "Thread Name", nameFormat, "{username} - Ticket: {category}", false, false, 100),
-	}
-}
-
-func builderPreviewWelcome(s *discordgo.Session, i *discordgo.InteractionCreate, panel *types.InteractivePanel, category *types.TicketCategory) {
-	ticket := &types.Ticket{
-		OwnerID:       i.Member.User.ID,
-		OwnerName:     i.Member.User.Username,
-		Status:        types.TicketStatusOpen,
-		Ref:           "ABC123",
-		Number:        1,
-		CategoryLabel: category.Label,
-	}
-	embed := TicketWelcomeMessage(ticket, panel, category, GuildDisplayName(s, i.GuildID), true)
-	_ = RespondEmbed(s, i, embed)
-}
-
-// ============================================================================
-// Response Helpers
-// ============================================================================
-
-// editComponentEmbed fills the deferred ephemeral reply of a button click.
 func editComponentEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}})
 }
@@ -3089,271 +2341,6 @@ func TicketContextErrorEmbed(err error) *discordgo.MessageEmbed {
 }
 
 // ============================================================================
-// Modal Handling
-// ============================================================================
-
-// HandleTicketModal processes modal submissions from the panel builder.
-func HandleTicketModal(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
-	if !strings.HasPrefix(customID, TicketIDModal+":") {
-		return false
-	}
-	if !InteractionIsAdmin(i) {
-		_ = RespondEmbed(s, i, TicketPermissionDeniedEmbed("Only administrators can manage ticket panels."))
-		return true
-	}
-
-	parts := strings.Split(customID, ":")
-	if len(parts) < 3 {
-		return true
-	}
-	values := ModalValues(i)
-
-	switch parts[2] {
-	case "new":
-		modalNewPanel(s, i, values)
-	case "look":
-		if len(parts) == 4 {
-			modalLook(s, i, parts[3], values)
-		}
-	case "cat":
-		if len(parts) == 5 {
-			modalCategory(s, i, parts[3], parts[4], values)
-		}
-	case "wel":
-		if len(parts) == 5 {
-			modalWelcome(s, i, parts[3], parts[4], values)
-		}
-	case "lim":
-		if len(parts) == 4 {
-			modalLimit(s, i, parts[3], values)
-		}
-	case "inactivity":
-		if len(parts) == 4 {
-			modalInactivity(s, i, parts[3], values)
-		}
-	}
-	return true
-}
-
-// modalError tells the admin what to fix without losing their place.
-func modalError(s *discordgo.Session, i *discordgo.InteractionCreate, title, description string) {
-	_ = RespondEmbed(s, i, Preset("error", types.PresetOptions{Title: title, Description: description, Thumbnail: ThumbFlag}))
-}
-
-func modalNewPanel(s *discordgo.Session, i *discordgo.InteractionCreate, values map[string]string) {
-	name := values["name"]
-	if name == "" {
-		modalError(s, i, "Name Required", "Give the panel a name so you can find it later.")
-		return
-	}
-
-	panel := NewTicketPanel(name, values["title"], InteractionUserID(i))
-	err := Tickets.Update(InteractionUserID(i), i.GuildID, func(ip *types.InteractivePanels) error {
-		if len(SortedTicketPanels(ip)) >= MaxPanelsPerGuild {
-			return errPanelLimit
-		}
-		ip.Panels[panel.ID] = panel
-		return nil
-	})
-	switch {
-	case err == errPanelLimit:
-		modalError(s, i, "Panel Limit Reached", fmt.Sprintf("A server can have up to **%d** ticket panels. Delete one before creating another.", MaxPanelsPerGuild))
-		return
-	case err != nil:
-		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-		return
-	}
-	_ = UpdateV2(s, i, TicketEditorScreen(panel, "Panel created. Add a category, then send it to a channel.")...)
-}
-
-func modalLook(s *discordgo.Session, i *discordgo.InteractionCreate, panelID string, values map[string]string) {
-	color := 0
-	if raw := values["color"]; raw != "" {
-		parsed, ok := ParseHexColor(raw)
-		if !ok {
-			modalError(s, i, "Invalid Colour", "Use a hex colour such as `#55FFFF`.")
-			return
-		}
-		color = parsed
-	}
-	if banner := values["banner"]; banner != "" && !isHTTPURL(banner) {
-		modalError(s, i, "Invalid Image", "The banner must be a direct `https://` image link.")
-		return
-	}
-
-	updated, err := mutatePanel(i, panelID, func(p *types.InteractivePanel) error {
-		p.Appearance.Title = values["title"]
-		p.Appearance.Description = values["description"]
-		p.Appearance.Footer = values["footer"]
-		p.Appearance.Color = color
-		p.Appearance.BannerURL = values["banner"]
-		return nil
-	})
-	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
-		return TicketEditorScreen(panel, "Appearance saved. Use **Update Sent Panel** to apply it to the live message.")
-	})
-}
-
-func modalCategory(s *discordgo.Session, i *discordgo.InteractionCreate, panelID, categoryID string, values map[string]string) {
-	label := values["label"]
-	if label == "" {
-		modalError(s, i, "Label Required", "A category needs a label so members know what the button is for.")
-		return
-	}
-	emoji := values["emoji"]
-	if !validButtonEmoji(emoji) {
-		modalError(s, i, "Invalid Emoji", "Use a single emoji, or a server emoji like `<:name:123456789012345678>`.")
-		return
-	}
-	style, ok := ParseButtonStyle(values["style"])
-	if !ok {
-		modalError(s, i, "Invalid Button Colour", "Use `blue`, `grey`, `green`, or `red`.")
-		return
-	}
-	nameFormat := values["name_format"]
-	if nameFormat == "" {
-		nameFormat = "{username} - Ticket: {category}"
-	}
-
-	var created *types.TicketCategory
-	updated, err := mutatePanel(i, panelID, func(p *types.InteractivePanel) error {
-		if categoryID == "new" {
-			if len(p.Ticket.Categories) >= MaxCategoriesPerPanel {
-				return errCategoryLimit
-			}
-			created = NewTicketCategory(label)
-			p.Ticket.Categories = append(p.Ticket.Categories, created)
-		} else {
-			created = FindTicketCategory(p, categoryID)
-			if created == nil {
-				return ErrTicketCategoryNotFound
-			}
-		}
-		created.Label = label
-		created.Emoji = emoji
-		created.Description = values["description"]
-		created.ButtonStyle = style
-		created.NameFormat = nameFormat
-		return nil
-	})
-	if err == errCategoryLimit {
-		modalError(s, i, "Category Limit Reached", fmt.Sprintf("A panel can have up to **%d** categories.", MaxCategoriesPerPanel))
-		return
-	}
-	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
-		if categoryID == "new" {
-			return TicketCategoryScreen(panel, created, "Category added. Set its staff roles and welcome message below.")
-		}
-		return TicketCategoryScreen(panel, created, "")
-	})
-}
-
-func modalWelcome(s *discordgo.Session, i *discordgo.InteractionCreate, panelID, categoryID string, values map[string]string) {
-	color := 0
-	if raw := values["color"]; raw != "" {
-		parsed, ok := ParseHexColor(raw)
-		if !ok {
-			modalError(s, i, "Invalid Colour", "Use a hex colour such as `#55FFFF`.")
-			return
-		}
-		color = parsed
-	}
-	if thumbnail := values["thumbnail"]; thumbnail != "" && !isHTTPURL(thumbnail) {
-		modalError(s, i, "Invalid Image", "The thumbnail must be a direct `https://` image link.")
-		return
-	}
-
-	var edited *types.TicketCategory
-	updated, err := mutatePanel(i, panelID, func(p *types.InteractivePanel) error {
-		edited = FindTicketCategory(p, categoryID)
-		if edited == nil {
-			return ErrTicketCategoryNotFound
-		}
-		edited.Welcome.Title = values["title"]
-		edited.Welcome.Body = values["body"]
-		edited.Welcome.Footer = values["footer"]
-		edited.Welcome.Color = color
-		edited.Welcome.ThumbnailURL = values["thumbnail"]
-		return nil
-	})
-	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
-		return TicketCategoryScreen(panel, edited, "Welcome message saved. Use **Preview Welcome** to see it.")
-	})
-}
-
-func modalLimit(s *discordgo.Session, i *discordgo.InteractionCreate, panelID string, values map[string]string) {
-	limit, err := strconv.Atoi(values["limit"])
-	if err != nil || limit < 0 || limit > 25 {
-		modalError(s, i, "Invalid Limit", "Enter a whole number from `0` (unlimited) to `25`.")
-		return
-	}
-	updated, err := mutatePanel(i, panelID, func(p *types.InteractivePanel) error {
-		p.Ticket.Settings.MaxOpenPerUser = limit
-		return nil
-	})
-	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
-		return TicketSettingsScreen(panel, "")
-	})
-}
-
-func modalInactivity(s *discordgo.Session, i *discordgo.InteractionCreate, panelID string, values map[string]string) {
-	reminderHours, reminderErr := strconv.Atoi(values["reminder_hours"])
-	closeHours, closeErr := strconv.Atoi(values["close_hours"])
-	if reminderErr != nil || closeErr != nil ||
-		reminderHours < 1 || reminderHours > maxInactivityHours ||
-		closeHours <= reminderHours || closeHours > maxInactivityHours {
-		modalError(s, i, "Invalid Inactivity Period", fmt.Sprintf("Set a reminder interval from `1` to `%d` hours, and a close period longer than the reminder interval (up to `%d` hours).", maxInactivityHours, maxInactivityHours))
-		return
-	}
-	message := strings.TrimSpace(values["message"])
-	if message == "" {
-		modalError(s, i, "Reminder Message Required", "Enter the message to post when a ticket reaches its inactivity reminder interval.")
-		return
-	}
-	updated, err := mutatePanel(i, panelID, func(p *types.InteractivePanel) error {
-		if p.Ticket == nil {
-			return ErrTicketPanelNotFound
-		}
-		p.Ticket.Settings.InactivityReminderHours = reminderHours
-		p.Ticket.Settings.InactivityCloseHours = closeHours
-		p.Ticket.Settings.InactivityMessage = message
-		return nil
-	})
-	finishModal(s, i, updated, err, func(panel *types.InteractivePanel) []discordgo.MessageComponent {
-		return TicketSettingsScreen(panel, "Inactivity settings saved.")
-	})
-}
-
-func finishModal(s *discordgo.Session, i *discordgo.InteractionCreate, panel *types.InteractivePanel, err error, screen func(*types.InteractivePanel) []discordgo.MessageComponent) {
-	if err != nil {
-		_ = RespondEmbed(s, i, UnexpectedErrorTicketEmbed())
-		return
-	}
-	_ = UpdateV2(s, i, screen(panel)...)
-}
-
-// validButtonEmoji accepts no emoji, a server emoji, or a short unicode emoji.
-func validButtonEmoji(emoji string) bool {
-	if emoji == "" || builderCustomEmoji.MatchString(emoji) {
-		return true
-	}
-	return len([]rune(emoji)) <= 8 && !builderASCIIText.MatchString(emoji) && !strings.ContainsAny(emoji, "<>: ")
-}
-
-func isHTTPURL(raw string) bool {
-	return strings.HasPrefix(raw, "https://") || strings.HasPrefix(raw, "http://")
-}
-
-type builderError string
-
-func (e builderError) Error() string { return string(e) }
-
-const (
-	errPanelLimit    = builderError("panel limit reached")
-	errCategoryLimit = builderError("category limit reached")
-)
-
-// ============================================================================
 // Ticket Context
 // ============================================================================
 
@@ -3378,7 +2365,7 @@ func LoadTicketContext(guildID, threadID string) (*TicketContext, error) {
 	}
 	category := FindTicketCategory(panel, ticket.CategoryID)
 	if category == nil {
-		category = NewTicketCategory(ticket.CategoryLabel)
+		category = &types.TicketCategory{ID: ticket.CategoryID, Label: ticket.CategoryLabel}
 	}
 	return &TicketContext{Ticket: ticket, Panel: panel, Category: category}, nil
 }
@@ -3417,7 +2404,5 @@ func HandleTickets(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Type {
 	case discordgo.InteractionMessageComponent:
 		HandleTicketComponent(s, i, i.MessageComponentData().CustomID)
-	case discordgo.InteractionModalSubmit:
-		HandleTicketModal(s, i, i.ModalSubmitData().CustomID)
 	}
 }

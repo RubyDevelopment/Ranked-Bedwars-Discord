@@ -421,10 +421,8 @@ func unassignedGuildEmbed() *discordgo.MessageEmbed {
 // ticket
 // ============================================================================
 
-// TicketWelcomeMessage renders the message posted inside a ticket: a ping line,
-// the configurable welcome, the ticket details and the Close / Claim buttons.
-// With preview set the buttons are disabled and no pings are included.
-func TicketWelcomeMessage(ticket *types.Ticket, panel *types.InteractivePanel, category *types.TicketCategory, guildName string, preview bool) *discordgo.MessageEmbed {
+// TicketWelcomeMessage renders the configurable welcome and ticket details.
+func TicketWelcomeMessage(ticket *types.Ticket, panel *types.InteractivePanel, category *types.TicketCategory, guildName string) *discordgo.MessageEmbed {
 	welcome := category.Welcome
 	color := welcome.Color
 	if color == 0 {
@@ -631,7 +629,7 @@ func ticketNotInChannelEmbed() *discordgo.MessageEmbed {
 func ticketPanelMissingEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Panel Not Found",
-		Description: "The panel for this ticket no longer exists. Ask an administrator to check `/ticket panel`.",
+		Description: "The panel for this ticket no longer exists. Ask an administrator to check its configuration in the Ranked Bedwars Dashboard.",
 		Thumbnail:   ThumbFlag,
 	})
 }
