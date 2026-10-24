@@ -120,6 +120,15 @@ type Ticket struct {
 	Mode                   string `json:"mode"` // "thread" or "channel"
 	LastActivityAt         int64  `json:"last_activity_at,omitempty"`
 	LastInactivityNoticeAt int64  `json:"last_inactivity_notice_at,omitempty"`
+	ArchiveURL             string `json:"archive_url,omitempty"`
+	Logs                   []TicketLogEntry `json:"logs,omitempty"`
+}
+
+type TicketLogEntry struct {
+	Type      string `json:"type"`
+	ActorID   string `json:"actor_id,omitempty"`
+	Message   string `json:"message"`
+	CreatedAt int64  `json:"created_at"`
 }
 
 // TicketStaffStats feeds the ticket leaderboard.

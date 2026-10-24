@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -409,6 +410,9 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		CreatedAt:      createdAt,
 		LastActivityAt: createdAt,
 		Mode:           mode,
+		Logs: []types.TicketLogEntry{{
+			Type: "opened", ActorID: owner.ID, Message: "Ticket opened.", CreatedAt: createdAt,
+		}},
 	}
 
 	// Reserve the number and reference first so the thread name can use them.
@@ -625,6 +629,7 @@ func setTicketClaim(s *discordgo.Session, guildID, threadID, staffID string, cla
 			found.Status = types.TicketStatusClaimed
 			found.ClaimedBy = staffID
 			found.ClaimedAt = time.Now().Unix()
+			appendTicketLog(found, "claimed", staffID, "Ticket claimed.", found.ClaimedAt)
 			stats := StaffStatsFor(ip, staffID)
 			stats.Claimed++
 			stats.LastClaimedAt = found.ClaimedAt
@@ -641,6 +646,7 @@ func setTicketClaim(s *discordgo.Session, guildID, threadID, staffID string, cla
 			found.Status = types.TicketStatusOpen
 			found.ClaimedBy = ""
 			found.ClaimedAt = 0
+			appendTicketLog(found, "unclaimed", staffID, "Ticket claim released.", time.Now().Unix())
 		}
 		copied := *found
 		ticket = &copied
@@ -738,6 +744,11 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 		found.Status = types.TicketStatusClosed
 		found.ClosedAt = time.Now().Unix()
 		found.ClosedBy = closerID
+		message := "Ticket closed."
+		if inactivityCutoff > 0 {
+			message = "Ticket automatically closed after inactivity."
+		}
+		appendTicketLog(found, "closed", closerID, message, found.ClosedAt)
 		if closerIsStaff {
 			StaffStatsFor(ip, closerID).Closed++
 		}
@@ -757,7 +768,47 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 	}
 
 	transcriptName := fmt.Sprintf("%s.html", strings.ToLower(ticket.OwnerName))
-	transcript := BuildTicketTranscript(s, ticket)
+	transcript, messages, transcriptErr := BuildTicketTranscript(s, ticket)
+	if transcriptErr != nil {
+		log.Printf("[Tickets] could not read the complete transcript for ticket %s in guild %s: %v", threadID, guildID, transcriptErr)
+	}
+	ticket.ArchiveURL = ""
+	archive := struct {
+		SchemaVersion    int                       `json:"schema_version"`
+		Ticket           *types.Ticket             `json:"ticket"`
+		Messages         []types.DiscordLogMessage `json:"messages"`
+		TranscriptComplete bool                    `json:"transcript_complete"`
+		ArchivedAt       int64                     `json:"archived_at"`
+	}{
+		SchemaVersion: 1,
+		Ticket: ticket,
+		Messages: messages,
+		TranscriptComplete: transcriptErr == nil && len(messages) < 5000,
+		ArchivedAt: time.Now().Unix(),
+	}
+	if !Blobs.Enabled() {
+		log.Printf("[Tickets] JSON archive not saved for ticket %s in guild %s: blob storage is not configured", threadID, guildID)
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		archiveURL, archiveErr := Blobs.PutJSON(ctx, fmt.Sprintf("tickets/%s/%s.json", guildID, threadID), archive)
+		cancel()
+		if archiveErr != nil {
+			log.Printf("[Tickets] could not save JSON archive for ticket %s in guild %s: %v", threadID, guildID, archiveErr)
+		} else {
+			ticket.ArchiveURL = archiveURL
+			if updateErr := Tickets.Update(sdk.SystemActor, guildID, func(ip *types.InteractivePanels) error {
+				for _, archived := range ip.Tickets.History {
+					if archived.ThreadID == threadID {
+						archived.ArchiveURL = archiveURL
+						return nil
+					}
+				}
+				return ErrTicketNotFound
+			}); updateErr != nil {
+				log.Printf("[Tickets] saved JSON archive for ticket %s but could not attach its URL to history: %v", threadID, updateErr)
+			}
+		}
+	}
 	file := func() *discordgo.File {
 		return &discordgo.File{Name: transcriptName, ContentType: "text/html", Reader: bytes.NewReader(transcript)}
 	}
@@ -1009,6 +1060,13 @@ func sweepTicketInactivity(s *discordgo.Session) {
 				},
 			}); err != nil {
 				log.Printf("[Tickets] could not send inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+			} else if err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
+				if ticket := current.Tickets.Open[candidate.ThreadID]; ticket != nil {
+					appendTicketLog(ticket, "inactivity_reminder", "", message, now.Unix())
+				}
+				return nil
+			}); err != nil {
+				log.Printf("[Tickets] could not save inactivity reminder log for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
 			}
 		}
 	}
@@ -1189,12 +1247,17 @@ func transcriptMarkdown(text string, names map[string]string) string {
 }
 
 // BuildTicketTranscript renders the thread's messages as a standalone HTML page.
-func BuildTicketTranscript(s *discordgo.Session, ticket *types.Ticket) []byte {
+func BuildTicketTranscript(s *discordgo.Session, ticket *types.Ticket) ([]byte, []types.DiscordLogMessage, error) {
 	var messages []*discordgo.Message
+	var fetchErr error
 	beforeID := ""
 	for len(messages) < 5000 {
 		batch, err := s.ChannelMessages(ticket.ThreadID, 100, beforeID, "", "")
-		if err != nil || len(batch) == 0 {
+		if err != nil {
+			fetchErr = err
+			break
+		}
+		if len(batch) == 0 {
 			break
 		}
 		messages = append(messages, batch...)
@@ -1206,6 +1269,10 @@ func BuildTicketTranscript(s *discordgo.Session, ticket *types.Ticket) []byte {
 	// Discord returns newest first; the page reads oldest first.
 	for left, right := 0, len(messages)-1; left < right; left, right = left+1, right-1 {
 		messages[left], messages[right] = messages[right], messages[left]
+	}
+	archiveMessages := make([]types.DiscordLogMessage, 0, len(messages))
+	for _, message := range messages {
+		archiveMessages = append(archiveMessages, logMessage(message))
 	}
 
 	names := map[string]string{}
@@ -1279,7 +1346,13 @@ func BuildTicketTranscript(s *discordgo.Session, ticket *types.Ticket) []byte {
 	}
 	page.WriteString(`</div>`)
 	fmt.Fprintf(&page, `<div class="footer">Generated %s</div></div></body></html>`, time.Now().UTC().Format("Jan 2, 2006 15:04 UTC"))
-	return page.Bytes()
+	return page.Bytes(), archiveMessages, fetchErr
+}
+
+func appendTicketLog(ticket *types.Ticket, eventType, actorID, message string, createdAt int64) {
+	ticket.Logs = append(ticket.Logs, types.TicketLogEntry{
+		Type: eventType, ActorID: actorID, Message: message, CreatedAt: createdAt,
+	})
 }
 
 func transcriptDisplayName(user *discordgo.User, member *discordgo.Member) string {
