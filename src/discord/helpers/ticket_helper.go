@@ -1712,7 +1712,7 @@ func TicketPanelMessage(panel *types.InteractivePanel, preview bool) []discordgo
 	layout := look.Layout
 	if len(layout) == 0 {
 		layout = StandardPanelLayout(panel)
-	} else if len(panel.Ticket.Categories) > 0 && !layoutHas(layout, "buttons") {
+	} else if len(panel.Ticket.Categories) > 0 && !layoutHas(layout, "buttons") && !ticketCategoryButtonsInline(panel) {
 		layout = append(append([]types.PanelBlock{}, layout...), types.PanelBlock{Type: "buttons"}) // members could not open tickets otherwise
 	}
 
@@ -1829,6 +1829,17 @@ func layoutHas(layout []types.PanelBlock, blockType string) bool {
 	return false
 }
 
+func ticketCategoryButtonsInline(panel *types.InteractivePanel) bool {
+	if panel == nil || panel.Ticket == nil || !panel.Ticket.Settings.InlineCategoryButtons || panel.Appearance.HideCategoryList {
+		return false
+	}
+	layout := panel.Appearance.Layout
+	if len(layout) == 0 {
+		layout = StandardPanelLayout(panel)
+	}
+	return layoutHas(layout, "categories")
+}
+
 // StandardPanelLayout is the layout of a panel that has no custom one: banner, title, description and a line, the
 // category list, the footer, a line and the buttons. The line under the description is left out when there is no
 // description, and the one above the buttons when there are no categories.
@@ -1887,7 +1898,25 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 				if category.Description != "" {
 					text += "\n-# " + category.Description
 				}
-				out = append(out, v2Text(text))
+				if ticketCategoryButtonsInline(panel) {
+					buttonLabel := category.ButtonLabel
+					if buttonLabel == "" {
+						buttonLabel = category.Label
+					}
+					button := v2Button(
+						fmt.Sprintf("%s:%s:%s", TicketIDOpen, panel.ID, category.ID),
+						buttonLabel,
+						category.Emoji,
+						discordgo.ButtonStyle(category.ButtonStyle),
+					)
+					button.Disabled = preview
+					out = append(out, discordgo.Section{
+						Components: []discordgo.MessageComponent{v2Text(text)},
+						Accessory:  button,
+					})
+				} else {
+					out = append(out, v2Text(text))
+				}
 			}
 		}
 		return out
@@ -1896,6 +1925,9 @@ func panelBlockComponents(panel *types.InteractivePanel, b types.PanelBlock, pre
 			return one(v2Text(look.Footer))
 		}
 	case "buttons":
+		if ticketCategoryButtonsInline(panel) {
+			return nil
+		}
 		if len(categories) == 0 {
 			return one(v2Text("-# This panel has no categories yet."))
 		}
