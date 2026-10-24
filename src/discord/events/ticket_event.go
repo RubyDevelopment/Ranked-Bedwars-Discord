@@ -28,7 +28,7 @@ func init() {
 
 var TicketActivityEvent = &types.Event{
 	Name:        "Ticket Activity",
-	Description: "Resets ticket inactivity timers when a member sends a message in an open ticket.",
+	Description: "Resets inactivity timers and auto-claims open tickets when staff reply.",
 	Type:        "message_create",
 	Once:        false,
 	Disabled:    false,

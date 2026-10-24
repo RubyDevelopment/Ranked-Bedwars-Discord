@@ -419,10 +419,24 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 	}
 
 	guildName := GuildDisplayName(s, guildID)
-	ticket.ThreadName = truncate(TicketPlaceholders(category.NameFormat, ticket, panel, category, guildName), 100)
-	if strings.TrimSpace(ticket.ThreadName) == "" {
+	nameFormat := category.ThreadNameFormat
+	if mode == types.TicketModeChannel {
+		nameFormat = category.ChannelNameFormat
+	}
+	if nameFormat == "" {
+		nameFormat = category.NameFormat
+	}
+	if nameFormat == "" {
+		nameFormat = "{username} - Ticket: {category}"
+	}
+	ticket.ThreadName = strings.TrimSpace(TicketPlaceholders(nameFormat, ticket, panel, category, guildName))
+	if ticket.ThreadName == "" {
 		ticket.ThreadName = fmt.Sprintf("%s - Ticket: %s", owner.Username, category.Label)
 	}
+	if mode == types.TicketModeChannel {
+		ticket.ThreadName = channelTicketName(ticket.ThreadName, ticket.Ref)
+	}
+	ticket.ThreadName = truncate(ticket.ThreadName, 100)
 
 	var channelID string
 	if mode == types.TicketModeChannel {
@@ -528,6 +542,23 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		"- **Owner:** <@" + ticket.OwnerID + ">",
 	}), nil)
 	return ticket, nil
+}
+
+var (
+	invalidChannelNameChars = regexp.MustCompile(`[^a-z0-9_-]+`)
+	repeatedChannelHyphens  = regexp.MustCompile(`-+`)
+)
+
+func channelTicketName(name, reference string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.ReplaceAll(name, " ", "-")
+	name = invalidChannelNameChars.ReplaceAllString(name, "")
+	name = repeatedChannelHyphens.ReplaceAllString(name, "-")
+	name = strings.Trim(name, "-")
+	if name == "" {
+		name = "ticket-" + strings.ToLower(reference)
+	}
+	return name
 }
 
 // ticketMentions limits pings to the ticket's owner and (when enabled) its staff roles.
@@ -784,8 +815,8 @@ func ticketInactivityActionFor(settings types.TicketSettings, ticket *types.Tick
 	return ticketInactivityRemind
 }
 
-// HandleTicketMessage resets the inactivity clock for human messages in an open ticket.
-func HandleTicketMessage(_ *discordgo.Session, m *discordgo.MessageCreate) {
+// HandleTicketMessage resets the inactivity clock and lets the first staff reply claim the ticket.
+func HandleTicketMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m == nil || m.Message == nil || m.GuildID == "" || m.Author == nil || m.Author.Bot || m.WebhookID != "" {
 		return
 	}
@@ -801,6 +832,40 @@ func HandleTicketMessage(_ *discordgo.Session, m *discordgo.MessageCreate) {
 	})
 	if err != nil {
 		log.Printf("[Tickets] could not update activity for ticket %s in guild %s: %v", m.ChannelID, m.GuildID, err)
+		return
+	}
+	autoClaimTicketOnStaffResponse(s, m)
+}
+
+func autoClaimTicketOnStaffResponse(s *discordgo.Session, m *discordgo.MessageCreate) {
+	ip, err := Tickets.Load(m.GuildID)
+	if err != nil {
+		log.Printf("[Tickets] could not load ticket %s in guild %s for auto-claim: %v", m.ChannelID, m.GuildID, err)
+		return
+	}
+	ticket := ip.Tickets.Open[m.ChannelID]
+	if ticket == nil || ticket.Status != types.TicketStatusOpen {
+		return
+	}
+	panel := ip.Panels[ticket.PanelID]
+	if panel == nil || panel.Ticket == nil || !panel.Ticket.Settings.ClaimEnabled {
+		return
+	}
+	category := FindTicketCategory(panel, ticket.CategoryID)
+
+	member := m.Member
+	if member == nil {
+		member, err = s.GuildMember(m.GuildID, m.Author.ID)
+		if err != nil {
+			log.Printf("[Tickets] could not load member %s in guild %s for ticket auto-claim: %v", m.Author.ID, m.GuildID, err)
+			return
+		}
+	}
+	if !IsTicketStaff(member, panel, category) {
+		return
+	}
+	if _, err := ClaimTicket(s, m.GuildID, m.ChannelID, m.Author.ID); err != nil && !errors.Is(err, ErrTicketAlreadyClaimed) {
+		log.Printf("[Tickets] could not auto-claim ticket %s for staff member %s: %v", m.ChannelID, m.Author.ID, err)
 	}
 }
 
@@ -1904,11 +1969,11 @@ func ticketDetailFields(ticket *types.Ticket) []*discordgo.MessageEmbedField {
 func TicketStatusLabel(ticket *types.Ticket) string {
 	switch ticket.Status {
 	case types.TicketStatusClaimed:
-		return fmt.Sprintf("🟢 Claimed by <@%s>", ticket.ClaimedBy)
+		return fmt.Sprintf("%s Claimed by <@%s>", DotGreen, ticket.ClaimedBy)
 	case types.TicketStatusClosed:
-		return "🔴 Closed"
+		return DotRed + " Closed"
 	}
-	return "🟡 Awaiting Staff"
+	return DotYellow + " Awaiting Staff"
 }
 
 func ticketWelcomeButtons(ticket *types.Ticket, panel *types.InteractivePanel) []discordgo.MessageComponent {

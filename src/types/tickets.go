@@ -21,17 +21,19 @@ type TicketPanelConfig struct {
 
 // TicketCategory is one button on a ticket panel.
 type TicketCategory struct {
-	ID           string        `json:"id"`
-	Label        string        `json:"label"`
-	ButtonLabel  string        `json:"button_label"`
-	Emoji        string        `json:"emoji"`
-	Description  string        `json:"description"`
-	ButtonStyle  int           `json:"button_style"`
-	NameFormat   string        `json:"name_format"`
-	StaffRoleIDs []string      `json:"staff_role_ids"`
-	PingStaff    bool          `json:"ping_staff"`
-	Welcome      TicketWelcome `json:"welcome"`
-	CategoryID   string        `json:"category_id"` // Parent category ID for channel-based tickets
+	ID                string        `json:"id"`
+	Label             string        `json:"label"`
+	ButtonLabel       string        `json:"button_label"`
+	Emoji             string        `json:"emoji"`
+	Description       string        `json:"description"`
+	ButtonStyle       int           `json:"button_style"`
+	NameFormat        string        `json:"name_format"`
+	ChannelNameFormat string        `json:"channel_name_format,omitempty"`
+	ThreadNameFormat  string        `json:"thread_name_format,omitempty"`
+	StaffRoleIDs      []string      `json:"staff_role_ids"`
+	PingStaff         bool          `json:"ping_staff"`
+	Welcome           TicketWelcome `json:"welcome"`
+	CategoryID        string        `json:"category_id"` // Parent category ID for channel-based tickets
 }
 
 // TicketWelcome is the message posted inside a freshly opened ticket. Title,
