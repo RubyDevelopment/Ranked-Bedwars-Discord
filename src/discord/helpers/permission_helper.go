@@ -11,9 +11,13 @@ func MemberIsAdministrator(s *discordgo.Session, i *discordgo.InteractionCreate)
 	if i == nil || i.Member == nil {
 		return false
 	}
-	perms, err := MemberGuildPermissions(s, i.GuildID, i.Member)
-	if err != nil {
-		return false
+	// Discord sends the member's computed permissions with the interaction: no guild/role API calls needed.
+	perms := i.Member.Permissions
+	if perms == 0 {
+		var err error
+		if perms, err = MemberGuildPermissions(s, i.GuildID, i.Member); err != nil {
+			return false
+		}
 	}
 	return perms&(discordgo.PermissionAdministrator|discordgo.PermissionManageGuild) != 0
 }

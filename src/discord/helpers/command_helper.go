@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
@@ -33,6 +34,7 @@ const (
 
 var (
 	cooldowns             sync.Map
+	cooldownSweptAt       atomic.Int64
 	errGuildNotRegistered = errors.New("guild not registered")
 )
 
@@ -194,7 +196,22 @@ func IsOnCooldown(guildID, userID, cmdName string, durationSeconds int) bool {
 		}
 	}
 	cooldowns.Store(key, now)
+	sweepCooldowns(now)
 	return false
+}
+
+// sweepCooldowns drops entries older than an hour (at most every ten minutes) so the map does not grow with every user ever seen.
+func sweepCooldowns(now int64) {
+	last := cooldownSweptAt.Load()
+	if now-last < 600 || !cooldownSweptAt.CompareAndSwap(last, now) {
+		return
+	}
+	cooldowns.Range(func(key, value any) bool {
+		if at, ok := value.(int64); !ok || now-at > 3600 {
+			cooldowns.Delete(key)
+		}
+		return true
+	})
 }
 
 // ============================================================================
