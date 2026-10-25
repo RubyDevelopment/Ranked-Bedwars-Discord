@@ -43,12 +43,16 @@ const (
 	defaultPanelColor = 0x55FFFF
 
 	defaultInactivityReminderHours = 12
-	defaultInactivityCloseHours    = 24
 	maxInactivityHours             = 8760
-	inactivityCloser               = "inactivity"
+	// inactivityCloser only labels tickets that older versions closed automatically; nothing closes tickets for
+	// inactivity any more.
+	inactivityCloser = "inactivity"
 )
 
-const defaultInactivityMessage = "This ticket has been inactive for {inactive_hours} hours. It will be closed in {hours_until_close} hours if no new messages are sent."
+const defaultInactivityMessage = "{user} this ticket has been inactive for {inactive_hours} hours. Reply here if you still need help."
+
+// legacyInactivityMessage is the old default that promised an automatic close; it is swapped for the new default.
+const legacyInactivityMessage = "This ticket has been inactive for {inactive_hours} hours. It will be closed in {hours_until_close} hours if no new messages are sent."
 
 // Ticket component custom IDs are namespaced `tkt:` and colon separated.
 const (
@@ -206,12 +210,11 @@ func normalizeInteractivePanels(ip *types.InteractivePanels) {
 		}
 		if panel.Type == types.PanelTypeTicket && panel.Ticket != nil {
 			settings := &panel.Ticket.Settings
-			if settings.InactivityReminderHours == 0 && settings.InactivityCloseHours == 0 {
+			if settings.InactivityReminderHours == 0 {
 				settings.InactivityEnabled = true
 				settings.InactivityReminderHours = defaultInactivityReminderHours
-				settings.InactivityCloseHours = defaultInactivityCloseHours
 			}
-			if settings.InactivityMessage == "" {
+			if settings.InactivityMessage == "" || settings.InactivityMessage == legacyInactivityMessage {
 				settings.InactivityMessage = defaultInactivityMessage
 			}
 		}
@@ -753,14 +756,10 @@ func SetPendingCloseReason(actorID, guildID, threadID, reason string) error {
 // CloseTicket archives the ticket, saves its transcript to the log channel (and
 // the owner's DMs, when enabled), then deletes or locks the thread.
 func CloseTicket(s *discordgo.Session, guildID, threadID, closerID string, closerIsStaff bool) (*types.Ticket, error) {
-	return closeTicket(s, guildID, threadID, closerID, closerIsStaff, 0)
+	return closeTicket(s, guildID, threadID, closerID, closerIsStaff)
 }
 
-func closeInactiveTicket(s *discordgo.Session, guildID, threadID string, now time.Time) (*types.Ticket, error) {
-	return closeTicket(s, guildID, threadID, inactivityCloser, false, now.Unix())
-}
-
-func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, closerIsStaff bool, inactivityCutoff int64) (*types.Ticket, error) {
+func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, closerIsStaff bool) (*types.Ticket, error) {
 	var ticket *types.Ticket
 	var panel *types.InteractivePanel
 	err := Tickets.Update(closerID, guildID, func(ip *types.InteractivePanels) error {
@@ -769,28 +768,10 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 			return ErrTicketNotFound
 		}
 		panel = ip.Panels[found.PanelID]
-		if inactivityCutoff > 0 {
-			if panel == nil || panel.Ticket == nil {
-				return ErrTicketActivityChanged
-			}
-			settings := panel.Ticket.Settings
-			if !settings.InactivityEnabled || !validInactivitySettings(settings) {
-				return ErrTicketActivityChanged
-			}
-			cutoff := time.Unix(inactivityCutoff, 0).Add(-time.Duration(settings.InactivityCloseHours) * time.Hour).Unix()
-			if ticketLastActivity(found) > cutoff {
-				return ErrTicketActivityChanged
-			}
-			found.CloseReason = "Automatically closed after inactivity."
-		}
 		found.Status = types.TicketStatusClosed
 		found.ClosedAt = time.Now().Unix()
 		found.ClosedBy = closerID
-		message := "Ticket closed."
-		if inactivityCutoff > 0 {
-			message = "Ticket automatically closed after inactivity."
-		}
-		appendTicketLog(found, "closed", closerID, message, found.ClosedAt)
+		appendTicketLog(found, "closed", closerID, "Ticket closed.", found.ClosedAt)
 		if closerIsStaff {
 			StaffStatsFor(ip, closerID).Closed++
 		}
@@ -893,7 +874,6 @@ type ticketInactivityAction uint8
 const (
 	ticketInactivityNone ticketInactivityAction = iota
 	ticketInactivityRemind
-	ticketInactivityClose
 )
 
 func ticketInactivityActionFor(settings types.TicketSettings, ticket *types.Ticket, now time.Time) ticketInactivityAction {
@@ -902,9 +882,6 @@ func ticketInactivityActionFor(settings types.TicketSettings, ticket *types.Tick
 	}
 	lastActive := ticketLastActivity(ticket)
 	idle := now.Sub(time.Unix(lastActive, 0))
-	if idle >= time.Duration(settings.InactivityCloseHours)*time.Hour {
-		return ticketInactivityClose
-	}
 	if idle < time.Duration(settings.InactivityReminderHours)*time.Hour {
 		return ticketInactivityNone
 	}
@@ -1047,14 +1024,6 @@ func sweepTicketInactivity(s *discordgo.Session) {
 				continue
 			}
 
-			if action == ticketInactivityClose {
-				if _, err := closeInactiveTicket(s, guild.ID, candidate.ThreadID, now); err != nil &&
-					!errors.Is(err, ErrTicketNotFound) && !errors.Is(err, ErrTicketActivityChanged) {
-					log.Printf("[Tickets] could not automatically close ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
-				}
-				continue
-			}
-
 			notify := false
 			err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 				ticket := current.Tickets.Open[candidate.ThreadID]
@@ -1084,23 +1053,16 @@ func sweepTicketInactivity(s *discordgo.Session) {
 				continue
 			}
 			elapsedHours := int(now.Sub(time.Unix(ticketLastActivity(candidate), 0)).Hours())
-			hoursUntilClose := settings.InactivityCloseHours - elapsedHours
-			if hoursUntilClose < 1 {
-				hoursUntilClose = 1
+			vars := map[string]string{
+				"user":           "<@" + candidate.OwnerID + ">",
+				"username":       candidate.OwnerName,
+				"inactive_hours": strconv.Itoa(elapsedHours),
+				"reference":      candidate.Ref,
+				"number":         strconv.Itoa(candidate.Number),
+				"category":       candidate.CategoryLabel,
 			}
-			message := strings.NewReplacer(
-				"{user}", "<@"+candidate.OwnerID+">",
-				"{inactive_hours}", strconv.Itoa(elapsedHours),
-				"{hours_until_close}", strconv.Itoa(hoursUntilClose),
-				"{close_hours}", strconv.Itoa(settings.InactivityCloseHours),
-			).Replace(settings.InactivityMessage)
-			if _, err := s.ChannelMessageSendComplex(candidate.ThreadID, &discordgo.MessageSend{
-				Content: message,
-				AllowedMentions: &discordgo.MessageAllowedMentions{
-					Parse: []discordgo.AllowedMentionType{},
-					Users: []string{candidate.OwnerID},
-				},
-			}); err != nil {
+			message, err := sendInactivityReminder(s, guild.ID, candidate.ThreadID, candidate.OwnerID, settings, vars)
+			if err != nil {
 				log.Printf("[Tickets] could not send inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
 			} else if err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 				if ticket := current.Tickets.Open[candidate.ThreadID]; ticket != nil {
@@ -1115,10 +1077,50 @@ func sweepTicketInactivity(s *discordgo.Session) {
 }
 
 func validInactivitySettings(settings types.TicketSettings) bool {
-	return settings.InactivityReminderHours > 0 &&
-		settings.InactivityReminderHours <= maxInactivityHours &&
-		settings.InactivityCloseHours > settings.InactivityReminderHours &&
-		settings.InactivityCloseHours <= maxInactivityHours
+	return settings.InactivityReminderHours > 0 && settings.InactivityReminderHours <= maxInactivityHours
+}
+
+// sendInactivityReminder posts the reminder into the ticket: the saved Embed Builder message the panel points at
+// (plain message, embeds or Components V2) when it still exists, otherwise the panel's plain text. It returns the
+// text kept in the ticket log. Nothing is closed or deleted.
+func sendInactivityReminder(s *discordgo.Session, guildID, threadID, ownerID string, settings types.TicketSettings, vars map[string]string) (string, error) {
+	fill := VarFiller(vars)
+	if id := strings.TrimSpace(settings.InactivityMessageID); id != "" {
+		if doc := savedMessageDoc(guildID, id); doc != nil {
+			payload := doc.Payload(fill)
+			if !doc.AllowMentions && doc.AllowedMentions == nil {
+				payload["allowed_mentions"] = map[string]any{"parse": []string{}, "users": []string{ownerID}}
+			}
+			_, err := SendPayload(s, threadID, payload)
+			return "Inactivity reminder (" + doc.Name + ")", err
+		}
+	}
+	text := fill(settings.InactivityMessage)
+	_, err := s.ChannelMessageSendComplex(threadID, &discordgo.MessageSend{
+		Content:         text,
+		AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{}, Users: []string{ownerID}},
+	})
+	return text, err
+}
+
+// savedMessageDoc is the Embed Builder message with the id, or nil when it is gone.
+func savedMessageDoc(guildID, id string) *MessageDoc {
+	cfg, err := database.Must().GuildConfig.Get(guildID)
+	if err != nil || cfg.Panels.IsEmpty() {
+		return nil
+	}
+	var sections struct {
+		Messages []MessageDoc `json:"messages"`
+	}
+	if cfg.Panels.Unmarshal(&sections) != nil {
+		return nil
+	}
+	for i := range sections.Messages {
+		if sections.Messages[i].ID == id {
+			return &sections.Messages[i]
+		}
+	}
+	return nil
 }
 
 func copyTicket(ticket *types.Ticket) *types.Ticket {

@@ -1339,7 +1339,7 @@ func (m *EloManager) AddDecay(actor, guildID, userID string, amount int, reason 
 	if applied <= 0 {
 		return nil, ErrAtDecayFloor
 	}
-	return m.applyDecay(actor, guildID, userID, st, applied, reason, m.daysInactive(st))
+	return m.applyDecay(actor, guildID, userID, st, applied, reason, m.daysInactive(st), false)
 }
 
 // RemoveDecay deletes a decay record and gives back the ELO it took (unless
@@ -1379,7 +1379,7 @@ func (m *EloManager) daysInactive(st *models.PlayerStatsModel) int {
 
 // applyDecay records the decay first and rolls the record back if the ELO
 // write fails, so history never shows a decay that didn't happen.
-func (m *EloManager) applyDecay(actor, guildID, userID string, st *models.PlayerStatsModel, amount int, reason string, days int) (*DecayResult, error) {
+func (m *EloManager) applyDecay(actor, guildID, userID string, st *models.PlayerStatsModel, amount int, reason string, days int, auto bool) (*DecayResult, error) {
 	if reason == "" {
 		reason = "Inactivity Decay"
 	}
@@ -1396,9 +1396,13 @@ func (m *EloManager) applyDecay(actor, guildID, userID string, st *models.Player
 		}
 		return nil, err
 	}
-	if _, err := m.api().Patch(actor, guildID, userID, st.SeasonID, map[string]any{
-		"last_elo_decay_at": m.deps.Now().UTC(), "elo_decay_warning_for": nil,
-	}); err != nil {
+	// Only automatic decay starts/continues the decay streak; a staff decay on an active player must not make
+	// NextDecayAt schedule an automatic tick 24h later.
+	stamps := map[string]any{"elo_decay_warning_for": nil}
+	if auto {
+		stamps["last_elo_decay_at"] = m.deps.Now().UTC()
+	}
+	if _, err := m.api().Patch(actor, guildID, userID, st.SeasonID, stamps); err != nil {
 		m.logf("decay timestamps for %s/%s: %v", guildID, userID, err)
 	}
 	if _, err := m.syncRank(actor, guildID, userID, st, after); err != nil {
@@ -1502,7 +1506,7 @@ func (m *EloManager) autoDecay(guildID, userID string, cfg DecayConfig, ranks []
 	if amount <= 0 {
 		return false
 	}
-	res, err := m.applyDecay(actorSystem, guildID, userID, st, amount, "", m.daysInactive(st))
+	res, err := m.applyDecay(actorSystem, guildID, userID, st, amount, "", m.daysInactive(st), true)
 	if err != nil {
 		m.logf("decay %s/%s: %v", guildID, userID, err)
 		return false

@@ -42,7 +42,7 @@ func init() {
 
 var TicketInactivitySweepEvent = &types.Event{
 	Name:        "Ticket Inactivity Manager",
-	Description: "Sends inactivity reminders and closes tickets after their configured idle period.",
+	Description: "Reminds ticket owners when a ticket has been idle for the configured time. Never closes tickets.",
 	Type:        "ready",
 	Once:        false,
 	Disabled:    false,

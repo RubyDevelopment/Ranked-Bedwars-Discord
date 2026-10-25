@@ -66,20 +66,23 @@ type TicketField struct {
 
 // TicketSettings holds the behaviour shared by every category of a panel.
 type TicketSettings struct {
-	ThreadChannelID         string   `json:"thread_channel_id"`
-	LogChannelID            string   `json:"log_channel_id"`
-	StaffRoleIDs            []string `json:"staff_role_ids"`
-	MaxOpenPerUser          int      `json:"max_open_per_user"`
-	ClaimEnabled            bool     `json:"claim_enabled"`
-	DMTranscript            bool     `json:"dm_transcript"`
-	DeleteOnClose           bool     `json:"delete_on_close"`
-	OwnerCanClose           bool     `json:"owner_can_close"`
-	Mode                    string   `json:"mode"` // "thread" or "channel"
-	InactivityEnabled       bool     `json:"inactivity_enabled"`
-	InactivityReminderHours int      `json:"inactivity_reminder_hours"`
-	InactivityCloseHours    int      `json:"inactivity_close_hours"`
-	InactivityMessage       string   `json:"inactivity_message"`
-	InlineCategoryButtons   bool     `json:"inline_category_buttons"`
+	ThreadChannelID string   `json:"thread_channel_id"`
+	LogChannelID    string   `json:"log_channel_id"`
+	StaffRoleIDs    []string `json:"staff_role_ids"`
+	MaxOpenPerUser  int      `json:"max_open_per_user"`
+	ClaimEnabled    bool     `json:"claim_enabled"`
+	DMTranscript    bool     `json:"dm_transcript"`
+	DeleteOnClose   bool     `json:"delete_on_close"`
+	OwnerCanClose   bool     `json:"owner_can_close"`
+	Mode            string   `json:"mode"` // "thread" or "channel"
+	// InactivityEnabled turns the idle reminder on. Tickets are never closed for inactivity.
+	InactivityEnabled       bool   `json:"inactivity_enabled"`
+	InactivityReminderHours int    `json:"inactivity_reminder_hours"`
+	InactivityMessage       string `json:"inactivity_message"`
+	// InactivityMessageID is a saved Embed Builder message (message, embeds or Components V2) used for the reminder
+	// instead of InactivityMessage; empty or missing falls back to the plain text.
+	InactivityMessageID   string `json:"inactivity_message_id"`
+	InlineCategoryButtons bool   `json:"inline_category_buttons"`
 }
 
 // TicketState is the runtime state of every ticket panel in a guild.
