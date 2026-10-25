@@ -658,6 +658,15 @@ func TicketMemberRemovedEmbed(userID string) *discordgo.MessageEmbed {
 	})
 }
 
+// TicketAccessResultEmbed reports the outcome of /ticket add or /ticket remove.
+func TicketAccessResultEmbed(ok bool, description string) *discordgo.MessageEmbed {
+	kind, title := "success", "Ticket Access Updated"
+	if !ok {
+		kind, title = "error", "Nothing To Change"
+	}
+	return Preset(kind, types.PresetOptions{Title: title, Description: description, Thumbnail: ThumbGuild})
+}
+
 func TicketRemoveOwnerEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",

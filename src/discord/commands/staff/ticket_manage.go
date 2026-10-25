@@ -1,6 +1,8 @@
 package staff
 
 import (
+	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -55,15 +57,17 @@ var TicketManageCommand = &types.Command{
 				},
 			},
 			{
-				Name: "add", Description: "Add a member to the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Name: "add", Description: "Add a user and/or a role to the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
-					{Name: "user", Description: "Discord user to add", Type: discordgo.ApplicationCommandOptionUser, Required: true},
+					{Name: "user", Description: "Discord user to add", Type: discordgo.ApplicationCommandOptionUser, Required: false},
+					{Name: "role", Description: "Role to add (every member of it in a thread ticket)", Type: discordgo.ApplicationCommandOptionRole, Required: false},
 				},
 			},
 			{
-				Name: "remove", Description: "Remove a member from the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Name: "remove", Description: "Remove a user and/or a role from the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
-					{Name: "user", Description: "Discord user to remove", Type: discordgo.ApplicationCommandOptionUser, Required: true},
+					{Name: "user", Description: "Discord user to remove", Type: discordgo.ApplicationCommandOptionUser, Required: false},
+					{Name: "role", Description: "Role to remove (every member of it in a thread ticket)", Type: discordgo.ApplicationCommandOptionRole, Required: false},
 				},
 			},
 		},
@@ -244,7 +248,8 @@ func executeTicketClose(s *discordgo.Session, i *discordgo.InteractionCreate) er
 // Core Logic & Helpers
 // ============================================================================
 
-// changeTicketMember adds or removes a member of the ticket thread or channel.
+// changeTicketMember adds or removes a user and/or a role of the ticket thread or channel. At least one of the two
+// options is needed; when both are given both are changed.
 func changeTicketMember(s *discordgo.Session, i *discordgo.InteractionCreate, add bool) error {
 	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
@@ -256,41 +261,102 @@ func changeTicketMember(s *discordgo.Session, i *discordgo.InteractionCreate, ad
 
 	_, options := types.SelectedSubcommand(i)
 	target := helpers.SubOptionUser(s, options, "user")
-	if target == nil || target.Bot {
+	roleID := helpers.SubOptionRoleID(s, options, "role")
+	if target == nil && roleID == "" {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Choose a user, a role, or both."))
+	}
+	if target != nil && target.Bot {
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketBotTargetEmbed())
 	}
-
-	if ctx.Ticket.Mode == types.TicketModeChannel {
-		// Channel-based tickets: use permission overwrites
-		if add {
-			allow := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionReadMessageHistory | discordgo.PermissionAttachFiles | discordgo.PermissionEmbedLinks)
-			if err := s.ChannelPermissionSet(i.ChannelID, target.ID, discordgo.PermissionOverwriteTypeMember, allow, 0); err != nil {
-				return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
-			}
-			return helpers.EditInteractionEmbed(s, i, helpers.TicketMemberAddedEmbed(target.ID))
-		}
-		if target.ID == ctx.Ticket.OwnerID {
-			return helpers.EditInteractionEmbed(s, i, helpers.TicketRemoveOwnerEmbed())
-		}
-		deny := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages)
-		if err := s.ChannelPermissionSet(i.ChannelID, target.ID, discordgo.PermissionOverwriteTypeMember, 0, deny); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
-		}
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketMemberRemovedEmbed(target.ID))
-	}
-
-	// Thread-based tickets: use thread member management
-	if add {
-		if err := s.ThreadMemberAdd(i.ChannelID, target.ID); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
-		}
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketMemberAddedEmbed(target.ID))
-	}
-	if target.ID == ctx.Ticket.OwnerID {
+	if target != nil && !add && target.ID == ctx.Ticket.OwnerID {
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketRemoveOwnerEmbed())
 	}
-	if err := s.ThreadMemberRemove(i.ChannelID, target.ID); err != nil {
+
+	verb, prep := "Added", "to"
+	if !add {
+		verb, prep = "Removed", "from"
+	}
+	var done []string
+	var failed []string
+	if target != nil {
+		if err := changeTicketAccess(s, ctx, target.ID, discordgo.PermissionOverwriteTypeMember, add); err != nil {
+			failed = append(failed, "<@"+target.ID+">")
+		} else {
+			done = append(done, "<@"+target.ID+">")
+		}
+	}
+	if roleID != "" {
+		n, err := changeTicketRoleAccess(s, i.GuildID, ctx, roleID, add)
+		switch {
+		case err != nil:
+			failed = append(failed, "<@&"+roleID+">")
+		case ctx.Ticket.Mode == types.TicketModeChannel:
+			done = append(done, "<@&"+roleID+">")
+		default:
+			done = append(done, fmt.Sprintf("<@&%s> (%d members)", roleID, n))
+		}
+	}
+	if len(done) == 0 {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketMemberRemovedEmbed(target.ID))
+	msg := fmt.Sprintf("%s %s %s this ticket.", verb, strings.Join(done, ", "), prep)
+	if len(failed) > 0 {
+		msg += "\n\nCould not change: " + strings.Join(failed, ", ")
+	}
+	return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(true, msg))
+}
+
+// changeTicketAccess gives or takes ticket access for one user (member) or role (overwrite type). Channel tickets use
+// permission overwrites; thread tickets can only add or remove single users.
+func changeTicketAccess(s *discordgo.Session, ctx *types.TicketContext, id string, kind discordgo.PermissionOverwriteType, add bool) error {
+	if ctx.Ticket.Mode == types.TicketModeChannel {
+		allow := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionReadMessageHistory | discordgo.PermissionAttachFiles | discordgo.PermissionEmbedLinks)
+		if add {
+			return s.ChannelPermissionSet(ctx.Ticket.ThreadID, id, kind, allow, 0)
+		}
+		return s.ChannelPermissionSet(ctx.Ticket.ThreadID, id, kind, 0, int64(discordgo.PermissionViewChannel|discordgo.PermissionSendMessages))
+	}
+	if add {
+		return s.ThreadMemberAdd(ctx.Ticket.ThreadID, id)
+	}
+	return s.ThreadMemberRemove(ctx.Ticket.ThreadID, id)
+}
+
+// maxTicketRoleMembers bounds how many people one role change touches in a thread ticket (each is an API call).
+const maxTicketRoleMembers = 200
+
+// changeTicketRoleAccess applies a role to the ticket. In a channel ticket that is one permission overwrite; a thread
+// has no role access, so every member holding the role is added or removed instead (the owner is never removed).
+// It returns how many members were changed.
+func changeTicketRoleAccess(s *discordgo.Session, guildID string, ctx *types.TicketContext, roleID string, add bool) (int, error) {
+	if ctx.Ticket.Mode == types.TicketModeChannel {
+		return 0, changeTicketAccess(s, ctx, roleID, discordgo.PermissionOverwriteTypeRole, add)
+	}
+	changed, after := 0, ""
+	for scanned := 0; scanned < 10000; {
+		members, err := s.GuildMembers(guildID, after, 1000)
+		if err != nil {
+			return changed, err
+		}
+		if len(members) == 0 {
+			break
+		}
+		for _, m := range members {
+			after = m.User.ID
+			scanned++
+			if m.User.Bot || !slices.Contains(m.Roles, roleID) || (!add && m.User.ID == ctx.Ticket.OwnerID) {
+				continue
+			}
+			if changed >= maxTicketRoleMembers {
+				return changed, nil
+			}
+			if err := changeTicketAccess(s, ctx, m.User.ID, discordgo.PermissionOverwriteTypeMember, add); err == nil {
+				changed++
+			}
+		}
+		if len(members) < 1000 {
+			break
+		}
+	}
+	return changed, nil
 }
