@@ -1016,7 +1016,7 @@
 				{
 					"key": "leaderboard.leaderboard",
 					"slug": "leaderboard",
-					"title": "Leaderboard — …",
+					"title": "Leaderboard · …",
 					"look": "success",
 					"description": "No players have stats for the active season yet."
 				},
@@ -1771,7 +1771,7 @@
 				{
 					"key": "profile.player-profile",
 					"slug": "player-profile",
-					"title": "Player Profile — …",
+					"title": "Player Profile · …",
 					"look": "info",
 					"description": "…\n\nUse `/stats` for a full seasonal breakdown."
 				}
@@ -2353,7 +2353,7 @@
 				{
 					"key": "role.roles",
 					"slug": "roles",
-					"title": "Roles — …",
+					"title": "Roles · …",
 					"look": "success",
 					"description": "…\n\nUse `/role add` or `/role remove` to manage roles."
 				},
@@ -2556,7 +2556,7 @@
 				{
 					"key": "settings.player-settings",
 					"slug": "player-settings",
-					"title": "Player Settings — …",
+					"title": "Player Settings · …",
 					"look": "info",
 					"description": "Your current ranked profile preferences. Use `/settings toggle` to change one.",
 					"has_fields": true
@@ -2649,7 +2649,7 @@
 				{
 					"key": "stats.player-stats",
 					"slug": "player-stats",
-					"title": "Player Stats — …",
+					"title": "Player Stats · …",
 					"look": "info"
 				}
 			]
@@ -3647,7 +3647,7 @@
 				{
 					"key": "verify.player-verification",
 					"slug": "player-verification",
-					"title": "Player Verification — …",
+					"title": "Player Verification · …",
 					"look": "default"
 				}
 			]

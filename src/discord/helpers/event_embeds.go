@@ -947,7 +947,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match. The result is being scored.",
 		embedField{Name: "Match stats", Value: "{statTable}"})),
 	"scored":     thumb(colored(tpl("default", "Match Finished", "**Game #{game}**\n\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), "#dc4d4d"), ThumbTada),
-	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied — no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), ThumbTada),
+	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied · no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), ThumbTada),
 	"staffPending": thumb(colored(tpl("pending", "Win Submitted • Game #{game}",
 		"**Status:** Pending staff scoring\n**Claimed winner:** {winner}\n\nThe match was moved to the review category. Staff will score it shortly."), "#fee75c"), ThumbTimer),
 	"trackingLost": submitYourWin,

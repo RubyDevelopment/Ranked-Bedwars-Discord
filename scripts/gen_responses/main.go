@@ -349,7 +349,7 @@ func collapse(s string) string { return strings.ReplaceAll(s, changing+changing,
 
 // slug keeps in step with helpers.ResponseTitleSlug (a test there compares the two).
 func slug(title string) string {
-	for _, sep := range []string{" — ", " · "} {
+	for _, sep := range []string{" · ", " · "} {
 		if cut := strings.Index(title, sep); cut >= 0 {
 			title = title[:cut]
 		}

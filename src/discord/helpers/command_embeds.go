@@ -80,7 +80,7 @@ func ServerConfigUnknownRequirementKeyEmbed(i *discordgo.InteractionCreate, cmdN
 }
 
 func ServerConfigRequirementListEmbed(i *discordgo.InteractionCreate, resourceType types.RequirementType, cmdName string, slots map[string]types.RequirementSlot) *discordgo.MessageEmbed {
-	title := fmt.Sprintf("%s Requirements — /%s", strings.ToUpper(string(resourceType[:1]))+string(resourceType[1:]), cmdName)
+	title := fmt.Sprintf("%s Requirements · /%s", strings.ToUpper(string(resourceType[:1]))+string(resourceType[1:]), cmdName)
 	if len(slots) == 0 {
 		return Preset("info", types.PresetOptions{
 			Title:       title,
@@ -550,7 +550,7 @@ func LeaderboardNoActiveSeasonEmbed(i *discordgo.InteractionCreate) *discordgo.M
 
 func LeaderboardEmptyEmbed(i *discordgo.InteractionCreate, season string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("Leaderboard — %s", season),
+		Title:       fmt.Sprintf("Leaderboard · %s", season),
 		Description: "No players have stats for the active season yet.",
 		Thumbnail:   ThumbPlayers,
 	})
@@ -580,7 +580,7 @@ func LeaderboardOverviewEmbed(i *discordgo.InteractionCreate, rows []sdk.Leaderb
 	}
 
 	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("Leaderboard — %s", season),
+		Title:       fmt.Sprintf("Leaderboard · %s", season),
 		Description: b.String(),
 		FooterText:  fmt.Sprintf("Page %d/%d", page, totalPages),
 		Thumbnail:   ThumbPlayers,
@@ -1145,7 +1145,7 @@ func PlayerProfileOverviewEmbed(i *discordgo.InteractionCreate, user *discordgo.
 	}, "\n")
 
 	return Preset("info", types.PresetOptions{
-		Title:       fmt.Sprintf("Player Profile — %s", config.Username),
+		Title:       fmt.Sprintf("Player Profile · %s", config.Username),
 		Description: description + "\n\nUse `/stats` for a full seasonal breakdown.",
 		Thumbnail:   MinecraftBustAvatarURL(config.Username),
 	})
@@ -1553,7 +1553,7 @@ func PlayerSettingsUnknownOptionEmbed(i *discordgo.InteractionCreate) *discordgo
 
 func PlayerSettingsOverviewEmbed(i *discordgo.InteractionCreate, config *models.PlayerConfigsModel) *discordgo.MessageEmbed {
 	return Preset("info", types.PresetOptions{
-		Title:       fmt.Sprintf("Player Settings — %s", config.Username),
+		Title:       fmt.Sprintf("Player Settings · %s", config.Username),
 		Description: "Your current ranked profile preferences. Use `/settings toggle` to change one.",
 		Thumbnail:   MinecraftBustAvatarURL(config.Username),
 		Fields: []*discordgo.MessageEmbedField{
@@ -1644,7 +1644,7 @@ func PlayerStatsOverviewEmbed(i *discordgo.InteractionCreate, username string, s
 	)
 
 	return Preset("info", types.PresetOptions{
-		Title:       fmt.Sprintf("Player Stats — %s", username),
+		Title:       fmt.Sprintf("Player Stats · %s", username),
 		Description: description,
 		Thumbnail:   MinecraftBustAvatarURL(username),
 	})
@@ -3038,7 +3038,7 @@ func PlayerVerifyReportEmbed(i *discordgo.InteractionCreate, user *discordgo.Use
 	}
 
 	return Preset(preset, types.PresetOptions{
-		Title:       fmt.Sprintf("Player Verification — %s", username),
+		Title:       fmt.Sprintf("Player Verification · %s", username),
 		Description: description,
 		Thumbnail:   MinecraftBustAvatarURL(username),
 	})
@@ -3399,7 +3399,7 @@ func RoleMassResultEmbed(i *discordgo.InteractionCreate, roleName, action string
 
 func RoleListEmbed(i *discordgo.InteractionCreate, user *discordgo.User, roles string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
-		Title:       fmt.Sprintf("Roles — %s", user.Username),
+		Title:       fmt.Sprintf("Roles · %s", user.Username),
 		Description: roles + "\n\nUse `/role add` or `/role remove` to manage roles.",
 		Thumbnail:   ThumbGuild,
 	})
@@ -3407,7 +3407,7 @@ func RoleListEmbed(i *discordgo.InteractionCreate, user *discordgo.User, roles s
 
 func RoleListEmptyEmbed(i *discordgo.InteractionCreate, user *discordgo.User) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
-		Title:       fmt.Sprintf("Roles — %s", user.Username),
+		Title:       fmt.Sprintf("Roles · %s", user.Username),
 		Description: "It looks like that member has no assignable roles. Roles may be managed by integrations or higher hierarchy.",
 		Thumbnail:   ThumbFlag,
 	})
@@ -3637,7 +3637,7 @@ var (
 	LayoutQueuesBlockingTitle = DefineLayout("queues.blocking_title", "Not enough players heading", "⛔ Blocking Queue")
 	LayoutQueuesBlockingText  = DefineLayout("queues.blocking_text", "Not enough players text", "Not enough eligible players (`{eligible}/{slots}`)", "eligible", "slots")
 	LayoutQueuesBlockedTitle  = DefineLayout("queues.blocked_title", "Blocked players heading", "⛔ Blocked Players", "count")
-	LayoutQueuesBlockedRow    = DefineRepeatedLayout("queues.blocked_row", "One blocked player", "> {mention} — {reason}", "mention", "id", "reason")
+	LayoutQueuesBlockedRow    = DefineRepeatedLayout("queues.blocked_row", "One blocked player", "> {mention} · {reason}", "mention", "id", "reason")
 	LayoutQueuesReasonInGame  = DefineLayout("queues.reason_in_game", "Blocked: already in a game", "currently in a game")
 	LayoutQueuesReasonNoReg   = DefineLayout("queues.reason_unregistered", "Blocked: not registered", "not registered")
 	LayoutQueuesReasonBanned  = DefineLayout("queues.reason_restricted", "Blocked: has a restriction", "has active restriction")
@@ -3665,7 +3665,7 @@ var (
 	LayoutMapsFooter        = DefineLayout("maps.footer", "Line under the list", "*Active modes: `{modes}`*", "modes", "count")
 
 	// /leaderboard
-	LayoutLeaderboardRow = DefineRepeatedLayout("leaderboard.row", "One player's line", "> **#{position}** — `{elo}` ELO — {wins}W/{losses}L (`{win_rate}`)", "position", "elo", "rank", "peak", "wins", "losses", "games", "win_rate", "kills", "deaths", "final_kills", "beds", "mvps")
+	LayoutLeaderboardRow = DefineRepeatedLayout("leaderboard.row", "One player's line", "> **#{position}** · `{elo}` ELO · {wins}W/{losses}L (`{win_rate}`)", "position", "elo", "rank", "peak", "wins", "losses", "games", "win_rate", "kills", "deaths", "final_kills", "beds", "mvps")
 )
 
 var (
@@ -3674,7 +3674,7 @@ var (
 	LayoutRanksProgressMax = DefineLayout("ranks.progress_max", "Your standing, at the top rank", "**Your ELO:** `{elo}`\n**Your Rank:** `{rank}`\nYou have achieved maximum competitive rank status!", "elo", "rank")
 	LayoutRanksGuest       = DefineLayout("ranks.guest", "Shown to someone not registered", "Use `/register` to track your seasonal elo and rank progression!")
 	LayoutRanksHeading     = DefineLayout("ranks.heading", "Heading above the ranks", "__**Available Ranks:**__")
-	LayoutRanksLine        = DefineRepeatedLayout("ranks.line", "One rank", "{role} — ELO: `{min_elo} - {max_elo}` | Win: `+{win}` | Loss: `-{loss}`", "role", "name", "min_elo", "max_elo", "win", "loss")
+	LayoutRanksLine        = DefineRepeatedLayout("ranks.line", "One rank", "{role} · ELO: `{min_elo} - {max_elo}` | Win: `+{win}` | Loss: `-{loss}`", "role", "name", "min_elo", "max_elo", "win", "loss")
 	LayoutRanksNoMax       = DefineLayout("ranks.no_max", "Top of the highest rank", "∞")
 	LayoutRanksUnranked    = DefineLayout("ranks.unranked", "Name when you have no rank", "Unranked")
 )
