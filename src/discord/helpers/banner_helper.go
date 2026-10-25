@@ -1070,9 +1070,9 @@ func DateOf(t *time.Time) string {
 
 // Minecraft heads and bodies come from mc-heads.net, by the player's registered username.
 func HeadURL(name string) string {
-	return "https://mc-heads.net/avatar/" + url.PathEscape(name) + "/128"
+	return "https://mc-heads.net/avatar/" + url.PathEscape(name)
 }
-func BodyURL(name string) string { return "https://mc-heads.net/body/" + url.PathEscape(name) + "/256" }
+func BodyURL(name string) string { return "https://mc-heads.net/body/" + url.PathEscape(name) }
 
 // EntryVars are the fields of one leaderboard row ("lb.3.") or of the invoker's own row ("me."), as the
 // panel's Banner Builder lists them.
