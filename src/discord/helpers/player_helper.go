@@ -931,9 +931,14 @@ func ApplyStartingRank(guildID, actorID string, playerID uint) error {
 	if rankName == "" {
 		return nil // no ranks configured yet
 	}
-	_, err = database.Must().Stats.Patch(actorID, guildID, sdk.UintToString(playerID), 0, map[string]any{
-		"rank": rankName, "elo": startingElo, "highest_elo": startingElo,
-	})
+	pid := sdk.UintToString(playerID)
+	if startingElo > 0 {
+		// The entry rating is the base of the game chain, not a staff modification on top of it.
+		if _, err = database.Must().Stats.ApplyElo(actorID, guildID, pid, 0, sdk.EloEffect{Part: "game", Delta: startingElo}); err != nil {
+			return err
+		}
+	}
+	_, err = database.Must().Stats.Patch(actorID, guildID, pid, 0, map[string]any{"rank": rankName})
 	return err
 }
 
@@ -1356,16 +1361,22 @@ func NewPerkResolver(session func() *discordgo.Session) func(guildID, userID str
 	return func(guildID, userID string) PerkContext {
 		s := session()
 		if s == nil {
-			return PerkContext{}
+			return PerkContext{Err: errors.New("no Discord session to read roles from")}
 		}
 		perks, err := cache.get(guildID, func() ([]Perk, error) { return GuildPerks(guildID) })
-		if err != nil || len(perks) == 0 {
+		if err != nil {
+			return PerkContext{Err: err}
+		}
+		if len(perks) == 0 {
 			return PerkContext{}
 		}
 		member, err := s.State.Member(guildID, userID)
 		if err != nil {
 			if member, err = s.GuildMember(guildID, userID); err != nil {
-				return PerkContext{}
+				if isUnknownMember(err) {
+					return PerkContext{} // left the server: no roles, so no perks
+				}
+				return PerkContext{Err: err} // a lookup failure is not "no perks": scoring retries instead of paying nothing
 			}
 		}
 
@@ -1594,4 +1605,13 @@ func (v *RegistrationVerifierStore) sweep(now time.Time) {
 			delete(v.nameLast, k)
 		}
 	}
+}
+
+// isUnknownMember reports whether Discord answered that the member (or user) does not exist.
+func isUnknownMember(err error) bool {
+	var rest *discordgo.RESTError
+	if errors.As(err, &rest) && rest.Message != nil {
+		return rest.Message.Code == discordgo.ErrCodeUnknownMember || rest.Message.Code == discordgo.ErrCodeUnknownUser
+	}
+	return false
 }

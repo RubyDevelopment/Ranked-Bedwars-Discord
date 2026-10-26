@@ -15,6 +15,7 @@ import (
 
 func init() {
 	helpers.Register(WarnIssueCommand)
+	helpers.RegisterLadderAction("warning", warnSpec)
 }
 
 // ============================================================================
@@ -51,14 +52,17 @@ var WarnIssueCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
+var warnSpec = &helpers.ApplySpec{
+	Command:       "warn_issue",
+	Action:        "warn",
+	Adjective:     "warned",
+	Summary:       "the warning",
+	Title:         "Warning Issued",
+	Type:          "warn",
+	SkipHierarchy: true,
+	Ladder:        "warning",
+}
+
 func executeWarnIssueCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
-		Command:       "warn_issue",
-		Action:        "warn",
-		Adjective:     "warned",
-		Summary:       "the warning",
-		Title:         "Warning Issued",
-		Type:          "warn",
-		SkipHierarchy: true,
-	})
+	return helpers.ApplyPunishment(s, i, warnSpec)
 }

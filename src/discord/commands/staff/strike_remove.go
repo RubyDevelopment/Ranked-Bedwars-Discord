@@ -99,12 +99,18 @@ func executeStrikeRemoveCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		}
 	}
 
-	// 4. Void Strike in Database
+	// 4. Void Strike in Database, then give back the ELO it took (a lapsed strike keeps its penalty; a removed one does not)
+	removed, _ := database.Must().Strikes.Get(i.GuildID, strikeID)
 	if err := database.Must().Strikes.Delete(actor, i.GuildID, strikeID); err != nil {
 		if sdk.IsNotFound(err) {
 			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveNotFoundEmbed(i))
 		}
 		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRemoveEmbed(i))
+	}
+	if removed != nil {
+		if err := helpers.Elo.RefundStrike(actor, i.GuildID, target.ID, removed); err != nil {
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRemoveEmbed(i))
+		}
 	}
 
 	username := target.Username

@@ -15,6 +15,7 @@ import (
 
 func init() {
 	helpers.Register(ServerVcMuteCommand)
+	helpers.RegisterLadderAction("vc_mute", vcMuteSpec)
 }
 
 // ============================================================================
@@ -42,12 +43,6 @@ var ServerVcMuteCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
-			{
-				Name:        "duration",
-				Description: "How long the mute lasts (e.g. 30m, 1d, perm)",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
 		},
 	},
 	Execute: executeServerVcMuteCommand,
@@ -57,24 +52,27 @@ var ServerVcMuteCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
+var vcMuteSpec = &helpers.ApplySpec{
+	Command:       "server_vc_mute",
+	RoleKey:       "vc_muted_role",
+	Action:        "voice mute",
+	Adjective:     "voice muted",
+	Summary:       "the voice mute",
+	Title:         "Voice Mute Applied",
+	Type:          "vc_mute",
+	ActiveTypes:   helpers.VoiceMutePunishmentTypes(),
+	Duration:      true,
+	Duplicates:    true,
+	RequireMember: true,
+	MemberActive:  func(member *discordgo.Member) bool { return member.Mute },
+	Discord:       voiceMuteMember,
+	AppliedNote:   "The member is now server-muted in voice channels.",
+	FailedNote:    "The punishment was recorded, but the Discord voice mute could not be applied due to missing permissions.",
+	Ladder:        "vc_mute",
+}
+
 func executeServerVcMuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
-		Command:       "server_vc_mute",
-		RoleKey:       "vc_muted_role",
-		Action:        "voice mute",
-		Adjective:     "voice muted",
-		Summary:       "the voice mute",
-		Title:         "Voice Mute Applied",
-		Type:          "vc_mute",
-		ActiveTypes:   helpers.VoiceMutePunishmentTypes(),
-		Duration:      true,
-		Duplicates:    true,
-		RequireMember: true,
-		MemberActive:  func(member *discordgo.Member) bool { return member.Mute },
-		Discord:       voiceMuteMember,
-		AppliedNote:   "The member is now server-muted in voice channels.",
-		FailedNote:    "The punishment was recorded, but the Discord voice mute could not be applied due to missing permissions.",
-	})
+	return helpers.ApplyPunishment(s, i, vcMuteSpec)
 }
 
 // ============================================================================

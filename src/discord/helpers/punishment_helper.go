@@ -38,6 +38,10 @@ type ApplySpec struct {
 	Duration    bool     // whether the command accepts a duration
 	Duplicates  bool     // whether an already-active punishment blocks a new one
 
+	// Ladder is the punishment-ladder type (queue_ban, chat_mute, vc_mute, server_ban, warning) whose level decides what
+	// this command applies and for how long. Empty = the command applies its own action (kick).
+	Ladder string
+
 	// SkipHierarchy skips the role hierarchy check for punishments that never touch the member's roles.
 	SkipHierarchy bool
 
@@ -91,7 +95,44 @@ func (spec *RevokeSpec) activeTypes() []string {
 // Apply Flow
 // ============================================================================
 
-// ApplyPunishment validates the target, records the punishment, and runs its Discord action.
+// ladderSpecs maps a ladder step action to the spec that applies it; each punishment command registers its own.
+var ladderSpecs = map[string]*ApplySpec{}
+
+// RegisterLadderAction makes spec what a ladder step with the given action ("queue_ban", "chat_mute"...) applies.
+func RegisterLadderAction(action string, spec *ApplySpec) { ladderSpecs[action] = spec }
+
+// FormatSpan renders a duration the way staff type it: 30m, 2h, 7d.
+func FormatSpan(d time.Duration) string {
+	switch {
+	case d%(24*time.Hour) == 0:
+		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%dm", int(d/time.Minute))
+}
+
+// ladderNotConfiguredEmbed tells staff what to set up on the dashboard (or that something went wrong reading it).
+func ladderNotConfiguredEmbed(err error) *discordgo.MessageEmbed {
+	if !IsLadderNotConfigured(err) {
+		return unexpectedErrorPunishmentEmbed("punishment")
+	}
+	return Preset("error", types.PresetOptions{
+		Title:       "Ladder Not Configured",
+		Description: err.Error(),
+		Thumbnail:   ThumbFlag,
+	})
+}
+
+// LadderNotConfiguredEmbed is ladderNotConfiguredEmbed for commands outside this file (strikes).
+func LadderNotConfiguredEmbed(err error) *discordgo.MessageEmbed { return ladderNotConfiguredEmbed(err) }
+
+// LadderActionSpec is the spec that applies a ladder step action, nil when a standard punishment cannot apply it.
+func LadderActionSpec(action string) *ApplySpec { return ladderSpecs[action] }
+
+// ApplyPunishment validates the target, lets the punishment ladder choose the action and duration, records the
+// punishment, and runs its Discord action. Commands with no ladder category (spec.Ladder empty, e.g. kick) apply
+// their own action as before.
 func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec *ApplySpec) error {
 	// 1. Validate Target User
 	target := OptionUser(s, i, "user")
@@ -112,19 +153,10 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 		return EditInteractionEmbed(s, i, punishmentReasonRequiredEmbed())
 	}
 
-	// 3. Validate Duration
-	durationLabel := "Permanent"
-	var expiresAt string
-	if spec.Duration {
-		if input := strings.TrimSpace(OptionString(i, "duration")); input != "" {
-			duration, ok, permanent := ParseDurationMs(input)
-			if !ok {
-				return EditInteractionEmbed(s, i, punishmentInvalidDurationEmbed())
-			}
-			if !permanent {
-				expiresAt = time.Now().Add(duration).UTC().Format(time.RFC3339)
-				durationLabel = input
-			}
+	// 3. Require the ladder before anything is created
+	if spec.Ladder != "" {
+		if err := RequirePunishmentLadder(i.GuildID, spec.Ladder); err != nil {
+			return EditInteractionEmbed(s, i, ladderNotConfiguredEmbed(err))
 		}
 	}
 
@@ -133,52 +165,23 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	if err != nil {
 		return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(spec.Action))
 	}
-	pid := sdk.UintToString(playerID)
 
-	// 5. Check Member & Role Hierarchy
-	member, _ := FetchGuildMember(s, i.GuildID, target.ID)
-	if spec.RequireMember && member == nil {
-		return EditInteractionEmbed(s, i, punishmentMemberNotFoundEmbed(spec.Action))
-	}
-	if !spec.SkipHierarchy {
-		botMember, _ := FetchGuildMember(s, i.GuildID, s.State.User.ID)
-		if issue := MemberManageabilityIssue(s, i.GuildID, member, botMember); issue != RoleHierarchyOK {
-			return EditInteractionEmbed(s, i, punishmentHierarchyEmbed())
-		}
-	}
-
-	// 6. Check Existing Punishments
-	if spec.Duplicates {
-		active, err := database.Must().Punishments.ByPlayer(i.GuildID, pid, true, "", sdk.Page{})
+	// 5. The ladder picks the step for this offence: its action and duration are what is applied
+	level, expiresAt, durationLabel := "", "", "Permanent"
+	if spec.Ladder != "" {
+		plan, err := PlanPunishment(i.GuildID, sdk.UintToString(playerID), spec.Ladder)
 		if err != nil {
-			return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(spec.Action))
+			return EditInteractionEmbed(s, i, ladderNotConfiguredEmbed(err))
 		}
-		for _, entry := range active.Data {
-			if PunishmentTypeIn(entry.Type, spec.activeTypes()) {
-				return EditInteractionEmbed(s, i, punishmentAlreadyActiveEmbed(spec.Adjective))
-			}
+		resolved := LadderActionSpec(plan.Action)
+		if resolved == nil {
+			return EditInteractionEmbed(s, i, ladderNotConfiguredEmbed(&ErrLadderNotConfigured{Reason: fmt.Sprintf(
+				"Step %d of the punishment ladder uses the %q action, which a standard punishment cannot apply. Change it on the dashboard to warning, chat mute, voice mute, queue ban or server ban.", plan.Step, plan.Action)}))
 		}
-		if spec.MemberActive != nil && member != nil && spec.MemberActive(member) {
-			return EditInteractionEmbed(s, i, punishmentAlreadyActiveEmbed(spec.Adjective))
-		}
-	}
-
-	// 7. Record Punishment in Database
-	if _, err := database.Must().Punishments.Create(actor, i.GuildID, pid, sdk.NewPunishment{
-		StaffID: actor, Reason: reason, Type: spec.Type, ExpiresAt: expiresAt,
-	}); err != nil {
-		return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(spec.Action))
-	}
-	TrackPunishmentExpiry(i.GuildID, expiresAt)
-
-	// 8. Apply Discord Action
-	applied := false
-	if spec.Discord != nil {
-		applied = spec.Discord(s, i.GuildID, target.ID, reason)
-	}
-	if spec.RoleKey != "" {
-		if roleID := SettingRole(i.GuildID, spec.Command, spec.RoleKey); roleID != "" && s.GuildMemberRoleAdd(i.GuildID, target.ID, roleID) == nil {
-			applied = true
+		spec, level = resolved, plan.Level
+		if spec.Duration && plan.Span > 0 {
+			expiresAt = time.Now().Add(plan.Span).UTC().Format(time.RFC3339)
+			durationLabel = FormatSpan(plan.Span)
 		}
 	}
 
@@ -186,10 +189,66 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	if profile != nil && profile.Username != "" {
 		username = profile.Username
 	}
-	embed := punishmentAppliedEmbed(spec, target, username, durationLabel, reason, applied)
-	LogCommandResult(s, i.GuildID, spec.Command, actor, embed)
-	SendPunishmentAlert(s, i.GuildID, spec.Command, "applied", target, username, spec.Type, durationLabel, reason)
+	embed, _ := ApplyPunishmentTo(s, i.GuildID, actor, target, playerID, username, reason, spec, level, expiresAt, durationLabel)
 	return EditInteractionEmbed(s, i, embed)
+}
+
+// ApplyPunishmentTo checks the target against spec, records the punishment under the ladder level that chose it, and
+// runs the Discord action. It returns the result embed and whether the punishment was recorded.
+func ApplyPunishmentTo(s *discordgo.Session, guildID, actor string, target *discordgo.User, playerID uint, username, reason string, spec *ApplySpec, level, expiresAt, durationLabel string) (*discordgo.MessageEmbed, bool) {
+	pid := sdk.UintToString(playerID)
+
+	// Check Member & Role Hierarchy
+	member, _ := FetchGuildMember(s, guildID, target.ID)
+	if spec.RequireMember && member == nil {
+		return punishmentMemberNotFoundEmbed(spec.Action), false
+	}
+	if !spec.SkipHierarchy {
+		botMember, _ := FetchGuildMember(s, guildID, s.State.User.ID)
+		if issue := MemberManageabilityIssue(s, guildID, member, botMember); issue != RoleHierarchyOK {
+			return punishmentHierarchyEmbed(), false
+		}
+	}
+
+	// Check Existing Punishments
+	if spec.Duplicates {
+		active, err := database.Must().Punishments.ByPlayer(guildID, pid, true, "", sdk.Page{})
+		if err != nil {
+			return unexpectedErrorPunishmentEmbed(spec.Action), false
+		}
+		for _, entry := range active.Data {
+			if PunishmentTypeIn(entry.Type, spec.activeTypes()) {
+				return punishmentAlreadyActiveEmbed(spec.Adjective), false
+			}
+		}
+		if spec.MemberActive != nil && member != nil && spec.MemberActive(member) {
+			return punishmentAlreadyActiveEmbed(spec.Adjective), false
+		}
+	}
+
+	// Record Punishment in Database
+	if _, err := database.Must().Punishments.Create(actor, guildID, pid, sdk.NewPunishment{
+		StaffID: actor, Reason: reason, Type: spec.Type, ExpiresAt: expiresAt, LadderLevel: level,
+	}); err != nil {
+		return unexpectedErrorPunishmentEmbed(spec.Action), false
+	}
+	TrackPunishmentExpiry(guildID, expiresAt)
+
+	// Apply Discord Action
+	applied := false
+	if spec.Discord != nil {
+		applied = spec.Discord(s, guildID, target.ID, reason)
+	}
+	if spec.RoleKey != "" {
+		if roleID := SettingRole(guildID, spec.Command, spec.RoleKey); roleID != "" && s.GuildMemberRoleAdd(guildID, target.ID, roleID) == nil {
+			applied = true
+		}
+	}
+
+	embed := punishmentAppliedEmbed(spec, target, username, durationLabel, reason, applied)
+	LogCommandResult(s, guildID, spec.Command, actor, embed)
+	SendPunishmentAlert(s, guildID, spec.Command, "applied", target, username, spec.Type, durationLabel, reason)
+	return embed, true
 }
 
 // ============================================================================

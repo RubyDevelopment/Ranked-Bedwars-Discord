@@ -15,6 +15,7 @@ import (
 
 func init() {
 	helpers.Register(ServerBanCommand)
+	helpers.RegisterLadderAction("server_ban", serverBanSpec)
 }
 
 // ============================================================================
@@ -42,12 +43,6 @@ var ServerBanCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
-			{
-				Name:        "duration",
-				Description: "How long the ban lasts (e.g. 1h, 1d, perm)",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
 		},
 	},
 	Execute: executeServerBanCommand,
@@ -57,20 +52,23 @@ var ServerBanCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
+var serverBanSpec = &helpers.ApplySpec{
+	Command:     "server_ban",
+	Action:      "server ban",
+	Adjective:   "server banned",
+	Summary:     "the server ban",
+	Title:       "Server Ban Applied",
+	Type:        "server_ban",
+	Duration:    true,
+	Duplicates:  true,
+	Discord:     banMember,
+	AppliedNote: "The member was banned from the Discord guild.",
+	FailedNote:  "The punishment was recorded, but the Discord ban could not be applied due to missing permissions or hierarchy.",
+	Ladder:      "server_ban",
+}
+
 func executeServerBanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
-		Command:     "server_ban",
-		Action:      "server ban",
-		Adjective:   "server banned",
-		Summary:     "the server ban",
-		Title:       "Server Ban Applied",
-		Type:        "server_ban",
-		Duration:    true,
-		Duplicates:  true,
-		Discord:     banMember,
-		AppliedNote: "The member was banned from the Discord guild.",
-		FailedNote:  "The punishment was recorded, but the Discord ban could not be applied due to missing permissions or hierarchy.",
-	})
+	return helpers.ApplyPunishment(s, i, serverBanSpec)
 }
 
 // ============================================================================

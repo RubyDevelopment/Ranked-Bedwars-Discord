@@ -39,6 +39,8 @@ var (
 // decaySweepEvery is how often every guild is checked for warnings and due decays.
 func init() {
 	Elo.SetHooks(deliverDecayNotice, syncRankRoles)
+	// In-game players never decay. The manager is built before the game manager exists, so the check is wired here.
+	Elo.deps.InGame = func(guildID, userID string) bool { return Games.InGame(guildID, userID) }
 }
 
 // decayWatch sweeps only guilds where a player can still decay. A finished game adds a guild; a sweep drops it once
@@ -183,6 +185,9 @@ type Perk struct {
 type PerkContext struct {
 	Perks         []Perk
 	BoosterStacks int // 0..2, from the booster roles
+	// Err is set when the perks could not be looked up (not when there are none). Scoring and claiming then fail
+	// instead of silently paying no grant and no multiplier.
+	Err error
 }
 
 // QualifiesFor reports whether a member holding roleIDs gets this perk: it must
@@ -560,6 +565,10 @@ type sdkEloAPI struct{ s *sdk.Services }
 
 func (a sdkEloAPI) Stats(g, u string) (*models.PlayerStatsModel, error) {
 	return a.s.Stats.GetOrCreate(g, u, 0)
+}
+
+func (a sdkEloAPI) StatsInSeason(g, u string, season uint) (*models.PlayerStatsModel, error) {
+	return a.s.Stats.GetOrCreate(g, u, season)
 }
 
 func (a sdkEloAPI) ApplyElo(actor, g, u string, season uint, e sdk.EloEffect) (*models.PlayerStatsModel, error) {
@@ -966,7 +975,7 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 			return nil
 		}
 		seen[id] = true
-		st, err := m.api().Stats(in.GuildID, id)
+		st, err := m.api().StatsInSeason(in.GuildID, id, in.SeasonID)
 		if err != nil {
 			return fmt.Errorf("stats for %s: %w", id, err)
 		}
@@ -976,9 +985,13 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 			results = append(results, res)
 			return nil
 		}
+		perks := m.perks(in.GuildID, id)
+		if perks.Err != nil {
+			return fmt.Errorf("perks for %s: %w", id, perks.Err)
+		}
 		oi := OutcomeInput{
 			Base: st.Elo, Win: win, MVP: res.MVP, Ranks: ranks,
-			Perks: m.perks(in.GuildID, id),
+			Perks: perks,
 			Grant: !st.StartingEloClaimed && st.GamesPlayed == 0,
 		}
 		if hasMate(id) {
@@ -1249,6 +1262,9 @@ func (m *EloManager) ClaimStartingElo(actor, guildID, userID string) (*Claim, er
 		return nil, ErrStartingGrantUsed
 	}
 	pc := m.perks(guildID, userID)
+	if pc.Err != nil {
+		return nil, pc.Err
+	}
 	grant := pc.StartingGrant()
 	if grant <= 0 {
 		return nil, ErrNoStartingGrant

@@ -3914,7 +3914,7 @@ func (m *GameManager) commitRanked(actor string, g Game, winningTeam, staffMVP s
 	}
 	mvp := mvpFor(g, winners, staffMVP)
 	mode := g.Mode
-	results, err := m.deps.Elo.ScoreGame(ScoreInput{GuildID: g.GuildID, Winners: winners, Losers: losers, MVP: mvp, Parties: g.Parties, Mode: &mode})
+	results, err := m.deps.Elo.ScoreGame(ScoreInput{GuildID: g.GuildID, SeasonID: g.SeasonID, Winners: winners, Losers: losers, MVP: mvp, Parties: g.Parties, Mode: &mode})
 	if err != nil {
 		return nil, fmt.Errorf("score: %w", err)
 	}

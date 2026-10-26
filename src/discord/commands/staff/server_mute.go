@@ -15,6 +15,7 @@ import (
 
 func init() {
 	helpers.Register(ServerMuteCommand)
+	helpers.RegisterLadderAction("chat_mute", muteSpec)
 }
 
 // ============================================================================
@@ -42,12 +43,6 @@ var ServerMuteCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
-			{
-				Name:        "duration",
-				Description: "How long the mute lasts (e.g. 30m, 1d, perm)",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
 		},
 	},
 	Execute: executeServerMuteCommand,
@@ -57,16 +52,19 @@ var ServerMuteCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
+var muteSpec = &helpers.ApplySpec{
+	Command:    "server_mute",
+	RoleKey:    "chat_muted_role",
+	Action:     "chat mute",
+	Adjective:  "chat muted",
+	Summary:    "the chat mute",
+	Title:      "Chat Mute Applied",
+	Type:       "mute",
+	Duration:   true,
+	Duplicates: true,
+	Ladder:     "chat_mute",
+}
+
 func executeServerMuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
-		Command:    "server_mute",
-		RoleKey:    "chat_muted_role",
-		Action:     "chat mute",
-		Adjective:  "chat muted",
-		Summary:    "the chat mute",
-		Title:      "Chat Mute Applied",
-		Type:       "mute",
-		Duration:   true,
-		Duplicates: true,
-	})
+	return helpers.ApplyPunishment(s, i, muteSpec)
 }

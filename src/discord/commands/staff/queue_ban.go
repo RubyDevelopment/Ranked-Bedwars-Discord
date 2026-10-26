@@ -15,6 +15,7 @@ import (
 
 func init() {
 	helpers.Register(QueueBanCommand)
+	helpers.RegisterLadderAction("queue_ban", queueBanSpec)
 }
 
 // ============================================================================
@@ -43,12 +44,6 @@ var QueueBanCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
-			{
-				Name:        "duration",
-				Description: "How long the ban lasts (e.g. 1h, 1d, perm)",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
 		},
 	},
 	Execute: executeQueueBanCommand,
@@ -58,16 +53,19 @@ var QueueBanCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
+var queueBanSpec = &helpers.ApplySpec{
+	Command:    "queue_ban",
+	RoleKey:    "queue_banned_role",
+	Action:     "queue ban",
+	Adjective:  "queue banned",
+	Summary:    "the queue ban",
+	Title:      "Queue Ban Applied",
+	Type:       "ban",
+	Duration:   true,
+	Duplicates: true,
+	Ladder:     "queue_ban",
+}
+
 func executeQueueBanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
-		Command:    "queue_ban",
-		RoleKey:    "queue_banned_role",
-		Action:     "queue ban",
-		Adjective:  "queue banned",
-		Summary:    "the queue ban",
-		Title:      "Queue Ban Applied",
-		Type:       "ban",
-		Duration:   true,
-		Duplicates: true,
-	})
+	return helpers.ApplyPunishment(s, i, queueBanSpec)
 }
