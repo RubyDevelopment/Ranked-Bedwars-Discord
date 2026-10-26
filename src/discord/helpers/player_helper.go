@@ -1318,14 +1318,10 @@ func RegistrationNetworkLabel(cfg *types.RegistrationVerification) string {
 	return "Minecraft"
 }
 
-// AdjustElo applies delta to current's elo (clamped at 0), raising highest_elo
-// to match when it's now higher, and returns the updated row.
-func AdjustElo(actor, guildID, pid string, seasonID uint, current *models.PlayerStatsModel, delta int) (*models.PlayerStatsModel, error) {
-	target := current.Elo + delta
-	if target < 0 {
-		target = 0
-	}
-	return database.Must().Stats.SetElo(actor, guildID, pid, seasonID, target)
+// AdjustElo records a staff modification of delta on top of the player's game results (the database clamps the
+// rating at 0 and raises highest_elo) and returns the updated row.
+func AdjustElo(actor, guildID, pid string, seasonID uint, _ *models.PlayerStatsModel, delta int) (*models.PlayerStatsModel, error) {
+	return database.Must().Stats.ApplyElo(actor, guildID, pid, seasonID, sdk.EloEffect{Part: "adjustment", Delta: delta, Category: "modify"})
 }
 
 // SyncRankForElo recomputes the rank matching elo from the guild's configured

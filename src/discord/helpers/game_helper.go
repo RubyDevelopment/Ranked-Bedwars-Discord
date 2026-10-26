@@ -632,6 +632,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 			d.post(s, g, "matchStarted", embedData{})
 			d.startTracker(s, g)
 		} else {
+			d.manualSetup(s, g)
 			d.post(s, g, "matchStartedManual", embedData{})
 		}
 	case EventHostStatus:
@@ -664,6 +665,41 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	}
 }
 
+// manualSetup tells the players of a game nobody hosts for them how to set it up: the party to form and the map to play.
+func (d *gameDiscord) manualSetup(s *discordgo.Session, g Game) {
+	flow := flowOf(g.GuildID)
+	var invite []string
+	for _, p := range g.Players {
+		if p.UserID != g.Host && strings.TrimSpace(p.Username) != "" {
+			invite = append(invite, p.Username)
+		}
+	}
+	command := fill(firstNonEmpty(flow.PartyInvite, "/party invite {players}"), map[string]string{"players": strings.Join(invite, " ")})
+	d.post(s, g, "partySetup", embedData{Vars: map[string]string{"inviteCommand": strings.TrimSpace(command)}})
+
+	if g.Map == "" || g.Map == MapUndecided {
+		return
+	}
+	maps, _ := GuildMetaMaps(g.GuildID)
+	vars := map[string]string{"mapHeight": "—", "mapTeams": "—"}
+	count := 0
+	for _, m := range maps {
+		if m.IsEnabled && m.IsMapAvailable {
+			count++
+		}
+		if m.Name == g.Map {
+			if m.MapHeight > 0 {
+				vars["mapHeight"] = strconv.Itoa(m.MapHeight)
+			}
+			if teams := m.TeamsFor(g.Mode.Name); len(teams) > 0 {
+				vars["mapTeams"] = strings.Join(teams, ", ")
+			}
+		}
+	}
+	vars["mapCount"] = strconv.Itoa(count)
+	d.post(s, g, "mapSetup", embedData{Vars: vars})
+}
+
 // embedState is what the live embeds of a running match remember: their messages and the match state they show.
 type embedState struct {
 	msgs       map[string]string // live embed key -> message id
@@ -690,31 +726,42 @@ func (d *gameDiscord) forget(id uint) {
 	d.mu.Unlock()
 }
 
-// post renders the guild's template for key and sends it, or edits the earlier message of a live embed.
-func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedData) {
+// build renders the guild's template for key against the game as it is now. ok is false for a key without a default. The
+// embed is nil when the guild switched it off (unless data.Force).
+func (d *gameDiscord) build(g Game, key string, data embedData) (emb *discordgo.MessageEmbed, t embedTemplate, ok bool) {
 	flow := flowOf(g.GuildID)
-	t, ok := flow.embedFor(key)
+	t, ok = flow.embedFor(key)
 	if !ok {
-		return
+		return nil, t, false
 	}
 	st := d.state(g.ID)
 	d.mu.Lock()
 	elim, bed := maps.Clone(st.eliminated), maps.Clone(st.bedLost)
 	started := st.startedAt
-	msgID := st.msgs[key]
 	d.mu.Unlock()
 
 	data.Game, data.Flow, data.Eliminated, data.BedLost = g, flow, elim, bed
 	if !started.IsZero() {
-		if data.Vars == nil {
-			data.Vars = map[string]string{}
+		vars := maps.Clone(data.Vars)
+		if vars == nil {
+			vars = map[string]string{}
 		}
-		data.Vars["startedAt"] = strconv.FormatInt(started.Unix(), 10)
+		vars["startedAt"] = strconv.FormatInt(started.Unix(), 10)
+		data.Vars = vars
 	}
-	emb := renderEmbed(key, t, data)
-	if emb == nil {
+	return renderEmbed(key, t, data), t, true
+}
+
+// post renders the guild's template for key and sends it, or edits the earlier message of a live embed.
+func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedData) {
+	emb, t, ok := d.build(g, key, data)
+	if !ok || emb == nil {
 		return
 	}
+	st := d.state(g.ID)
+	d.mu.Lock()
+	msgID := st.msgs[key]
+	d.mu.Unlock()
 	WithGuildFooterIconForGuild(s, g.GuildID, emb)
 	live := embedKinds[key].Live
 	if live && msgID != "" {
@@ -849,6 +896,7 @@ type mapVote struct {
 	done      chan struct{}
 	closeOnce sync.Once
 	game      Game
+	endsAt    int64 // when the vote closes (Unix seconds)
 }
 
 // selectMap lets the players vote for the map. Each vote is worth the voter's
@@ -881,6 +929,7 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 		maps = playable
 	}
 	if len(maps) == 0 {
+		d.post(s, g, "noMaps", embedData{})
 		return "", nil
 	}
 	if len(maps) > maxMapVoteOptions {
@@ -891,11 +940,11 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 		return maps[0].Name, nil
 	}
 
-	v := &mapVote{maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g}
+	v := &mapVote{maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(mapVoteDuration).Unix()}
 	for _, p := range g.Players {
 		v.weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
 	}
-	embed := v.embed(false)
+	embed := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(g.ID, false)})
 	if err != nil {
@@ -920,8 +969,7 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	d.mu.Lock()
 	winner := v.winner()
 	d.mu.Unlock()
-	embed = v.embed(true)
-	embed.Description = fmt.Sprintf("Voting is over: **%s** wins.", winner.Name)
+	embed = d.voteEmbed(v, winner.Name)
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Channel: msg.ChannelID, ID: msg.ID, Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &[]discordgo.MessageComponent{},
@@ -951,21 +999,30 @@ func (v *mapVote) winner() types.Map {
 	return v.maps[leaders[rand.IntN(len(leaders))]]
 }
 
-func (v *mapVote) embed(closed bool) *discordgo.MessageEmbed {
+// voteEmbed is the map vote as the guild's "mapVoting" template draws it, or, once winner is set, the "mapVoteEnded" one.
+// The vote cannot be skipped, so a template the guild switched off is drawn anyway.
+func (d *gameDiscord) voteEmbed(v *mapVote, winner string) *discordgo.MessageEmbed {
+	d.mu.Lock()
 	totals := v.totals()
+	voted := len(v.votes)
+	d.mu.Unlock()
 	lines := make([]string, len(v.maps))
 	for i, m := range v.maps {
 		lines[i] = fmt.Sprintf("**%s** · `%s`", m.Name, formatWeight(totals[i]))
 	}
-	description := fmt.Sprintf("Vote for the map you want to play. Voting closes when everyone has voted or in **%d seconds**. A vote can be changed until then.", int(mapVoteDuration.Seconds()))
-	if closed {
-		description = "Voting is over."
+	vars := map[string]string{
+		"endsAt": strconv.FormatInt(v.endsAt, 10), "mapVotes": strings.Join(lines, "\n"),
+		"voted": strconv.Itoa(voted), "mapCount": strconv.Itoa(len(v.maps)),
 	}
-	return Preset("info", types.PresetOptions{
-		Title:       "Map Vote",
-		Description: description + "\n\n" + strings.Join(lines, "\n"),
-		FooterText:  fmt.Sprintf("Ranked Bedwars • %d of %d voted", len(v.votes), len(v.game.Players)),
-	})
+	key := "mapVoting"
+	if winner != "" {
+		key, vars["map"] = "mapVoteEnded", winner
+	}
+	emb, _, _ := d.build(v.game, key, embedData{Vars: vars, Force: true})
+	if emb == nil { // no default for the key: cannot happen, but a vote must never be left without a message
+		emb = &discordgo.MessageEmbed{Title: "Map Voting", Description: strings.Join(lines, "\n")}
+	}
+	return emb
 }
 
 func (v *mapVote) components(gameID uint, disabled bool) []discordgo.MessageComponent {
@@ -1008,6 +1065,16 @@ type draftUI struct {
 	channelID string
 	messageID string
 	turnKey   string // changes whenever someone picks, so a stale auto-pick timer does nothing
+	endsAt    int64      // when the current pick times out (Unix seconds), 0 without a time limit
+	prev      [][]string // the rosters as the message last showed them, to tell who a pick pulled along
+}
+
+// setTimer notes when the pick that starts now times out.
+func (ui *draftUI) setTimer(seconds int) {
+	ui.endsAt = 0
+	if seconds > 0 {
+		ui.endsAt = time.Now().Add(time.Duration(seconds) * time.Second).Unix()
+	}
 }
 
 func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
@@ -1016,7 +1083,8 @@ func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
 		return
 	}
 	ui := &draftUI{channelID: g.Channels.Text}
-	embed := draftEmbed(g, view)
+	ui.setTimer(Games.FlowSettings(g.GuildID).CaptainFor(g.Mode).PickTimeoutSeconds)
+	embed := d.draftEmbed(s, g, view, ui)
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{
 		Content:    draftPing(view),
@@ -1027,6 +1095,13 @@ func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
 		return
 	}
 	ui.messageID = msg.ID
+	// The captains' party mates were put on their teams before the first pick.
+	captainsOnly := make([][]string, len(view.Teams))
+	for t, members := range view.Teams {
+		captainsOnly[t] = members[:min(1, len(members))]
+	}
+	d.announceAutoAssigned(s, g, captainsOnly, view.Teams, false)
+	ui.prev = cloneTeams(view.Teams)
 	d.mu.Lock()
 	d.drafts[g.ID] = ui
 	d.mu.Unlock()
@@ -1068,22 +1143,38 @@ func (d *gameDiscord) refreshDraft(s *discordgo.Session, gameID uint, ui *draftU
 		return
 	}
 	view, err := Games.Draft(gameID)
+	d.mu.Lock()
+	before := ui.prev
+	d.mu.Unlock()
 	if err != nil || view.Turn < 0 {
 		d.mu.Lock()
 		delete(d.drafts, gameID)
 		d.mu.Unlock()
-		done := draftEmbed(g, view)
-		done.Description = "The draft is complete."
-		WithGuildFooterIconForGuild(s, g.GuildID, done)
-		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: ui.channelID, ID: ui.messageID, Embeds: &[]*discordgo.MessageEmbed{done}, Components: &[]discordgo.MessageComponent{}})
+		// The teams embed that follows shows the finished rosters, so the picking message goes.
+		if s.ChannelMessageDelete(ui.channelID, ui.messageID) != nil {
+			done := d.draftEmbed(s, g, view, ui)
+			done.Description = "The draft is complete."
+			WithGuildFooterIconForGuild(s, g.GuildID, done)
+			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: ui.channelID, ID: ui.messageID, Embeds: &[]*discordgo.MessageEmbed{done}, Components: &[]discordgo.MessageComponent{}})
+		}
+		if err == nil {
+			d.announceAutoAssigned(s, g, before, view.Teams, true)
+		}
 		return
 	}
-	embed := draftEmbed(g, view)
+	d.mu.Lock()
+	ui.setTimer(Games.FlowSettings(g.GuildID).CaptainFor(g.Mode).PickTimeoutSeconds)
+	d.mu.Unlock()
+	embed := d.draftEmbed(s, g, view, ui)
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Channel: ui.channelID, ID: ui.messageID, Content: ptr(draftPing(view)),
 		Embeds: &[]*discordgo.MessageEmbed{embed}, Components: ptr(draftComponents(g, view)),
 	})
+	d.announceAutoAssigned(s, g, before, view.Teams, true)
+	d.mu.Lock()
+	ui.prev = cloneTeams(view.Teams)
+	d.mu.Unlock()
 	d.armDraftTimer(s, gameID, ui)
 }
 
@@ -1096,29 +1187,114 @@ func draftPing(view DraftView) string {
 	return "<@" + view.Teams[view.Turn][0] + ">, it's your pick."
 }
 
-func draftEmbed(g Game, view DraftView) *discordgo.MessageEmbed {
-	name := func(id string) string {
-		if p, ok := g.Player(id); ok {
-			return p.Username
-		}
-		return id
+// draftRows are the rosters of the captain draft for the "captainPicking" template's per-team fields. The draft has no
+// teams on the game yet, so they come from the draft's own view.
+func draftRows(g Game, view DraftView, t embedTemplate) []map[string]string {
+	def := defaultPlayerLines["draft"]
+	line, empty := orDefault(t.PlayerLine, def.line), orDefault(t.TeamEmpty, def.empty)
+	sep := "\n"
+	if t.PlayerSeparator != nil && *t.PlayerSeparator != "" {
+		sep = strings.ReplaceAll(*t.PlayerSeparator, `\n`, "\n")
 	}
-	var fields []*discordgo.MessageEmbedField
-	for t, members := range view.Teams {
-		lines := make([]string, len(members))
+	rows := make([]map[string]string, 0, len(view.Teams))
+	for ti, members := range view.Teams {
+		lines := make([]string, 0, len(members))
 		for i, id := range members {
-			lines[i] = name(id)
+			name, elo := id, "0"
+			if p, ok := g.Player(id); ok {
+				name, elo = p.Username, strconv.Itoa(p.EloBefore)
+			}
+			captain := ""
 			if i == 0 {
-				lines[i] += " 👑"
+				captain = "👑"
+			}
+			lines = append(lines, strings.TrimSpace(fill(line, map[string]string{
+				"mention": "<@" + id + ">", "name": name, "id": id, "captain": captain, "team": TeamName(ti), "elo": elo,
+			})))
+		}
+		if len(lines) == 0 {
+			lines = []string{empty}
+		}
+		rows = append(rows, map[string]string{"team": TeamName(ti), "teamPlayers": strings.Join(lines, sep), "bed": ""})
+	}
+	return rows
+}
+
+// draftEmbed is the captain draft as the guild's "captainPicking" template draws it: whose turn it is and the rosters so far.
+// The draft cannot be skipped, so a template the guild switched off is drawn anyway.
+func (d *gameDiscord) draftEmbed(s *discordgo.Session, g Game, view DraftView, ui *draftUI) *discordgo.MessageEmbed {
+	flow := flowOf(g.GuildID)
+	t, _ := flow.embedFor("captainPicking")
+	vars := map[string]string{"timeLeft": "No time limit"}
+	if ui != nil && ui.endsAt > 0 {
+		vars["timeLeft"] = "<t:" + strconv.FormatInt(ui.endsAt, 10) + ":R>"
+		vars["endsAt"] = strconv.FormatInt(ui.endsAt, 10)
+	}
+	if view.Turn >= 0 && view.Turn < len(view.Teams) && len(view.Teams[view.Turn]) > 0 {
+		captain := view.Teams[view.Turn][0]
+		vars["captain"], vars["team"] = "<@"+captain+">", TeamName(view.Turn)
+		vars["captainName"] = captain
+		if p, ok := g.Player(captain); ok {
+			vars["captainName"] = p.Username
+		}
+		if s != nil {
+			if u, err := s.User(captain); err == nil {
+				vars["captainAvatar"] = AvatarOf(u)
 			}
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{Name: TeamName(t), Value: strings.Join(lines, "\n"), Inline: true})
 	}
-	description := "Captains pick their teams in turn. Pick from the menu below."
-	if view.Turn >= 0 && view.Turn < len(view.Teams) && len(view.Teams[view.Turn]) > 0 {
-		description = fmt.Sprintf("**%s**'s pick (%s).", name(view.Teams[view.Turn][0]), TeamName(view.Turn))
+	emb, _, _ := d.build(g, "captainPicking", embedData{Vars: vars, TeamRows: draftRows(g, view, t), Force: true})
+	if emb == nil {
+		emb = &discordgo.MessageEmbed{Title: "Captain Picking", Description: "Captains pick their teams in turn."}
 	}
-	return Preset("info", types.PresetOptions{Title: "Captain Draft", Description: description, Fields: fields})
+	return emb
+}
+
+// announceAutoAssigned posts the "partyMembersAutoAssigned" embed for the players a pick pulled onto a team to stay with
+// their party. before is the rosters as they were when the message was last drawn.
+func (d *gameDiscord) announceAutoAssigned(s *discordgo.Session, g Game, before, after [][]string, picked bool) {
+	for t, members := range after {
+		from := 0
+		if t < len(before) {
+			from = len(before[t])
+		}
+		if from >= len(members) {
+			continue
+		}
+		added := members[from:]
+		if picked && from > 0 && len(added) > 0 { // the first newcomer is the pick itself
+			added = added[1:]
+		}
+		if len(added) == 0 || len(members) == 0 {
+			continue
+		}
+		names := make([]string, len(added))
+		for i, id := range added {
+			names[i] = id
+			if p, ok := g.Player(id); ok {
+				names[i] = "`" + p.Username + "`"
+			}
+		}
+		captain := members[0]
+		if p, ok := g.Player(captain); ok {
+			captain = p.Username
+		}
+		wasWere := "were"
+		if len(added) == 1 {
+			wasWere = "was"
+		}
+		d.post(s, g, "partyMembersAutoAssigned", embedData{Vars: map[string]string{
+			"names": strings.Join(names, ", "), "wasWere": wasWere, "team": TeamName(t), "captain": captain, "count": strconv.Itoa(len(added)),
+		}})
+	}
+}
+
+func cloneTeams(in [][]string) [][]string {
+	out := make([][]string, len(in))
+	for i, t := range in {
+		out[i] = slices.Clone(t)
+	}
+	return out
 }
 
 func draftComponents(g Game, view DraftView) []discordgo.MessageComponent {
@@ -1186,8 +1362,8 @@ func (d *gameDiscord) handleMapVote(s *discordgo.Session, i *discordgo.Interacti
 	}
 	v.votes[user] = idx
 	all := len(v.votes) >= len(v.game.Players)
-	embed := v.embed(false)
 	d.mu.Unlock()
+	embed := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, v.game.GuildID, embed)
 
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
@@ -1241,7 +1417,7 @@ func draftErrorText(err error) string {
 // Every embed a match posts (pre-game, in-game and post-game) is a template. The defaults below are the old bot's
 // wording; a guild changes them on the dashboard (Server Config → Embeds), which stores the changes in the server
 // profile's `embeds`. The keys, variables and defaults mirror
-// Ranked-Bedwars-Configuration-Dev/src/lib/server-profile/flow.ts: keep the two in step.
+// Ranked-Bedwars-Dashboard/src/lib/server-profile/flow.ts: keep the two in step.
 
 // Dots used to show a player's state in a roster.
 const (
@@ -1296,6 +1472,8 @@ var embedKinds = map[string]embedKind{
 	"teamsVerified":   {TeamLines: "status"},
 	"matchStarted":    {TeamLines: "locked"},
 	"liveTracker":     {Live: true, TeamLines: "alive"},
+	"captainPicking":  {Live: true, TeamLines: "draft"},
+	"partySetup":      {TeamLines: "plain"},
 }
 
 func str(s string) *string { return &s }
@@ -1383,6 +1561,7 @@ type guildFlow struct {
 	Embeds    map[string]embedTemplate
 	Stats     []statLabel
 	Announced map[string]bool // embeds the pipeline posts itself with an Announce step
+	PartyInvite string // the profile's party invite command, with {players}
 }
 
 func (f guildFlow) announces(id string) bool {
@@ -1457,6 +1636,9 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 		Profile struct {
 			Embeds   map[string]json.RawMessage `json:"embeds"`
 			Stats    []statLabel                `json:"stats"`
+			Commands struct {
+				PartyInvite string `json:"partyInvite"`
+			} `json:"commands"`
 			Pipeline []struct {
 				Type    string `json:"type"`
 				Embed   string `json:"embed"`
@@ -1467,7 +1649,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	if json.Unmarshal(raw, &server) != nil {
 		return guildFlow{}
 	}
-	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}}
+	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
 	for _, st := range server.Profile.Pipeline {
 		if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) {
 			f.Announced[st.Embed] = true
@@ -1495,6 +1677,8 @@ type embedData struct {
 	Eliminated map[string]bool   // user ids out of the match (live tracker)
 	BedLost    map[string]bool   // team name -> bed gone (live tracker)
 	Flow       guildFlow
+	TeamRows   []map[string]string // per-team values the caller supplies (the captain draft's rosters) instead of the game's teams
+	Force      bool                // draw it even when the guild switched the embed off: the vote and the draft cannot be skipped
 }
 
 func fill(text string, vars map[string]string) string {
@@ -1646,6 +1830,7 @@ var defaultPlayerLines = map[string]struct{ line, out, empty string }{
 	"status": {"{dot} `{name}`", "{dot} `{name}`", "No players"},
 	"locked": {"{dot} `{name}`", "{dot} `{name}`", "No players"},
 	"alive":  {"{dot} `{name}`", "{dot} ~~`{name}`~~", "No players"},
+	"draft":  {"{name} {captain}", "{name} {captain}", "No players"},
 }
 
 func orDefault(v *string, def string) string {
@@ -1657,6 +1842,14 @@ func orDefault(v *string, def string) string {
 
 // teamVars builds the per-team values for fields repeated for every team. Each player is written with the template's
 // PlayerLine (or the kind's default), so a guild chooses what a player's line shows.
+// teamRowsFor is the per-team values of fields repeated for every team: the caller's own, or the game's teams.
+func (d embedData) teamRowsFor(lines string, t embedTemplate) []map[string]string {
+	if d.TeamRows != nil {
+		return d.TeamRows
+	}
+	return d.teamVars(lines, t)
+}
+
 func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 	waiting := map[string]bool{}
 	for _, id := range d.Waiting {
@@ -1718,7 +1911,7 @@ var styleToPreset = map[string]string{"success": "success", "pending": "loading"
 
 // renderEmbed fills a template. It returns nil when the embed is switched off.
 func renderEmbed(key string, t embedTemplate, d embedData) *discordgo.MessageEmbed {
-	if !t.on() {
+	if !t.on() && !d.Force {
 		return nil
 	}
 	vars := d.common()
@@ -1727,7 +1920,7 @@ func renderEmbed(key string, t embedTemplate, d embedData) *discordgo.MessageEmb
 		rows := []map[string]string{vars}
 		if f.Each == "team" {
 			rows = nil
-			for _, tv := range d.teamVars(embedKinds[key].TeamLines, t) {
+			for _, tv := range d.teamRowsFor(embedKinds[key].TeamLines, t) {
 				merged := make(map[string]string, len(vars)+3)
 				for k, v := range vars {
 					merged[k] = v
@@ -1754,8 +1947,8 @@ func renderEmbed(key string, t embedTemplate, d embedData) *discordgo.MessageEmb
 		Title:       clip(strings.TrimSpace(fill(deref(t.Title), vars)), 256),
 		Description: clip(strings.TrimSpace(fill(deref(t.Description), vars)), 4096),
 		Fields:      fields,
-		Thumbnail:   strings.TrimSpace(deref(t.Thumbnail)),
-		Image:       strings.TrimSpace(deref(t.Image)),
+		Thumbnail:   strings.TrimSpace(fill(deref(t.Thumbnail), vars)),
+		Image:       strings.TrimSpace(fill(deref(t.Image), vars)),
 	}
 	if footer := strings.TrimSpace(fill(deref(t.Footer), vars)); footer != "" {
 		opts.FooterText = clip(footer, 2048)

@@ -562,8 +562,8 @@ func (a sdkEloAPI) Stats(g, u string) (*models.PlayerStatsModel, error) {
 	return a.s.Stats.GetOrCreate(g, u, 0)
 }
 
-func (a sdkEloAPI) SetElo(actor, g, u string, season uint, elo int) (*models.PlayerStatsModel, error) {
-	return a.s.Stats.SetElo(actor, g, u, season, elo)
+func (a sdkEloAPI) ApplyElo(actor, g, u string, season uint, e sdk.EloEffect) (*models.PlayerStatsModel, error) {
+	return a.s.Stats.ApplyElo(actor, g, u, season, e)
 }
 
 func (a sdkEloAPI) Patch(actor, g, u string, season uint, f map[string]any) (*models.PlayerStatsModel, error) {
@@ -1039,8 +1039,8 @@ func (m *EloManager) revertOne(actor, guildID string, r EloResult) error {
 	if err != nil {
 		return err
 	}
-	target := max(0, st.Elo-r.Change)
-	if _, err := m.api().SetElo(actor, guildID, r.UserID, st.SeasonID, target); err != nil {
+	updated, err := m.api().ApplyElo(actor, guildID, r.UserID, st.SeasonID, sdk.EloEffect{Part: "game", Delta: -r.Change})
+	if err != nil {
 		return err
 	}
 	if r.PerkStart > 0 {
@@ -1048,7 +1048,7 @@ func (m *EloManager) revertOne(actor, guildID string, r EloResult) error {
 			return err
 		}
 	}
-	_, err = m.syncRank(actor, guildID, r.UserID, st, target)
+	_, err = m.syncRank(actor, guildID, r.UserID, st, updated.Elo)
 	return err
 }
 
@@ -1100,7 +1100,7 @@ func (m *EloManager) Adjust(actor, guildID, userID string, delta int) (*Adjustme
 	if err != nil {
 		return nil, err
 	}
-	return m.setLocked(actor, guildID, userID, st, max(0, st.Elo+delta))
+	return m.applyLocked(actor, guildID, userID, st, sdk.EloEffect{Part: "adjustment", Delta: delta, Category: "modify"})
 }
 
 // Set sets the player's ELO outright (floored at 0).
@@ -1110,16 +1110,20 @@ func (m *EloManager) Set(actor, guildID, userID string, elo int) (*Adjustment, e
 	if err != nil {
 		return nil, err
 	}
-	return m.setLocked(actor, guildID, userID, st, max(0, elo))
+	target := max(0, elo)
+	return m.applyLocked(actor, guildID, userID, st, sdk.EloEffect{Part: "adjustment", SetTo: &target, Category: "modify"})
 }
 
-func (m *EloManager) setLocked(actor, guildID, userID string, st *models.PlayerStatsModel, target int) (*Adjustment, error) {
+// applyLocked applies one rating effect and brings the stored rank in line. The database applies it under a row lock
+// to the part it names, so games, modifications and decay stay separate; After is the resulting derived rating.
+func (m *EloManager) applyLocked(actor, guildID, userID string, st *models.PlayerStatsModel, e sdk.EloEffect) (*Adjustment, error) {
 	adj := &Adjustment{Before: st.Elo, After: st.Elo, RankBefore: st.Rank, RankAfter: st.Rank}
-	if target != st.Elo {
-		if _, err := m.api().SetElo(actor, guildID, userID, st.SeasonID, target); err != nil {
+	if e.Delta != 0 || e.SetTo != nil {
+		updated, err := m.api().ApplyElo(actor, guildID, userID, st.SeasonID, e)
+		if err != nil {
 			return nil, err
 		}
-		adj.After = target
+		adj.After = updated.Elo
 	}
 	rank, err := m.syncRank(actor, guildID, userID, st, adj.After)
 	adj.RankAfter = rank
@@ -1191,7 +1195,11 @@ func (m *EloManager) grant(actor, guildID, userID string, n int, win bool) (*Pre
 	if err != nil {
 		return nil, err
 	}
-	if _, err := m.setLocked(actor, guildID, userID, st, p.End); err != nil {
+	category := "loss"
+	if win {
+		category = "win"
+	}
+	if _, err := m.applyLocked(actor, guildID, userID, st, sdk.EloEffect{Part: "adjustment", Delta: p.End - st.Elo, Category: category, Reason: fmt.Sprintf("%d staff-granted", p.Count)}); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -1249,7 +1257,7 @@ func (m *EloManager) ClaimStartingElo(actor, guildID, userID string) (*Claim, er
 	if _, err := m.api().Patch(actor, guildID, userID, st.SeasonID, claimRecord(grant, pc.Names(), at)); err != nil {
 		return nil, err
 	}
-	adj, err := m.setLocked(actor, guildID, userID, st, st.Elo+grant)
+	adj, err := m.applyLocked(actor, guildID, userID, st, sdk.EloEffect{Part: "game", Delta: grant, Reason: "starting grant"})
 	if adj == nil {
 		if _, rbErr := m.api().Patch(actor, guildID, userID, st.SeasonID, clearedClaim()); rbErr != nil {
 			m.logf("claim rollback for %s/%s failed: %v", guildID, userID, rbErr)
@@ -1367,7 +1375,7 @@ func (m *EloManager) RemoveDecay(actor, guildID string, decayID uint) (*Adjustme
 	if d.IsVoided {
 		return &Adjustment{Before: st.Elo, After: st.Elo, RankBefore: st.Rank, RankAfter: st.Rank}, nil
 	}
-	return m.setLocked(actor, guildID, userID, st, st.Elo+d.AmountDeducted)
+	return m.applyLocked(actor, guildID, userID, st, sdk.EloEffect{Part: "decay", Delta: -d.AmountDeducted})
 }
 
 func (m *EloManager) daysInactive(st *models.PlayerStatsModel) int {
@@ -1383,14 +1391,14 @@ func (m *EloManager) applyDecay(actor, guildID, userID string, st *models.Player
 	if reason == "" {
 		reason = "Inactivity Decay"
 	}
-	after := st.Elo - amount
+	after := max(0, st.Elo-amount)
 	id, err := m.api().CreateDecay(actor, guildID, userID, models.PlayerDecaysModel{
 		SeasonID: st.SeasonID, AmountDeducted: amount, EloBefore: st.Elo, EloAfter: after, DaysInactive: days, Reason: reason,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if _, err := m.api().SetElo(actor, guildID, userID, st.SeasonID, after); err != nil {
+	if _, err := m.api().ApplyElo(actor, guildID, userID, st.SeasonID, sdk.EloEffect{Part: "decay", Delta: amount}); err != nil {
 		if delErr := m.api().DeleteDecay(actor, guildID, id); delErr != nil {
 			m.logf("decay %d rollback failed: %v", id, delErr)
 		}

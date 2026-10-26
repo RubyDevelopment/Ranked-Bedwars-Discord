@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 )
 
 // Adjustment is the outcome of a manual ELO change.
@@ -34,7 +35,7 @@ type DecayResult struct {
 // identified by Discord snowflake; stats are for the active season.
 type EloAPI interface {
 	Stats(guildID, userID string) (*models.PlayerStatsModel, error) // get-or-create
-	SetElo(actor, guildID, userID string, seasonID uint, elo int) (*models.PlayerStatsModel, error)
+	ApplyElo(actor, guildID, userID string, seasonID uint, e sdk.EloEffect) (*models.PlayerStatsModel, error) // one rating change, applied under a row lock
 	Patch(actor, guildID, userID string, seasonID uint, fields map[string]any) (*models.PlayerStatsModel, error)
 	Reset(actor, guildID, userID string, seasonID uint, startElo int, rank string) (*models.PlayerStatsModel, error)
 	DecayCandidates(guildID string, inactiveDays int) ([]models.PlayerStatsModel, error)
