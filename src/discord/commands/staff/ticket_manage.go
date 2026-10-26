@@ -124,7 +124,7 @@ func executeTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only administrators can publish ticket panels. Create and edit panels in the dashboard."))
 	}
 
-	ip, err := helpers.Tickets.Load(i.GuildID)
+	ip, err := helpers.Tickets.LoadOpen(i.GuildID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
 	}
@@ -133,7 +133,7 @@ func executeTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) er
 
 // executeTicketLeaderboard ranks staff by claimed tickets.
 func executeTicketLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ip, err := helpers.Tickets.Load(i.GuildID)
+	ip, err := helpers.Tickets.LoadOpen(i.GuildID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
 	}
@@ -151,7 +151,7 @@ func executeTicketStats(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketBotTargetEmbed())
 	}
 
-	ip, err := helpers.Tickets.Load(i.GuildID)
+	ip, err := helpers.Tickets.LoadOpen(i.GuildID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
 	}

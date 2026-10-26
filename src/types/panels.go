@@ -5,8 +5,10 @@ const PanelTypeTicket = "ticket"
 
 // InteractivePanels is the root of the `interactive_panels` config section.
 type InteractivePanels struct {
-	Panels  map[string]*InteractivePanel `json:"panels"`
-	Tickets TicketState                  `json:"tickets"`
+	Panels map[string]*InteractivePanel `json:"panels"`
+	// Tickets is never part of the stored section: tickets live in their own database tables and the bot fills this
+	// in at load time.
+	Tickets TicketState `json:"-"`
 }
 
 // InteractivePanel is one guild-authored panel: the message members interact

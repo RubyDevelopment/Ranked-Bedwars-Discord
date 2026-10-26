@@ -17,8 +17,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
+	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
@@ -34,7 +34,8 @@ const (
 	// interactivePanelsField is the guild config section panels are stored in.
 	interactivePanelsField = "interactive_panels"
 
-	// MaxTicketHistory caps how many closed tickets are kept for /ticket logs.
+	// MaxTicketHistory is how many of the most recent closed tickets are loaded for /ticket logs. Every ticket stays in
+	// the database; this only limits what the bot reads at a time.
 	MaxTicketHistory = 200
 
 	idAlphabet  = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -152,31 +153,54 @@ func (st *TicketStore) guildLock(guildID string) *sync.Mutex {
 	return lock
 }
 
-// Load returns the guild's interactive panels. A missing or empty section
-// resolves to an empty, ready-to-use value.
+// Load returns the guild's panels together with its ticket state: the live tickets, the most recent closed tickets
+// (MaxTicketHistory), the leaderboard, the blacklist and the counter. A guild without any resolves to an empty,
+// ready-to-use value.
 func (st *TicketStore) Load(guildID string) (*types.InteractivePanels, error) {
-	return loadInteractivePanels(guildID)
+	return loadInteractivePanels(guildID, MaxTicketHistory)
 }
 
-// Update loads the guild's panels, lets fn change them, and saves the result.
-// fn returning an error aborts the save.
+// LoadOpen is Load without the closed-ticket history, for hot paths that only look at live tickets.
+func (st *TicketStore) LoadOpen(guildID string) (*types.InteractivePanels, error) {
+	return loadInteractivePanels(guildID, 0)
+}
+
+// Update loads the guild's panels and tickets, lets fn change them, and saves what changed: ticket changes go to the
+// ticket tables in one atomic write, panel changes to the guild config. fn returning an error aborts the save.
 func (st *TicketStore) Update(actorID, guildID string, fn func(ip *types.InteractivePanels) error) error {
+	return st.update(actorID, guildID, MaxTicketHistory, fn)
+}
+
+// UpdateOpen is Update without the closed-ticket history. fn must not look at or change ip.Tickets.History.
+func (st *TicketStore) UpdateOpen(actorID, guildID string, fn func(ip *types.InteractivePanels) error) error {
+	return st.update(actorID, guildID, 0, fn)
+}
+
+func (st *TicketStore) update(actorID, guildID string, history int, fn func(ip *types.InteractivePanels) error) error {
 	lock := st.guildLock(guildID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	ip, err := loadInteractivePanels(guildID)
+	ip, err := loadInteractivePanels(guildID, history)
 	if err != nil {
 		return err
 	}
+	snapshot := snapshotInteractivePanels(ip)
 	if err := fn(ip); err != nil {
 		return err
 	}
-	err = database.Must().GuildConfig.SaveField(actorID, guildID, interactivePanelsField, ip)
-	return err
+	db := database.Must()
+	if err := db.Tickets.Sync(actorID, guildID, snapshot.changesSince(ip)); err != nil {
+		return err
+	}
+	if snapshot.panelsChanged(ip) {
+		return db.GuildConfig.SaveField(actorID, guildID, interactivePanelsField, ip)
+	}
+	return nil
 }
 
-func loadInteractivePanels(guildID string) (*types.InteractivePanels, error) {
+// loadInteractivePanels reads the panel definitions from the guild config and the ticket state from the ticket tables.
+func loadInteractivePanels(guildID string, history int) (*types.InteractivePanels, error) {
 	ip := &types.InteractivePanels{}
 	raw, err := database.Must().GuildConfig.Field(guildID, interactivePanelsField)
 	if err != nil && !sdk.IsNotFound(err) {
@@ -187,6 +211,11 @@ func loadInteractivePanels(guildID string) (*types.InteractivePanels, error) {
 			return nil, err
 		}
 	}
+	state, err := loadTicketState(guildID, history)
+	if err != nil {
+		return nil, err
+	}
+	ip.Tickets = state
 	normalizeInteractivePanels(ip)
 	return ip, nil
 }
@@ -311,13 +340,11 @@ func TicketLeaderboard(ip *types.InteractivePanels) []TicketLeaderboardRow {
 	return rows
 }
 
-// ArchiveTicket moves a closed ticket out of Open and into the capped history.
+// ArchiveTicket moves a closed ticket out of Open and into the history. Nothing is trimmed: the ticket tables keep
+// every closed ticket, and only the most recent MaxTicketHistory are loaded.
 func ArchiveTicket(ip *types.InteractivePanels, ticket *types.Ticket) {
 	delete(ip.Tickets.Open, ticket.ThreadID)
 	ip.Tickets.History = append(ip.Tickets.History, ticket)
-	if overflow := len(ip.Tickets.History) - MaxTicketHistory; overflow > 0 {
-		ip.Tickets.History = ip.Tickets.History[overflow:]
-	}
 }
 
 // NextTicketIdentity reserves the next ticket number and a unique reference.
@@ -901,7 +928,7 @@ func HandleTicketMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if !ticketTracksActivity(m.GuildID, m.ChannelID) {
 		return
 	}
-	err := Tickets.Update(m.Author.ID, m.GuildID, func(ip *types.InteractivePanels) error {
+	err := Tickets.UpdateOpen(m.Author.ID, m.GuildID, func(ip *types.InteractivePanels) error {
 		if ticket := ip.Tickets.Open[m.ChannelID]; ticket != nil {
 			ticket.LastActivityAt = time.Now().Unix()
 			ticket.LastInactivityNoticeAt = 0
@@ -916,7 +943,7 @@ func HandleTicketMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func autoClaimTicketOnStaffResponse(s *discordgo.Session, m *discordgo.MessageCreate) {
-	ip, err := Tickets.Load(m.GuildID)
+	ip, err := Tickets.LoadOpen(m.GuildID)
 	if err != nil {
 		log.Printf("[Tickets] could not load ticket %s in guild %s for auto-claim: %v", m.ChannelID, m.GuildID, err)
 		return
@@ -971,7 +998,7 @@ func sweepTicketInactivity(s *discordgo.Session) {
 		if guild == nil {
 			continue
 		}
-		ip, err := Tickets.Load(guild.ID)
+		ip, err := Tickets.LoadOpen(guild.ID)
 		if err != nil {
 			log.Printf("[Tickets] could not load inactivity settings for guild %s: %v", guild.ID, err)
 			continue
@@ -992,7 +1019,7 @@ func sweepTicketInactivity(s *discordgo.Session) {
 			}
 			if candidate.LastActivityAt == 0 {
 				var migrated *types.Ticket
-				err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
+				err := Tickets.UpdateOpen(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 					ticket := current.Tickets.Open[candidate.ThreadID]
 					if ticket == nil {
 						return nil
@@ -1026,7 +1053,7 @@ func sweepTicketInactivity(s *discordgo.Session) {
 			}
 
 			notify := false
-			err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
+			err := Tickets.UpdateOpen(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 				ticket := current.Tickets.Open[candidate.ThreadID]
 				if ticket == nil {
 					return nil
@@ -1065,7 +1092,7 @@ func sweepTicketInactivity(s *discordgo.Session) {
 			message, err := sendInactivityReminder(s, guild.ID, candidate.ThreadID, candidate.OwnerID, settings, vars)
 			if err != nil {
 				log.Printf("[Tickets] could not send inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
-			} else if err := Tickets.Update(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
+			} else if err := Tickets.UpdateOpen(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 				if ticket := current.Tickets.Open[candidate.ThreadID]; ticket != nil {
 					appendTicketLog(ticket, "inactivity_reminder", "", message, now.Unix())
 				}
