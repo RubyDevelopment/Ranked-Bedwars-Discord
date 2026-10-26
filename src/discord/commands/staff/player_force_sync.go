@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -52,36 +53,36 @@ func executePlayerForceSyncCommand(s *discordgo.Session, i *discordgo.Interactio
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceSyncInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceSyncInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceSyncBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceSyncBotTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceSyncRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceSyncRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceSyncEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceSyncEmbed(i))
 	}
 
 	// 3. Validate Guild Membership
 	member, err := helpers.FetchGuildMember(s, i.GuildID, target.ID)
 	if err != nil || member == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceSyncMemberNotFoundEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceSyncMemberNotFoundEmbed(i))
 	}
 
 	// 4. Synchronize Roles & Nickname
 	actions, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, target.ID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceSyncEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceSyncEmbed(i))
 	}
 
 	// 5. Return Result
 	if len(actions) == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceSyncUpToDateEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceSyncUpToDateEmbed(i, view.Config.Username))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceSyncSuccessEmbed(i, target, view.Config.Username, actions))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceSyncSuccessEmbed(i, target, view.Config.Username, actions))
 }

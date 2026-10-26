@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -81,22 +82,22 @@ func executeGameLeaderboardCommand(s *discordgo.Session, i *discordgo.Interactio
 
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorLeaderboardEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.LeaderboardNoActiveSeasonEmbed(i))
 	}
 
 	offset := (page - 1) * leaderboardPerPage
 	rows, err := database.Must().Stats.Leaderboard(i.GuildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: offset})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorLeaderboardEmbed(i))
 	}
 	if len(rows.Data) == 0 {
 		if page > 1 {
-			return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardEmptyPageEmbed(i, page))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.LeaderboardEmptyPageEmbed(i, page))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardEmptyEmbed(i, seasonKey))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.LeaderboardEmptyEmbed(i, seasonKey))
 	}
 
 	totalPages := 1
@@ -112,7 +113,7 @@ func executeGameLeaderboardCommand(s *discordgo.Session, i *discordgo.Interactio
 		log.Printf("leaderboard banner for guild %s: %v", i.GuildID, err)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardOverviewEmbed(i, rows.Data, seasonKey, page, totalPages))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.LeaderboardOverviewEmbed(i, rows.Data, seasonKey, page, totalPages))
 }
 
 // ============================================================================

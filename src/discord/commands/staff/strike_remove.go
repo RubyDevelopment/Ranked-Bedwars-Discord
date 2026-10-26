@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -57,19 +58,19 @@ func executeStrikeRemoveCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemoveInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemoveBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveBotTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemovePlayerNotFoundEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemovePlayerNotFoundEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeRemoveEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRemoveEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 	actor := helpers.InteractionUserID(i)
@@ -79,38 +80,38 @@ func executeStrikeRemoveCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	if strikeID == 0 {
 		latest, err := latestUnvoidedStrikeID(i.GuildID, pid)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeRemoveEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRemoveEmbed(i))
 		}
 		if latest == 0 {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemoveNoStrikesEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveNoStrikesEmbed(i))
 		}
 		strikeID = latest
 	} else {
 		strike, err := database.Must().Strikes.Get(i.GuildID, strikeID)
 		if err != nil && !sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeRemoveEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRemoveEmbed(i))
 		}
 		if strike == nil || strike.PlayerID != view.Player.ID {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemoveNotFoundEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveNotFoundEmbed(i))
 		}
 		if strike.IsVoided {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemoveAlreadyVoidedEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveAlreadyVoidedEmbed(i))
 		}
 	}
 
 	// 4. Void Strike in Database
 	if err := database.Must().Strikes.Delete(actor, i.GuildID, strikeID); err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeRemoveNotFoundEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRemoveNotFoundEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeRemoveEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRemoveEmbed(i))
 	}
 
 	username := target.Username
 	if view.Config != nil && view.Config.Username != "" {
 		username = view.Config.Username
 	}
-	embed := helpers.StrikeRemoveSuccessEmbed(i, strikeID, target, username)
+	embed := cmdcfg.StrikeRemoveSuccessEmbed(i, strikeID, target, username)
 	helpers.LogCommandResult(s, i.GuildID, "strike_remove", actor, embed)
 	helpers.SendPunishmentAlert(s, i.GuildID, "strike_issue", "revoked", target, username, "strike", "voided", "Strike voided by staff")
 	return helpers.EditInteractionEmbed(s, i, embed)

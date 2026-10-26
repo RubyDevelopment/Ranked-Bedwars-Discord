@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -68,30 +69,30 @@ func executeStrikeListCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeListBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeListBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeListNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeListNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeListEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeListEmbed(i))
 	}
 
 	// 4. Fetch & Filter Strike History
 	entries, err := database.Must().Strikes.AllByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), 0, false)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeListEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeListEmbed(i))
 	}
 
 	filtered := helpers.FilterStrikeHistoryEntries(entries, filterDuration)
 	if len(filtered) == 0 {
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.StrikeListEmptyFilteredEmbed(i, view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeListEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeListEmptyEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeListEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 5. Render First Page

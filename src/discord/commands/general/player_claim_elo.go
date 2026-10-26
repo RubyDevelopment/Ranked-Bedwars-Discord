@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -49,32 +50,32 @@ func executePlayerClaimEloCommand(s *discordgo.Session, i *discordgo.Interaction
 	view, err := database.Must().Player.Get(i.GuildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.ClaimEloNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ClaimEloNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorClaimEloEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorClaimEloEmbed(i))
 	}
 	username := view.Config.Username
 
 	// 2. Validate Active Season
 	seasonKey, _, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorClaimEloEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorClaimEloEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.ClaimEloNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ClaimEloNoActiveSeasonEmbed(i))
 	}
 
 	// 3. Pay & Record the Claim
 	claim, err := helpers.Elo.ClaimStartingElo(userID, i.GuildID, userID)
 	switch {
 	case errors.Is(err, helpers.ErrNoStartingGrant):
-		return helpers.EditInteractionEmbed(s, i, helpers.ClaimEloNoPerkEmbed(i, username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ClaimEloNoPerkEmbed(i, username))
 	case errors.Is(err, helpers.ErrStartingGrantUsed):
 		return helpers.EditInteractionEmbed(s, i, claimEloUsedEmbed(username, i.GuildID, userID))
 	case claim == nil:
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorClaimEloEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorClaimEloEmbed(i))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.ClaimEloSuccessEmbed(i, username, claim))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.ClaimEloSuccessEmbed(i, username, claim))
 }
 
 // ============================================================================

@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -156,87 +157,87 @@ func executeServerConfigCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	case "bot":
 		return executeConfigBotCommand(s, i, sub, options)
 	default:
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, group, sub))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRouteEmbed(i, group, sub))
 	}
 }
 
 func executeRequirementCommand(s *discordgo.Session, i *discordgo.InteractionCreate, resourceType types.RequirementType, sub string, options []*discordgo.ApplicationCommandInteractionDataOption) error {
 	cmdName := strings.ToLower(strings.TrimSpace(helpers.SubOptionString(options, "command")))
 	if findRegisteredCommand(cmdName) == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownCommandEmbed(i, cmdName))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownCommandEmbed(i, cmdName))
 	}
 
 	switch sub {
 	case "list":
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementListEmbed(i, resourceType, cmdName, slots))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigRequirementListEmbed(i, resourceType, cmdName, slots))
 
 	case "set":
 		key := helpers.SubOptionString(options, "key")
 		if key == "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigInvalidKeyEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigInvalidKeyEmbed(i))
 		}
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
 		if _, ok := slots[key]; !ok {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
 		}
 
 		id, label := resolveRequirementValue(s, i, options, resourceType)
 		if id == "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigMissingValueEmbed(i, string(resourceType)))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigMissingValueEmbed(i, string(resourceType)))
 		}
 
 		if err := helpers.SetRequirementSlotID(helpers.InteractionUserID(i), i.GuildID, cmdName, resourceType, key, id); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementSetEmbed(i, resourceType, cmdName, key, label))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigRequirementSetEmbed(i, resourceType, cmdName, key, label))
 
 	case "get":
 		key := helpers.SubOptionString(options, "key")
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
 		slot, ok := slots[key]
 		if !ok {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementGetEmbed(i, resourceType, cmdName, key, slot))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigRequirementGetEmbed(i, resourceType, cmdName, key, slot))
 
 	case "clear":
 		key := helpers.SubOptionString(options, "key")
 		slots, found, err := helpers.CommandRequirementSlots(i.GuildID, cmdName, resourceType)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
 		if !found {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigCommandNotSetUpEmbed(i, cmdName))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigCommandNotSetUpEmbed(i, cmdName))
 		}
 		if _, ok := slots[key]; !ok {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRequirementKeyEmbed(i, cmdName, key, slots))
 		}
 		if err := helpers.SetRequirementSlotID(helpers.InteractionUserID(i), i.GuildID, cmdName, resourceType, key, ""); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigRequirementClearedEmbed(i, resourceType, cmdName, key))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigRequirementClearedEmbed(i, resourceType, cmdName, key))
 
 	default:
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, string(resourceType), sub))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRouteEmbed(i, string(resourceType), sub))
 	}
 }
 
@@ -246,36 +247,36 @@ func executeConfigBotCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	case "view":
 		config, err := database.Must().GuildConfig.Get(i.GuildID)
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigBotViewEmbed(i, config.Prefix, config.IsPrefixEnabled, config.IsSlashEnabled))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigBotViewEmbed(i, config.Prefix, config.IsPrefixEnabled, config.IsSlashEnabled))
 	case "prefix":
 		prefix := helpers.SubOptionString(options, "prefix")
 		if n := utf8.RuneCountInString(prefix); n < 1 || n > 5 {
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigInvalidPrefixEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigInvalidPrefixEmbed(i))
 		}
 		if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "prefix", prefix); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigPrefixUpdatedEmbed(i, prefix))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigPrefixUpdatedEmbed(i, prefix))
 	case "toggle":
 		target := helpers.SubOptionString(options, "target")
 		enabled := helpers.SubOptionBool(options, "enabled")
 		switch target {
 		case "prefix":
 			if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_prefix_enabled", enabled); err != nil {
-				return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+				return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 			}
 		case "slash":
 			if err := database.Must().GuildConfig.SaveField(actor, i.GuildID, "is_slash_enabled", enabled); err != nil {
-				return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorServerConfigEmbed(i))
+				return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorServerConfigEmbed(i))
 			}
 		default:
-			return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, "bot", sub))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRouteEmbed(i, "bot", sub))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigBotToggleEmbed(i, target, enabled))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigBotToggleEmbed(i, target, enabled))
 	default:
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerConfigUnknownRouteEmbed(i, "bot", sub))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerConfigUnknownRouteEmbed(i, "bot", sub))
 	}
 }
 

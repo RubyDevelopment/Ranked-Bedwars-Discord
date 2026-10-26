@@ -1,7 +1,7 @@
 // gen_responses writes src/discord/helpers/response_catalog.json: every built-in command response, as the dashboard's
 // Commands → Responses tab lists it. Run it with `go generate ./src/discord/helpers` after changing a command's embeds.
 //
-// It reads the Preset(...) calls (and &discordgo.MessageEmbed literals) of src/discord/helpers/command_embeds.go, which is
+// It reads the Preset(...) calls (and &discordgo.MessageEmbed literals) of src/discord/config/command_embeds.go, which is
 // split into "// <dir>/<file>.go" sections, plus those of the command files themselves. A section belongs to the command
 // whose types.Command literal is in that file. Each part the command fills in (a name, a number, a built-up string) is
 // written as "…"; the bot reads those parts back out of the real response (see extractParts in embed_helper.go).
@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// command_embeds.go: sections by source file.
-	path := filepath.Join(root, "src/discord/helpers/command_embeds.go")
+	path := filepath.Join(root, "src/discord/config/command_embeds.go")
 	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	check(err)
 	type mark struct {
@@ -116,7 +116,9 @@ func main() {
 			}
 			continue
 		}
+		inConfig = true
 		add(name, scan(fn, fn))
+		inConfig = false
 	}
 
 	add("party", partyResponses(root, fset))
@@ -180,6 +182,19 @@ func ident(e ast.Expr) string {
 	return ""
 }
 
+// callee is a called function's name, whether it is written plain (Preset) or through the helpers package (helpers.Preset), which
+// is how the embeds in src/discord/config call it.
+// inConfig is set while the embeds of src/discord/config are scanned; elsewhere only the plain name counts, so a command
+// file that calls helpers.Preset itself is not suddenly listed.
+var inConfig bool
+
+func callee(e ast.Expr) string {
+	if s, ok := e.(*ast.SelectorExpr); ok && inConfig && ident(s.X) == "helpers" {
+		return s.Sel.Name
+	}
+	return ident(e)
+}
+
 func isSel(e ast.Expr, pkg, name string) bool {
 	for {
 		if u, ok := e.(*ast.UnaryExpr); ok {
@@ -207,7 +222,7 @@ func scan(root ast.Node, fn *ast.FuncDecl) []response {
 	ast.Inspect(root, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
-			if ident(x.Fun) == "gameErrorEmbed" && len(x.Args) == 2 { // game_helper.go's error shorthand: gameErrorEmbed(title, text)
+			if callee(x.Fun) == "gameErrorEmbed" && len(x.Args) == 2 { // game_helper.go's error shorthand: gameErrorEmbed(title, text)
 				title, ok1 := strLit(x.Args[0])
 				text, ok2 := strLit(x.Args[1])
 				if ok1 && ok2 {
@@ -215,7 +230,7 @@ func scan(root ast.Node, fn *ast.FuncDecl) []response {
 				}
 				return true
 			}
-			if ident(x.Fun) != "Preset" || len(x.Args) != 2 {
+			if callee(x.Fun) != "Preset" || len(x.Args) != 2 {
 				return true
 			}
 			opts, ok := x.Args[1].(*ast.CompositeLit)
@@ -371,7 +386,7 @@ func slug(title string) string {
 	return "response"
 }
 
-// partyResponses are the embeds /party answers with. They live in event_embeds.go (the party section), so only the
+// partyResponses are the embeds /party answers with. They live in event_helper.go (the party section), so only the
 // ones party_group.go sends as the command's answer count (the others are alerts sent to other players).
 func partyResponses(root string, fset *token.FileSet) []response {
 	src, err := os.ReadFile(filepath.Join(root, "src/discord/commands/general/party_group.go"))
@@ -380,7 +395,7 @@ func partyResponses(root string, fset *token.FileSet) []response {
 	for _, m := range regexp.MustCompile(`EditInteractionEmbed\(s, i, helpers\.(\w+)\(`).FindAllStringSubmatch(string(src), -1) {
 		answers[m[1]] = true
 	}
-	f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers/event_embeds.go"), nil, 0)
+	f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers/event_helper.go"), nil, 0)
 	check(err)
 	var out []response
 	for _, d := range f.Decls {
@@ -396,12 +411,12 @@ type commandResponses struct {
 	responses []response
 }
 
-// punishmentResponses expands the shared punishment builders (punishment_helper.go, event_embeds.go) once per command
+// punishmentResponses expands the shared punishment builders (punishment_helper.go, event_helper.go) once per command
 // that applies or reverses a punishment, with that command's ApplySpec / RevokeSpec wording. Keep the two "applied" and
 // "removed" texts in step with punishmentAppliedEmbed and punishmentRevokedEmbed (a test in helpers checks one).
 func punishmentResponses(root string, fset *token.FileSet, files []string) []commandResponses {
 	funcs := map[string]*ast.FuncDecl{}
-	for _, name := range []string{"punishment_helper.go", "event_embeds.go"} {
+	for _, name := range []string{"punishment_helper.go", "event_helper.go"} {
 		f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers", name), nil, 0)
 		check(err)
 		for _, d := range f.Decls {

@@ -17,8 +17,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
@@ -78,6 +78,7 @@ var (
 	ErrTicketNotClaimed       = errors.New("ticket not claimed")
 	ErrTicketClaimDisabled    = errors.New("claiming is disabled")
 	ErrTicketActivityChanged  = errors.New("ticket activity changed before it could be closed")
+	ErrTicketLockUnchanged    = errors.New("ticket is already in that state")
 )
 
 // TicketLimitError reports the tickets a member already has open.
@@ -507,7 +508,7 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 	embed := TicketWelcomeMessage(ticket, panel, category, guildName)
 	ping := "<@" + ticket.OwnerID + ">"
 	if category.PingStaff && ticket.Status != types.TicketStatusClosed {
-		for _, roleID := range staffRoleIDs(panel, category) {
+		for _, roleID := range pingRoleIDs(category) {
 			ping += " <@&" + roleID + ">"
 		}
 	}
@@ -585,7 +586,7 @@ func ticketMentions(ticket *types.Ticket, panel *types.InteractivePanel, categor
 			Users: []string{ticket.OwnerID},
 		}
 		if category.PingStaff {
-			mentions.Roles = staffRoleIDs(panel, category)
+			mentions.Roles = pingRoleIDs(category)
 		}
 		return mentions
 	}
@@ -607,7 +608,7 @@ func ticketMentions(ticket *types.Ticket, panel *types.InteractivePanel, categor
 		users = validMentionIDs(append([]string{ticket.OwnerID}, users...))
 	}
 	if !seen["roles"] && category.PingStaff {
-		roles = validMentionIDs(append(staffRoleIDs(panel, category), roles...))
+		roles = validMentionIDs(append(pingRoleIDs(category), roles...))
 	}
 	return &discordgo.MessageAllowedMentions{
 		Parse:       parse,
@@ -1719,7 +1720,23 @@ func IsTicketStaff(member *discordgo.Member, panel *types.InteractivePanel, cate
 	return false
 }
 
-// staffRoleIDs merges the panel-wide and category staff roles without duplicates.
+// pingRoleIDs are the roles a ticket in this category mentions: only the category's own list. The panel-wide staff
+// roles can open every ticket but are not pinged unless the category lists them too.
+func pingRoleIDs(category *types.TicketCategory) []string {
+	seen := map[string]bool{}
+	var roles []string
+	if category != nil {
+		for _, id := range category.StaffRoleIDs {
+			if id != "" && !seen[id] {
+				seen[id] = true
+				roles = append(roles, id)
+			}
+		}
+	}
+	return roles
+}
+
+// staffRoleIDs merges the panel-wide and category staff roles without duplicates: everyone who may see the ticket.
 func staffRoleIDs(panel *types.InteractivePanel, category *types.TicketCategory) []string {
 	seen := map[string]bool{}
 	var roles []string
@@ -1748,7 +1765,7 @@ func staffRoleIDs(panel *types.InteractivePanel, category *types.TicketCategory)
 // {created} (when the ticket was opened, as a Discord relative time) and {status} (where it stands) in configurable ticket text.
 func TicketPlaceholders(text string, ticket *types.Ticket, panel *types.InteractivePanel, category *types.TicketCategory, guildName string) string {
 	staff := "the support team"
-	if roles := staffRoleIDs(panel, category); len(roles) > 0 {
+	if roles := pingRoleIDs(category); len(roles) > 0 {
 		mentions := make([]string, len(roles))
 		for idx, id := range roles {
 			mentions[idx] = "<@&" + id + ">"
@@ -2220,13 +2237,17 @@ func ticketDetailFields(ticket *types.Ticket) []*discordgo.MessageEmbedField {
 
 // TicketStatusLabel describes where a ticket currently stands.
 func TicketStatusLabel(ticket *types.Ticket) string {
+	label := DotYellow + " Awaiting Staff"
 	switch ticket.Status {
 	case types.TicketStatusClaimed:
-		return fmt.Sprintf("%s Claimed by <@%s>", DotGreen, ticket.ClaimedBy)
+		label = fmt.Sprintf("%s Claimed by <@%s>", DotGreen, ticket.ClaimedBy)
 	case types.TicketStatusClosed:
 		return DotRed + " Closed"
 	}
-	return DotYellow + " Awaiting Staff"
+	if ticket.Locked {
+		label += " · Locked"
+	}
+	return label
 }
 
 func ticketWelcomeButtons(ticket *types.Ticket, panel *types.InteractivePanel) []discordgo.MessageComponent {
@@ -2728,4 +2749,140 @@ func HandleTickets(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case discordgo.InteractionMessageComponent:
 		HandleTicketComponent(s, i, i.MessageComponentData().CustomID)
 	}
+}
+
+// ── merged from ticket_rename_lock.go ──
+
+// lockedSendPermissions are what a locked channel ticket takes from the people in it; they can still read it.
+const lockedSendPermissions = int64(discordgo.PermissionSendMessages | discordgo.PermissionAddReactions | discordgo.PermissionAttachFiles | discordgo.PermissionEmbedLinks)
+
+// RenameTicket renames the ticket's thread or channel. A channel name follows Discord's channel rules (lower case,
+// dashes); a thread keeps the name as typed. It returns the name that was applied.
+func RenameTicket(s *discordgo.Session, guildID, threadID, staffID, name string) (string, *types.Ticket, error) {
+	name = strings.TrimSpace(name)
+	var ticket *types.Ticket
+	var panel *types.InteractivePanel
+	err := Tickets.Update(staffID, guildID, func(ip *types.InteractivePanels) error {
+		found := ip.Tickets.Open[threadID]
+		if found == nil {
+			return ErrTicketNotFound
+		}
+		if found.Mode == types.TicketModeChannel {
+			name = channelTicketName(name, found.Ref)
+		}
+		name = truncate(name, 100)
+		panel = ip.Panels[found.PanelID]
+		return nil
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	if _, err := s.ChannelEdit(threadID, &discordgo.ChannelEdit{Name: name}); err != nil {
+		return "", nil, err
+	}
+	err = Tickets.Update(staffID, guildID, func(ip *types.InteractivePanels) error {
+		found := ip.Tickets.Open[threadID]
+		if found == nil {
+			return ErrTicketNotFound
+		}
+		found.ThreadName = name
+		appendTicketLog(found, "renamed", staffID, "Ticket renamed to "+name+".", time.Now().Unix())
+		copied := *found
+		ticket = &copied
+		return nil
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	PostTicketLog(s, panel, TicketLogMessage(ColorDefault, "Ticket Renamed", "<@"+staffID+"> renamed a ticket.", []string{
+		"- **Ticket:** <#" + ticket.ThreadID + ">",
+		"- **Reference:** `#" + ticket.Ref + "`",
+		"- **New name:** " + name,
+	}), nil)
+	return name, ticket, nil
+}
+
+// SetTicketLocked locks or unlocks a ticket. A thread uses Discord's own lock (only members who manage threads can
+// write in it); a channel takes sending away from its owner and any member added by hand, and gives it back on unlock.
+func SetTicketLocked(s *discordgo.Session, guildID, threadID, staffID string, locked bool) (*types.Ticket, error) {
+	var ticket *types.Ticket
+	var panel *types.InteractivePanel
+	err := Tickets.Update(staffID, guildID, func(ip *types.InteractivePanels) error {
+		found := ip.Tickets.Open[threadID]
+		if found == nil {
+			return ErrTicketNotFound
+		}
+		if found.Locked == locked {
+			return ErrTicketLockUnchanged
+		}
+		panel = ip.Panels[found.PanelID]
+		copied := *found
+		ticket = &copied
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if ticket.Mode == types.TicketModeChannel {
+		channel, err := s.Channel(threadID)
+		if err != nil {
+			return nil, err
+		}
+		for _, overwrite := range channel.PermissionOverwrites {
+			if overwrite.Type != discordgo.PermissionOverwriteTypeMember {
+				continue
+			}
+			allow, deny := overwrite.Allow, overwrite.Deny
+			if locked {
+				if allow&lockedSendPermissions == 0 {
+					continue
+				}
+				allow &^= lockedSendPermissions
+				deny |= lockedSendPermissions
+			} else {
+				if deny&lockedSendPermissions == 0 {
+					continue
+				}
+				allow |= lockedSendPermissions
+				deny &^= lockedSendPermissions
+			}
+			if err := s.ChannelPermissionSet(threadID, overwrite.ID, discordgo.PermissionOverwriteTypeMember, allow, deny); err != nil {
+				return nil, err
+			}
+		}
+	} else if _, err := s.ChannelEditComplex(threadID, &discordgo.ChannelEdit{Locked: &locked}); err != nil {
+		return nil, err
+	}
+
+	err = Tickets.Update(staffID, guildID, func(ip *types.InteractivePanels) error {
+		found := ip.Tickets.Open[threadID]
+		if found == nil {
+			return ErrTicketNotFound
+		}
+		found.Locked = locked
+		message := "Ticket locked."
+		if !locked {
+			message = "Ticket unlocked."
+		}
+		appendTicketLog(found, map[bool]string{true: "locked", false: "unlocked"}[locked], staffID, message, time.Now().Unix())
+		copied := *found
+		ticket = &copied
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	RefreshTicketWelcome(s, guildID, ticket, panel)
+	title, color, verb := "Ticket Locked", ColorCaution, "locked"
+	if !locked {
+		title, color, verb = "Ticket Unlocked", ColorDefault, "unlocked"
+	}
+	PostTicketLog(s, panel, TicketLogMessage(color, title, "<@"+staffID+"> "+verb+" a ticket.", []string{
+		"- **Ticket:** <#" + ticket.ThreadID + ">",
+		"- **Reference:** `#" + ticket.Ref + "`",
+		"- **Owner:** <@" + ticket.OwnerID + ">",
+	}), nil)
+	return ticket, nil
 }

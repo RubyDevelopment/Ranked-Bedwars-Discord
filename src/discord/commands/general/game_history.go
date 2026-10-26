@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -81,42 +82,42 @@ func executeGameHistoryCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHistoryBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHistoryNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameHistoryEmbed(i))
 	}
 
 	// 4. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameHistoryEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHistoryNoActiveSeasonEmbed(i))
 	}
 
 	// 5. Fetch & Filter Game History
 	participants, err := database.Must().Player.AllGames(i.GuildID, sdk.UintToString(view.Player.ID))
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameHistoryEmbed(i))
 	}
 
 	entries := helpers.FilterGameHistoryEntries(participants, seasonID, filterDuration, hideVoided)
 	if len(entries) == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameHistoryEmptyEmbed(i, view.Config.Username, filterInput))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHistoryEmptyEmbed(i, view.Config.Username, filterInput))
 	}
 
 	// 6. Render First Page
 	playersByGame, err := helpers.LoadGameHistoryPlayers(database.Must(), i.GuildID, entries, 0)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameHistoryEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameHistoryEmbed(i))
 	}
 	voidedFlag := "0"
 	if hideVoided {

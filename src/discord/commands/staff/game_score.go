@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -71,7 +72,7 @@ func executeGameScoreCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// 2. Fetch the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameScoreNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameScoreNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Score the Game
@@ -80,7 +81,7 @@ func executeGameScoreCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("score the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.GameScoreSuccessEmbed(i, gameNumber, teamName, result.Results))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameScoreSuccessEmbed(i, gameNumber, teamName, result.Results))
 }
 
 // ============================================================================

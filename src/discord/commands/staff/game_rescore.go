@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -69,22 +70,22 @@ func executeGameRescoreCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	winnerTeam := helpers.SubOptionString(opts, "winner_team")
 	mvpUser := helpers.SubOptionUser(s, opts, "mvp")
 	if mvpUser == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreInvalidMvpEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameRescoreInvalidMvpEmbed(i))
 	}
 	if mvpUser.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreBotMvpEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameRescoreBotMvpEmbed(i))
 	}
 
 	// 2. Validate the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameRescoreNotFoundEmbed(i, gameNumber))
 	}
 	if game.State != helpers.GameCleanup && game.State != helpers.GameVoided {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreInvalidStateEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameRescoreInvalidStateEmbed(i, gameNumber))
 	}
 	if _, isParticipant := game.Player(mvpUser.ID); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreMvpNotInMatchEmbed(i, mvpUser))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameRescoreMvpNotInMatchEmbed(i, mvpUser))
 	}
 
 	// 3. Rescore the Game
@@ -93,6 +94,6 @@ func executeGameRescoreCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("rescore the game", err))
 	}
 
-	winners, losers := helpers.SplitResultMentions(result.Results)
-	return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreSuccessEmbed(i, gameNumber, winners, losers, mvpUser))
+	winners, losers := cmdcfg.SplitResultMentions(result.Results)
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameRescoreSuccessEmbed(i, gameNumber, winners, losers, mvpUser))
 }

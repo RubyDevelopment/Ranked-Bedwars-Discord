@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -52,22 +53,22 @@ func executePlayerUnregisterCommand(s *discordgo.Session, i *discordgo.Interacti
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnregisterInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnregisterInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnregisterBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnregisterBotTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnregisterNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnregisterNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnregisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerUnregisterEmbed(i))
 	}
 	if view.Config.Username == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnregisterNotRegisteredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnregisterNotRegisteredEmbed(i))
 	}
 
 	// 3. Remove Registration from Database
@@ -75,7 +76,7 @@ func executePlayerUnregisterCommand(s *discordgo.Session, i *discordgo.Interacti
 	username := view.Config.Username
 	actor := helpers.InteractionUserID(i)
 	if err := database.Must().Player.Remove(actor, i.GuildID, sdk.UintToString(view.Player.ID)); err != nil && !sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnregisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerUnregisterEmbed(i))
 	}
 
 	// 4. Reset Roles & Nickname
@@ -83,5 +84,5 @@ func executePlayerUnregisterCommand(s *discordgo.Session, i *discordgo.Interacti
 		_ = helpers.ResetMemberRegistrationProfile(s, i.GuildID, member)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnregisterSuccessEmbed(i, target, username))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnregisterSuccessEmbed(i, target, username))
 }

@@ -12,10 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	dbjson "github.com/RubyDevelopment/Ranked-Bedwars-Database/src/utility"
-	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 
 	"ranked-bedwars/src/database"

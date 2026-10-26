@@ -124,6 +124,7 @@ type Ticket struct {
 	CloseReason            string           `json:"close_reason"`
 	WelcomeMessageID       string           `json:"welcome_message_id"`
 	Mode                   string           `json:"mode"` // "thread" or "channel"
+	Locked                 bool             `json:"locked,omitempty"`
 	LastActivityAt         int64            `json:"last_activity_at,omitempty"`
 	LastInactivityNoticeAt int64            `json:"last_inactivity_notice_at,omitempty"`
 	ArchiveURL             string           `json:"archive_url,omitempty"`

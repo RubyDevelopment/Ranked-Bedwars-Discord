@@ -10,6 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -53,38 +54,38 @@ var PlayerRegisterVerifyEvent = &types.Event{
 // startPartyCodeRegistration sends the code to the player's party chat and offers the button to enter it.
 func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, userID, username string, cfg *types.InGameCode) error {
 	if helpers.IsPrefixInteraction(i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterUseSlashEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.RegisterUseSlashEmbed(i))
 	}
 	if !helpers.Engine.Connected() {
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterVerifyUnavailableEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.RegisterVerifyUnavailableEmbed(i))
 	}
 
 	// A name somebody already has can never be registered, so don't invite anyone for it.
 	if _, err := database.Must().Player.GetByUsername(i.GuildID, username); err == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterConflictEmbed(i, username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterConflictEmbed(i, username))
 	} else if !sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
 	code, err := helpers.RegistrationVerifier.Begin(i.GuildID, userID, username, cfg)
 	var limited *helpers.RateLimitError
 	if errors.As(err, &limited) {
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterRateLimitedEmbed(i, limited.Wait))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.RegisterRateLimitedEmbed(i, limited.Wait))
 	} else if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
-	_ = helpers.EditInteractionEmbed(s, i, helpers.RegisterContactingEmbed(i, username))
+	_ = helpers.EditInteractionEmbed(s, i, cmdcfg.RegisterContactingEmbed(i, username))
 	ctx, cancel := context.WithTimeout(context.Background(), engineVerifyTimeout)
 	defer cancel()
 	message := fmt.Sprintf("Your Ranked Bedwars verification code is %s. Enter it in Discord to finish registering. Never share it.", code)
 	res, err := helpers.Engine.Verify(ctx, i.GuildID, username, code, message)
 	if err != nil || res.Status != "sent" {
 		helpers.RegistrationVerifier.Discard(i.GuildID, userID)
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterVerifyFailedEmbed(i, username, res.Status))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.RegisterVerifyFailedEmbed(i, username, res.Status))
 	}
 
-	return helpers.EditInteractionComponents(s, i, helpers.RegisterCodePromptEmbed(i, username, len(code), cfg), []discordgo.MessageComponent{
+	return helpers.EditInteractionComponents(s, i, cmdcfg.RegisterCodePromptEmbed(i, username, len(code), cfg), []discordgo.MessageComponent{
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 			discordgo.Button{Label: "Enter code", Style: discordgo.PrimaryButton, CustomID: helpers.RegVerifyOpenID},
 		}},
@@ -109,7 +110,7 @@ func handlePlayerRegisterVerify(s *discordgo.Session, i *discordgo.InteractionCr
 
 func openRegisterCodeModal(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !helpers.RegistrationVerifier.Pending(i.GuildID, helpers.InteractionUserID(i)) {
-		respondEphemeral(s, i, helpers.RegisterNoPendingEmbed(i))
+		respondEphemeral(s, i, cmdcfg.RegisterNoPendingEmbed(i))
 		return
 	}
 	_ = helpers.RespondModal(s, i, helpers.RegVerifyModalID, "Verify your Minecraft account",
@@ -122,7 +123,7 @@ func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	username, result, left := helpers.RegistrationVerifier.Check(i.GuildID, userID, input)
 	if result != helpers.CodeOK {
-		respondEphemeral(s, i, helpers.RegisterCodeRejectedEmbed(i, result, left))
+		respondEphemeral(s, i, cmdcfg.RegisterCodeRejectedEmbed(i, result, left))
 		return
 	}
 
@@ -132,7 +133,7 @@ func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	var embed *discordgo.MessageEmbed
 	if existing, err := database.Must().Player.Get(i.GuildID, userID); err == nil && existing != nil {
-		embed = helpers.PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username)
+		embed = cmdcfg.PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username)
 	} else {
 		embed = registerNewPlayer(i, s, i.GuildID, userID, username)
 	}

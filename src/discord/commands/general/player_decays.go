@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -73,39 +74,39 @@ func executePlayerDecaysCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.DecaysBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.DecaysBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.DecaysNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.DecaysNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorDecaysEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorDecaysEmbed(i))
 	}
 
 	// 4. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorDecaysEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorDecaysEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.DecaysNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.DecaysNoActiveSeasonEmbed(i))
 	}
 
 	// 5. Fetch & Filter Decay History
 	entries, err := database.Must().Decays.AllByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), seasonID, false)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorDecaysEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorDecaysEmbed(i))
 	}
 
 	filtered := helpers.FilterDecayHistoryEntries(entries, filterDuration)
 	if len(filtered) == 0 {
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.DecaysEmptyFilteredEmbed(i, view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.DecaysEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.DecaysEmptyEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.DecaysEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 6. Render First Page

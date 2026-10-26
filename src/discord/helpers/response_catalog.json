@@ -3132,7 +3132,7 @@
 					"slug": "panel-not-found",
 					"title": "Panel Not Found",
 					"look": "error",
-					"description": "The panel for this ticket no longer exists. Ask an administrator to check `/ticket panel`."
+					"description": "The panel for this ticket no longer exists. Ask an administrator to check its configuration in the Ranked Bedwars Dashboard."
 				},
 				{
 					"key": "ticket.unexpected-error",

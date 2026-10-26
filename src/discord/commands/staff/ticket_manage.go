@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -57,6 +58,14 @@ var TicketManageCommand = &types.Command{
 				},
 			},
 			{
+				Name: "rename", Description: "Rename the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{Name: "name", Description: "The new name", Type: discordgo.ApplicationCommandOptionString, Required: true, MaxLength: 100},
+				},
+			},
+			{Name: "lock", Description: "Lock the ticket you are in so the owner can no longer write", Type: discordgo.ApplicationCommandOptionSubCommand},
+			{Name: "unlock", Description: "Unlock the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand},
+			{
 				Name: "add", Description: "Add a user and/or a role to the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{Name: "user", Description: "Discord user to add", Type: discordgo.ApplicationCommandOptionUser, Required: false},
@@ -95,12 +104,18 @@ func executeTicketManageCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		return executeTicketClaim(s, i)
 	case "close":
 		return executeTicketClose(s, i)
+	case "rename":
+		return executeTicketRename(s, i)
+	case "lock":
+		return executeTicketLock(s, i, true)
+	case "unlock":
+		return executeTicketLock(s, i, false)
 	case "add":
 		return changeTicketMember(s, i, true)
 	case "remove":
 		return changeTicketMember(s, i, false)
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketManageInvalidSubcommandEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.TicketManageInvalidSubcommandEmbed(i))
 }
 
 // executeTicketPanel opens the panel publishing flow for administrators.
@@ -207,6 +222,45 @@ func executeTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
 	}
 	return helpers.EditInteractionEmbed(s, i, helpers.TicketClaimedEmbed(helpers.InteractionUserID(i)))
+}
+
+// executeTicketRename renames the ticket the command is run in.
+func executeTicketRename(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+	}
+	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can rename tickets."))
+	}
+	_, options := types.SelectedSubcommand(i)
+	name := helpers.SubOptionString(options, "name")
+	if name == "" {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Give the ticket a name."))
+	}
+	applied, _, err := helpers.RenameTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), name)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+	}
+	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Renamed", "This ticket is now called **"+applied+"**."))
+}
+
+// executeTicketLock locks or unlocks the ticket the command is run in.
+func executeTicketLock(s *discordgo.Session, i *discordgo.InteractionCreate, locked bool) error {
+	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+	}
+	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can lock or unlock tickets."))
+	}
+	if _, err := helpers.SetTicketLocked(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), locked); err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+	}
+	if locked {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Locked", "The owner can no longer write here until it is unlocked."))
+	}
+	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Unlocked", "The owner can write in this ticket again."))
 }
 
 // executeTicketClose asks for confirmation before closing the ticket the command is run in.

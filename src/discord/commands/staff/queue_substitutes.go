@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -67,20 +68,20 @@ func executeQueueSubstitutesCommand(s *discordgo.Session, i *discordgo.Interacti
 	outgoing := helpers.SubOptionUser(s, opts, "out")
 	incoming := helpers.SubOptionUser(s, opts, "in")
 	if outgoing == nil || incoming == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueSubstitutesInvalidTargetEmbed(i))
 	}
 	if outgoing.Bot || incoming.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueSubstitutesBotTargetEmbed(i))
 	}
 	if outgoing.ID == incoming.ID {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesSamePlayerEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueSubstitutesSamePlayerEmbed(i))
 	}
 
 	// 2. Fetch the Game
 	gameNumber := helpers.SubOptionInt(opts, "game")
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueSubstitutesGameNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueSubstitutesGameNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Swap the Players
@@ -88,7 +89,7 @@ func executeQueueSubstitutesCommand(s *discordgo.Session, i *discordgo.Interacti
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("substitute the player", err))
 	}
 
-	embed := helpers.QueueSubstitutesSuccessEmbed(i, gameNumber, outgoing, incoming)
+	embed := cmdcfg.QueueSubstitutesSuccessEmbed(i, gameNumber, outgoing, incoming)
 	helpers.LogCommandResult(s, i.GuildID, "queue_substitutes", helpers.InteractionUserID(i), embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -65,22 +66,22 @@ func executeGameCompareCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	opponent := helpers.OptionUser(s, i, "opponent")
 	player := helpers.ResolveUserOption(s, i, "user")
 	if opponent == nil || player == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.CompareInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.CompareInvalidTargetEmbed(i))
 	}
 	if opponent.ID == player.ID {
-		return helpers.EditInteractionEmbed(s, i, helpers.CompareSelfComparisonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.CompareSelfComparisonEmbed(i))
 	}
 	if opponent.Bot || player.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.CompareBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.CompareBotTargetEmbed(i))
 	}
 
 	// 2. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorCompareEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorCompareEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.CompareNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.CompareNoActiveSeasonEmbed(i))
 	}
 
 	// 3. Fetch Player Profiles & Stats
@@ -190,7 +191,7 @@ func compareSideErrorEmbed(i *discordgo.InteractionCreate, err error, user *disc
 			Thumbnail:   helpers.ThumbFlag,
 		})
 	}
-	return helpers.UnexpectedErrorCompareEmbed(i)
+	return cmdcfg.UnexpectedErrorCompareEmbed(i)
 }
 
 func compareOverviewEmbed(season string, first, second *compareSide) *discordgo.MessageEmbed {

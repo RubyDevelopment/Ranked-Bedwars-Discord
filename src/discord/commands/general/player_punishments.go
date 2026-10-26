@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -76,33 +77,33 @@ func executePlayerPunishmentsCommand(s *discordgo.Session, i *discordgo.Interact
 	// 2. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerPunishmentsBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerPunishmentsNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerPunishmentsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerPunishmentsEmbed(i))
 	}
 
 	// 4. Fetch & Filter Punishment History
 	entries, err := database.Must().Punishments.ByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), false, "", sdk.Page{})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerPunishmentsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerPunishmentsEmbed(i))
 	}
 
 	filtered := helpers.FilterPunishmentHistoryEntries(entries.Data, activeOnly, filterDuration)
 	if len(filtered) == 0 {
 		if activeOnly {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsEmptyActiveEmbed(i, view.Config.Username))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerPunishmentsEmptyActiveEmbed(i, view.Config.Username))
 		}
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsEmptyFilteredEmbed(i, view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerPunishmentsEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerPunishmentsEmptyEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerPunishmentsEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 5. Render First Page

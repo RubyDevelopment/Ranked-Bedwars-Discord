@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -67,11 +68,11 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 1. Validate the Game Channel & Participant
 	game, ok := helpers.Games.ByChannel(i.ChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultNotGameChannelEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultNotGameChannelEmbed(i))
 	}
 	player, isParticipant := game.Player(actor)
 	if !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultNotInMatchEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultNotInMatchEmbed(i))
 	}
 
 	// 2. Validate the Attachment (fallback to proof_url string if attachment is absent)
@@ -79,40 +80,40 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	var proofURL string
 	if attachment != nil {
 		if !isImageAttachment(attachment.ContentType, attachment.Filename) {
-			return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultInvalidAttachmentEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultInvalidAttachmentEmbed(i))
 		}
 		proofURL = attachment.URL
 	} else {
 		proofURL = helpers.OptionString(i, "proof_url")
 		if proofURL == "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultMissingAttachmentEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultMissingAttachmentEmbed(i))
 		}
 	}
 
 	// 3. Validate the Game State
 	if game.State != helpers.GameInGame {
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultNotInProgressEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultNotInProgressEmbed(i))
 	}
 	if !game.StartedAt.IsZero() {
 		if elapsed := time.Since(game.StartedAt); elapsed < minResultDuration {
-			return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultTooEarlyEmbed(i, minResultDuration-elapsed))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultTooEarlyEmbed(i, minResultDuration-elapsed))
 		}
 	}
 	if game.End == helpers.EndStaffPending {
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultAlreadySubmittedEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultAlreadySubmittedEmbed(i))
 	}
 	if player.Team == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultNoTeamEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultNoTeamEmbed(i))
 	}
 
 	// 4. Ranked games wait for staff, casual games are scored immediately
 	if game.Mode.IsEloGainEnabled {
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL))
 	}
 	if _, err := helpers.Games.Score(actor, i.GuildID, game.ID, player.Team, helpers.ScoreOptions{}); err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("score the casual match", err))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultCasualEmbed(i, game.Number, player.Team, proofURL))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.SubmitResultCasualEmbed(i, game.Number, player.Team, proofURL))
 }
 
 // ============================================================================

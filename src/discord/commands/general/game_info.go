@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -61,16 +62,16 @@ func executeGameInfoCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	if gameNumber := helpers.SubOptionInt(i.ApplicationCommandData().Options, "game"); gameNumber > 0 {
 		game, ok = helpers.Games.ByNumber(i.GuildID, gameNumber)
 		if !ok {
-			return helpers.EditInteractionEmbed(s, i, helpers.GameInfoNotFoundEmbed(i, gameNumber))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.GameInfoNotFoundEmbed(i, gameNumber))
 		}
 	} else {
 		game, ok = helpers.Games.ByChannel(i.ChannelID)
 		if !ok {
-			return helpers.EditInteractionEmbed(s, i, helpers.GameInfoNoGameEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.GameInfoNoGameEmbed(i))
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.GameInfoOverviewEmbed(i, game))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameInfoOverviewEmbed(i, game))
 }
 
 // ============================================================================

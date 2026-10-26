@@ -8,6 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -59,19 +60,19 @@ func executePlayerForceNicknameCommand(s *discordgo.Session, i *discordgo.Intera
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameInvalidTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceNicknameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceNicknameEmbed(i))
 	}
 	if view.Config.Username == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameProfileNotFoundEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameProfileNotFoundEmbed(i))
 	}
 
 	config := view.Config
@@ -82,44 +83,44 @@ func executePlayerForceNicknameCommand(s *discordgo.Session, i *discordgo.Intera
 	newNickname := strings.TrimSpace(helpers.OptionString(i, "nickname"))
 	if newNickname == "" {
 		if config.Nickname == nil || strings.TrimSpace(*config.Nickname) == "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameNoneActiveEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameNoneActiveEmbed(i))
 		}
 		if _, err := database.Must().Player.SetNickname(actor, i.GuildID, pid, ""); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceNicknameEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceNicknameEmbed(i))
 		}
 		if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, target.ID); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceNicknameEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceNicknameEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameRemovedEmbed(i, target, config.Username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameRemovedEmbed(i, target, config.Username))
 	}
 
 	// 4. Validate Nickname Format
 	if !helpers.IsValidMcUsername(newNickname) {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameInvalidUsernameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameInvalidUsernameEmbed(i))
 	}
 
 	// 5. Validation Checks
 	if config.Nickname != nil && strings.EqualFold(*config.Nickname, newNickname) {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameAlreadySetEmbed(i, *config.Nickname))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameAlreadySetEmbed(i, *config.Nickname))
 	}
 
 	search := strings.ToLower(newNickname)
 	if isNicknameInUse(i.GuildID, search, view.Player.ID) {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameConflictEmbed(i, newNickname))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameConflictEmbed(i, newNickname))
 	}
 
 	// 6. Update Nickname in Database
 	if _, err := database.Must().Player.SetNickname(actor, i.GuildID, pid, newNickname); err != nil {
 		if sdk.IsConflict(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameConflictEmbed(i, newNickname))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameConflictEmbed(i, newNickname))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceNicknameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceNicknameEmbed(i))
 	}
 	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, target.ID); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceNicknameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceNicknameEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceNicknameUpdatedEmbed(i, target, config.Username, newNickname))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceNicknameUpdatedEmbed(i, target, config.Username, newNickname))
 }
 
 // ============================================================================

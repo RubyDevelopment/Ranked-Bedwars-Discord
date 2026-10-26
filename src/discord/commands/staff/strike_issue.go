@@ -8,6 +8,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -64,16 +65,16 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeIssueInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeIssueInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeIssueBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeIssueBotTargetEmbed(i))
 	}
 
 	// 2. Validate Reason
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
 	if reason == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.StrikeIssueReasonRequiredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeIssueReasonRequiredEmbed(i))
 	}
 	strikeType := strings.TrimSpace(helpers.OptionString(i, "type"))
 	actor := helpers.InteractionUserID(i)
@@ -81,7 +82,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 3. Resolve Target Profile
 	playerID, profile, err := helpers.EnsureModerationTarget(actor, i.GuildID, target)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeIssueEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeIssueEmbed(i))
 	}
 
 	// 4. Record Strike in Database
@@ -89,14 +90,14 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		StaffID: actor, Reason: reason,
 	})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeIssueEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeIssueEmbed(i))
 	}
 
 	username := target.Username
 	if profile != nil && profile.Username != "" {
 		username = profile.Username
 	}
-	embed := helpers.StrikeIssueSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
+	embed := cmdcfg.StrikeIssueSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
 	helpers.LogCommandResult(s, i.GuildID, "strike_issue", actor, embed)
 	helpers.SendPunishmentAlert(s, i.GuildID, "strike_issue", "applied", target, username, "strike", "", reason)
 	return helpers.EditInteractionEmbed(s, i, embed)

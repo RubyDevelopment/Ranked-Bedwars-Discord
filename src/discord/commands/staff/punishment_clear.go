@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -57,10 +58,10 @@ func executePunishmentClearCommand(s *discordgo.Session, i *discordgo.Interactio
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PunishmentClearInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PunishmentClearInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.PunishmentClearBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PunishmentClearBotTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
@@ -69,7 +70,7 @@ func executePunishmentClearCommand(s *discordgo.Session, i *discordgo.Interactio
 		if sdk.IsNotFound(err) {
 			return helpers.EditInteractionEmbed(s, i, helpers.PunishmentPlayerNotFoundEmbed())
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPunishmentClearEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPunishmentClearEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 	actor := helpers.InteractionUserID(i)
@@ -80,20 +81,20 @@ func executePunishmentClearCommand(s *discordgo.Session, i *discordgo.Interactio
 	if punishmentID == 0 {
 		active, err := database.Must().Punishments.ByPlayer(i.GuildID, pid, true, "", sdk.Page{})
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPunishmentClearEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPunishmentClearEmbed(i))
 		}
 		if len(active.Data) == 0 {
-			return helpers.EditInteractionEmbed(s, i, helpers.PunishmentClearNoneActiveEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PunishmentClearNoneActiveEmbed(i))
 		}
 		punishmentID = active.Data[0].ID
 		punishType = active.Data[0].Type
 	} else {
 		entry, err := database.Must().Punishments.Get(i.GuildID, punishmentID)
 		if err != nil && !sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPunishmentClearEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPunishmentClearEmbed(i))
 		}
 		if entry == nil || entry.PlayerID != view.Player.ID {
-			return helpers.EditInteractionEmbed(s, i, helpers.PunishmentClearNotFoundEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PunishmentClearNotFoundEmbed(i))
 		}
 		punishType = entry.Type
 	}
@@ -101,12 +102,12 @@ func executePunishmentClearCommand(s *discordgo.Session, i *discordgo.Interactio
 	// 4. Delete Punishment from Database
 	if err := database.Must().Punishments.Delete(actor, i.GuildID, punishmentID); err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PunishmentClearNotFoundEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PunishmentClearNotFoundEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPunishmentClearEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPunishmentClearEmbed(i))
 	}
 
-	embed := helpers.PunishmentClearSuccessEmbed(i, punishmentID, punishType, target)
+	embed := cmdcfg.PunishmentClearSuccessEmbed(i, punishmentID, punishType, target)
 	helpers.LogCommandResult(s, i.GuildID, "punishment_clear", actor, embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

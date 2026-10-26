@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -59,7 +60,7 @@ func executeServerSetupCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	case "sync":
 		return executeGuildSync(s, i)
 	default:
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerSetupInvalidSubcommandEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerSetupInvalidSubcommandEmbed(i))
 	}
 }
 
@@ -73,10 +74,10 @@ func executeGuildSetup(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 	result, err := helpers.EnsureGuildSetup(s, i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerSetupFailedEmbed(i, err))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerSetupFailedEmbed(i, err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.ServerSetupSuccessEmbed(i, result))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerSetupSuccessEmbed(i, result))
 }
 
 func executeGuildSync(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -89,10 +90,10 @@ func executeGuildSync(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 
 	result, err := helpers.EnsureGuildSetup(s, i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.ServerSyncFailedEmbed(i, err))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerSyncFailedEmbed(i, err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.ServerSyncSuccessEmbed(i, result))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.ServerSyncSuccessEmbed(i, result))
 }
 
 // ============================================================================

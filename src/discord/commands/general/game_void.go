@@ -6,6 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -58,15 +59,15 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// 1. Validate the Game Channel & Participant
 	game, ok := helpers.Games.ByChannel(i.ChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotGameChannelEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.VoidMatchNotGameChannelEmbed(i))
 	}
 	if _, isParticipant := game.Player(actor); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotInMatchEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.VoidMatchNotInMatchEmbed(i))
 	}
 
 	// 2. Validate Staff Permissions
 	if !helpers.MemberIsAdministrator(s, i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchStaffOnlyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.VoidMatchStaffOnlyEmbed(i))
 	}
 
 	// 3. Resolve Reason from Option
@@ -78,5 +79,5 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchSuccessEmbed(i, game.Number))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.VoidMatchSuccessEmbed(i, game.Number))
 }

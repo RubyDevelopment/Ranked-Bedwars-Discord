@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -66,12 +67,12 @@ func executeBotStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Fetch the registered bots for this guild
 	bots, err := helpers.GuildMetaBots(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorBotsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorBotsEmbed(i))
 	}
 
 	// If no bots are registered, return an error embed
 	if len(bots) == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.EmptyBotsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.EmptyBotsEmbed(i))
 	}
 
 	return helpers.EditInteractionEmbed(s, i, botsOverviewEmbed(i.GuildID, bots))
@@ -95,7 +96,7 @@ func botsOverviewEmbed(guildID string, bots []types.Bot) *discordgo.MessageEmbed
 		status, note := bot.Status, ""
 		if !bot.IsEnabled {
 			status = "Offline"
-			note = helpers.FillLayout(guildID, helpers.LayoutBotsDisabled, nil)
+			note = helpers.FillLayout(guildID, cmdcfg.LayoutBotsDisabled, nil)
 		}
 
 		// If bot is "Available", treat it as "Offline" for display
@@ -106,12 +107,12 @@ func botsOverviewEmbed(guildID string, bots []types.Bot) *discordgo.MessageEmbed
 		if _, ok := statusGroups[status]; !ok {
 			status = "Offline"
 		}
-		statusGroups[status] = append(statusGroups[status], helpers.FillLayout(guildID, helpers.LayoutBotsBot, map[string]string{
+		statusGroups[status] = append(statusGroups[status], helpers.FillLayout(guildID, cmdcfg.LayoutBotsBot, map[string]string{
 			"name": bot.Username, "tier": bot.Tier, "status": status, "note": note,
 		}))
 	}
 
-	separator := helpers.LayoutSeparator(guildID, helpers.LayoutBotsSeparator)
+	separator := helpers.LayoutSeparator(guildID, cmdcfg.LayoutBotsSeparator)
 	fields := make([]*discordgo.MessageEmbedField, 0, len(botDisplayConfigs))
 	for _, cfg := range botDisplayConfigs {
 		group := statusGroups[cfg.status]
@@ -125,7 +126,7 @@ func botsOverviewEmbed(guildID string, bots []types.Bot) *discordgo.MessageEmbed
 		}
 
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: helpers.FillLayout(guildID, helpers.LayoutBotsGroupTitle, map[string]string{
+			Name: helpers.FillLayout(guildID, cmdcfg.LayoutBotsGroupTitle, map[string]string{
 				"emoji": helpers.FillLayout(guildID, cfg.emojiLayout, nil), "label": helpers.FillLayout(guildID, cfg.labelLayout, nil),
 				"count": strconv.Itoa(len(group)), "status": cfg.status,
 			}),

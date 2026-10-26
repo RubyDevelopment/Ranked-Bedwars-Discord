@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -42,30 +43,30 @@ func executeQueueLfgCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// Identify the user invoking the command
 	target := helpers.InteractionUserID(i)
 	if target == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgInvalidUserEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueLfgInvalidUserEmbed(i))
 	}
 
 	// Load the LFG configuration for this guild
 	lfgConfig, err := helpers.LoadLFGConfig(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueLfgEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueLfgEmbed(i))
 	}
 
 	// Validate LFG configuration
 	if lfgConfig.LFGChannelID == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgNotConfiguredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueLfgNotConfiguredEmbed(i))
 	}
 	if lfgConfig.QueuesPaused {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgQueuesPausedEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueLfgQueuesPausedEmbed(i))
 	}
 
 	// Verify the user is registered in the ranked system
 	view, err := database.Must().Player.Get(i.GuildID, target)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueLfgNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueLfgEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueLfgEmbed(i))
 	}
 
 	// Use the configured username if available, otherwise use the user ID
@@ -76,9 +77,9 @@ func executeQueueLfgCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	// Send the LFG post to the configured channel
 	if _, err := s.ChannelMessageSendComplex(lfgConfig.LFGChannelID, &discordgo.MessageSend{
-		Embeds: []*discordgo.MessageEmbed{helpers.QueueLfgPostEmbed(i, username, target)},
+		Embeds: []*discordgo.MessageEmbed{cmdcfg.QueueLfgPostEmbed(i, username, target)},
 	}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueLfgEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueLfgEmbed(i))
 	}
 
 	// Assign the LFG role if configured
@@ -86,5 +87,5 @@ func executeQueueLfgCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		_ = s.GuildMemberRoleAdd(i.GuildID, target, lfgConfig.LFGRoleID)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgSuccessEmbed(i, username, lfgConfig.LFGChannelID))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueLfgSuccessEmbed(i, username, lfgConfig.LFGChannelID))
 }

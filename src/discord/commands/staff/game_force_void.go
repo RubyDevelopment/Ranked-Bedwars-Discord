@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -73,7 +74,7 @@ func executeGameForceVoidCommand(s *discordgo.Session, i *discordgo.InteractionC
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("find the game", err))
 	}
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameForceVoidNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameForceVoidNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Void the Game
@@ -81,5 +82,5 @@ func executeGameForceVoidCommand(s *discordgo.Session, i *discordgo.InteractionC
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.GameForceVoidSuccessEmbed(i, gameNumber, reason))
+	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameForceVoidSuccessEmbed(i, gameNumber, reason))
 }

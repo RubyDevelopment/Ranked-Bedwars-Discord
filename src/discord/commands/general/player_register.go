@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -50,7 +51,7 @@ var PlayerRegisterCommand = &types.Command{
 func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	username := helpers.OptionString(i, "username")
 	if !helpers.IsValidMcUsername(username) {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterInvalidUsernameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterInvalidUsernameEmbed(i))
 	}
 
 	userID := helpers.InteractionUserID(i)
@@ -58,23 +59,23 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 	// Check if player is already registered
 	existing, err := database.Must().Player.Get(i.GuildID, userID)
 	if err == nil && existing != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username))
 	} else if err != nil && !sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
 	// A rank must exist so the new player can be given one (and its role)
 	if ok, rankErr := helpers.HasConfiguredRank(i.GuildID); rankErr != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i))
 	} else if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterNoRanksEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterNoRanksEmbed(i))
 	}
 
 	// Registration creates the player's stats in the active season, so one has to exist
 	if _, err := database.Must().Season.Active(i.GuildID); sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterNoSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterNoSeasonEmbed(i))
 	} else if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
 	verification, _ := helpers.LoadRegistrationVerification(i.GuildID)
@@ -88,10 +89,10 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 	if helpers.RequiresRegistrationAPIVerification(verification) {
 		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(username, verification)
 		if verifyErr != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterAPIOutageEmbed(i, helpers.RegistrationNetworkLabel(verification)))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterAPIOutageEmbed(i, helpers.RegistrationNetworkLabel(verification)))
 		}
 		if !exists {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerRegisterAccountNotFoundEmbed(i, username, helpers.RegistrationNetworkLabel(verification)))
+			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerRegisterAccountNotFoundEmbed(i, username, helpers.RegistrationNetworkLabel(verification)))
 		}
 	}
 
@@ -108,18 +109,18 @@ func registerNewPlayer(i *discordgo.InteractionCreate, s *discordgo.Session, gui
 	reg, err := database.Must().Player.Register(userID, guildID, userID, username, 0)
 	if err != nil {
 		if sdk.IsConflict(err) {
-			return helpers.PlayerRegisterConflictEmbed(i, username)
+			return cmdcfg.PlayerRegisterConflictEmbed(i, username)
 		}
-		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
+		return cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
 	// Apply starting rank/ELO for brand new registrations
 	if reg.CreatedGuild {
 		if err := helpers.ApplyStartingRank(guildID, userID, reg.PlayerID); err != nil {
-			return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
+			return cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i)
 		}
 	}
 	if _, err := helpers.SyncRegisteredPlayerProfile(s, guildID, reg.PlayerID, userID); err != nil {
-		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
+		return cmdcfg.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
-	return helpers.PlayerRegisterSuccessEmbed(i, username)
+	return cmdcfg.PlayerRegisterSuccessEmbed(i, username)
 }
