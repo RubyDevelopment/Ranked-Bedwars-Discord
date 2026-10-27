@@ -1405,7 +1405,7 @@ func EmptyBotsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 }
 
 // ============================================================================
-// general/game_compare.go
+// general/player_compare.go
 // ============================================================================
 
 func UnexpectedErrorCompareEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
@@ -1497,7 +1497,7 @@ func GameHistoryEmptyEmbed(i *discordgo.InteractionCreate, username, filter stri
 }
 
 // ============================================================================
-// general/game_info.go
+// general/game_view.go
 // ============================================================================
 
 func OnOff(v bool) string {
@@ -1507,7 +1507,7 @@ func OnOff(v bool) string {
 	return "off"
 }
 
-func GameInfoNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
+func GameViewNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Game Not Found",
 		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
@@ -1515,7 +1515,7 @@ func GameInfoNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *disc
 	})
 }
 
-func GameInfoNoGameEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func GameViewNoGameEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Game",
 		Description: "You must either run this command in a game channel or specify a game number.",
@@ -1523,7 +1523,7 @@ func GameInfoNoGameEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed
 	})
 }
 
-func GameInfoOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo.MessageEmbed {
+func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo.MessageEmbed {
 	var description strings.Builder
 
 	// Basic info
@@ -1615,7 +1615,7 @@ func GameInfoOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo
 }
 
 // ============================================================================
-// general/game_leaderboard.go
+// general/player_leaderboard.go
 // ============================================================================
 
 func UnexpectedErrorLeaderboardEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
@@ -1750,7 +1750,7 @@ func MapsRotationEmbed(i *discordgo.InteractionCreate, maps []types.Map, targetM
 }
 
 // ============================================================================
-// general/game_pugs.go
+// general/queue_pugs.go
 // ============================================================================
 
 func PugsListUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
@@ -1941,7 +1941,7 @@ func VoidMatchSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int) *disc
 }
 
 // ============================================================================
-// general/player_claim_elo.go
+// general/player_claim.go
 // ============================================================================
 
 func UnexpectedErrorClaimEloEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
@@ -2238,10 +2238,10 @@ func PlayerProfileOverviewEmbed(i *discordgo.InteractionCreate, user *discordgo.
 }
 
 // ============================================================================
-// general/player_punishments.go
+// general/moderation_punishments.go
 // ============================================================================
 
-func UnexpectedErrorPlayerPunishmentsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationPunishmentsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while loading the punishment history. Please try again later or contact support.",
@@ -2249,7 +2249,7 @@ func UnexpectedErrorPlayerPunishmentsEmbed(i *discordgo.InteractionCreate) *disc
 	})
 }
 
-func PlayerPunishmentsBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationPunishmentsBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts do not have a punishment history. Target a registered player instead.",
@@ -2257,7 +2257,7 @@ func PlayerPunishmentsBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func PlayerPunishmentsNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationPunishmentsNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
 		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
@@ -2265,7 +2265,7 @@ func PlayerPunishmentsNotRegisteredEmbed(i *discordgo.InteractionCreate) *discor
 	})
 }
 
-func PlayerPunishmentsEmptyEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+func ModerationPunishmentsEmptyEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "History Clear",
 		Description: "No punishment history was found for this player. This player maintains a clean record.",
@@ -2273,7 +2273,7 @@ func PlayerPunishmentsEmptyEmbed(i *discordgo.InteractionCreate, username string
 	})
 }
 
-func PlayerPunishmentsEmptyActiveEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+func ModerationPunishmentsEmptyActiveEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "No Active Punishments",
 		Description: "No active punishments were found for this player. This player maintains a clean record.",
@@ -2281,7 +2281,7 @@ func PlayerPunishmentsEmptyActiveEmbed(i *discordgo.InteractionCreate, username 
 	})
 }
 
-func PlayerPunishmentsEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filter string) *discordgo.MessageEmbed {
+func ModerationPunishmentsEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filter string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "History Empty",
 		Description: fmt.Sprintf("No punishment history was found for this player in the last **%s**. Try a longer filter or remove it.", filter),
@@ -2551,10 +2551,10 @@ func PlayerRenameSuccessEmbed(i *discordgo.InteractionCreate, oldUsername, newUs
 }
 
 // ============================================================================
-// general/player_screenshare.go
+// general/moderation_screenshare.go
 // ============================================================================
 
-func PlayerScreenshareSubmittedEmbed(i *discordgo.InteractionCreate, target *discordgo.User, username, reason string) *discordgo.MessageEmbed {
+func ModerationScreenshareSubmittedEmbed(i *discordgo.InteractionCreate, target *discordgo.User, username, reason string) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
 		"Your screenshare request has been submitted. Staff will review the request and contact you shortly.\n\n> **Player:** <@%s> (**%s**)",
 		target.ID, username,
@@ -2570,7 +2570,7 @@ func PlayerScreenshareSubmittedEmbed(i *discordgo.InteractionCreate, target *dis
 	})
 }
 
-func PlayerScreenshareDatabaseUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationScreenshareDatabaseUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while trying to submit the screenshare request because the database service is unavailable. Please contact an administrator for assistance or try again later.",
@@ -2578,7 +2578,7 @@ func PlayerScreenshareDatabaseUnavailableEmbed(i *discordgo.InteractionCreate) *
 	})
 }
 
-func PlayerScreenshareInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationScreenshareInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify a player to request a screenshare for. Select a member from the command options.",
@@ -2586,7 +2586,7 @@ func PlayerScreenshareInvalidTargetEmbed(i *discordgo.InteractionCreate) *discor
 	})
 }
 
-func PlayerScreenshareBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationScreenshareBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated application bot profiles cannot be screenshared. Target a real player instead.",
@@ -3058,10 +3058,10 @@ func QueueStatusQueueEmbed(i *discordgo.InteractionCreate, modeName, description
 }
 
 // ============================================================================
-// general/strike_list.go
+// general/moderation_strikes.go
 // ============================================================================
 
-func UnexpectedErrorStrikeListEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while loading the strike history. Please try again later or contact support.",
@@ -3069,7 +3069,7 @@ func UnexpectedErrorStrikeListEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func StrikeListBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikesBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts do not have a strike history. Target a registered player instead.",
@@ -3077,7 +3077,7 @@ func StrikeListBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Message
 	})
 }
 
-func StrikeListNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikesNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
 		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
@@ -3085,7 +3085,7 @@ func StrikeListNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.Mes
 	})
 }
 
-func StrikeListEmptyEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+func ModerationStrikesEmptyEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Strikes Clear",
 		Description: "No strike history was found for this player. This player maintains a clean record.",
@@ -3093,7 +3093,7 @@ func StrikeListEmptyEmbed(i *discordgo.InteractionCreate, username string) *disc
 	})
 }
 
-func StrikeListEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filter string) *discordgo.MessageEmbed {
+func ModerationStrikesEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filter string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Strikes Empty",
 		Description: fmt.Sprintf("No strike history was found for this player in the last **%s**. Try a longer filter or remove it.", filter),
@@ -3102,10 +3102,10 @@ func StrikeListEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filt
 }
 
 // ============================================================================
-// general/strike_request.go
+// general/moderation_strike_request.go
 // ============================================================================
 
-func UnexpectedErrorStrikeRequestEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationStrikeRequestEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while submitting the strike review request. Please try again later or contact support.",
@@ -3113,7 +3113,7 @@ func UnexpectedErrorStrikeRequestEmbed(i *discordgo.InteractionCreate) *discordg
 	})
 }
 
-func StrikeRequestInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeRequestInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify a player to request a strike review for. Select a registered player from the command options.",
@@ -3121,7 +3121,7 @@ func StrikeRequestInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func StrikeRequestBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeRequestBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts do not have strikes to review. Target a registered player instead.",
@@ -3129,7 +3129,7 @@ func StrikeRequestBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Mess
 	})
 }
 
-func StrikeRequestReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeRequestReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Reason Required",
 		Description: "You must explain why the strike should be reviewed. Include a clear explanation in the reason field.",
@@ -3137,7 +3137,7 @@ func StrikeRequestReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo
 	})
 }
 
-func StrikeRequestNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeRequestNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
 		Description: "That player is not registered in this guild. Only registered players can have a strike review requested.",
@@ -3145,7 +3145,7 @@ func StrikeRequestNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func StrikeRequestSubmittedEmbed(i *discordgo.InteractionCreate, target *discordgo.User, username, reason string) *discordgo.MessageEmbed {
+func ModerationStrikeRequestSubmittedEmbed(i *discordgo.InteractionCreate, target *discordgo.User, username, reason string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title: "Strike Review Requested",
 		Description: fmt.Sprintf(
@@ -3299,10 +3299,10 @@ func GameLossSuccessEmbed(i *discordgo.InteractionCreate, user *discordgo.User, 
 }
 
 // ============================================================================
-// staff/game_modify.go
+// staff/player_modify.go
 // ============================================================================
 
-func UnexpectedErrorGameModifyEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorPlayerModifyEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while modifying the player's statistics. Please try again later or contact support.",
@@ -3310,7 +3310,7 @@ func UnexpectedErrorGameModifyEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func GameModifyInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func PlayerModifyInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Subcommand",
 		Description: "You must specify a subcommand: `add`, `remove`, or `set`. Select one from the command options.",
@@ -3318,7 +3318,7 @@ func GameModifyInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo
 	})
 }
 
-func GameModifyInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func PlayerModifyInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify a player to modify. Select a registered player from the command options.",
@@ -3326,7 +3326,7 @@ func GameModifyInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Mes
 	})
 }
 
-func GameModifyBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func PlayerModifyBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts cannot have their statistics modified. Target a registered player instead.",
@@ -3334,7 +3334,7 @@ func GameModifyBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Message
 	})
 }
 
-func GameModifyUnknownStatEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func PlayerModifyUnknownStatEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unknown Statistic",
 		Description: "That is not a valid statistic that can be modified. Please select a valid statistic from the command options.",
@@ -3342,7 +3342,7 @@ func GameModifyUnknownStatEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 	})
 }
 
-func GameModifyRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func PlayerModifyRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
 		Description: "That player is not registered in this guild. Register them with `/forceregister` before modifying their statistics.",
@@ -3350,7 +3350,7 @@ func GameModifyRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discor
 	})
 }
 
-func GameModifyNoActiveSeasonEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func PlayerModifyNoActiveSeasonEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Active Season",
 		Description: "This guild does not have an active season configured. Statistics can only be modified during an active season. Please contact an administrator to configure a season.",
@@ -3358,7 +3358,7 @@ func GameModifyNoActiveSeasonEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 	})
 }
 
-func GameModifySuccessEmbed(i *discordgo.InteractionCreate, statLabel string, user *discordgo.User, username, operation string, newVal, currentVal int) *discordgo.MessageEmbed {
+func PlayerModifySuccessEmbed(i *discordgo.InteractionCreate, statLabel string, user *discordgo.User, username, operation string, newVal, currentVal int) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title: "Statistics Modified",
 		Description: fmt.Sprintf(
@@ -4206,10 +4206,10 @@ func PlayerWipeSuccessEmbed(i *discordgo.InteractionCreate, username, season str
 }
 
 // ============================================================================
-// staff/punishment_clear.go
+// staff/moderation_clear_punishment.go
 // ============================================================================
 
-func UnexpectedErrorPunishmentClearEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationClearPunishmentEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while clearing the punishment. Please try again later or contact support.",
@@ -4217,7 +4217,7 @@ func UnexpectedErrorPunishmentClearEmbed(i *discordgo.InteractionCreate) *discor
 	})
 }
 
-func PunishmentClearInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationClearPunishmentInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify a player to clear a punishment from. Select a registered player from the command options.",
@@ -4225,7 +4225,7 @@ func PunishmentClearInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordg
 	})
 }
 
-func PunishmentClearBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationClearPunishmentBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts cannot receive punishments. Target a registered player instead.",
@@ -4233,7 +4233,7 @@ func PunishmentClearBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 	})
 }
 
-func PunishmentClearNoneActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationClearPunishmentNoneActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Active Punishments",
 		Description: "This player has no active punishments to clear. Their history can be reviewed with `/punishments`.",
@@ -4241,7 +4241,7 @@ func PunishmentClearNoneActiveEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func PunishmentClearNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationClearPunishmentNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Punishment Not Found",
 		Description: "No punishment with that ID exists for this player in this guild. Double-check the ID from `/punishments`.",
@@ -4249,7 +4249,7 @@ func PunishmentClearNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.Mes
 	})
 }
 
-func PunishmentClearSuccessEmbed(i *discordgo.InteractionCreate, id uint, punishType string, user *discordgo.User) *discordgo.MessageEmbed {
+func ModerationClearPunishmentSuccessEmbed(i *discordgo.InteractionCreate, id uint, punishType string, user *discordgo.User) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title: "Punishment Cleared",
 		Description: fmt.Sprintf(
@@ -4261,10 +4261,10 @@ func PunishmentClearSuccessEmbed(i *discordgo.InteractionCreate, id uint, punish
 }
 
 // ============================================================================
-// staff/queue_substitutes.go
+// staff/queue_substitute.go
 // ============================================================================
 
-func QueueSubstitutesInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func QueueSubstituteInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify both the player leaving and the substitute taking their place.",
@@ -4272,7 +4272,7 @@ func QueueSubstitutesInvalidTargetEmbed(i *discordgo.InteractionCreate) *discord
 	})
 }
 
-func QueueSubstitutesBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func QueueSubstituteBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts cannot play in games. Select real players instead.",
@@ -4280,7 +4280,7 @@ func QueueSubstitutesBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func QueueSubstitutesSamePlayerEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func QueueSubstituteSamePlayerEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "The outgoing player and the substitute must be different players.",
@@ -4288,7 +4288,7 @@ func QueueSubstitutesSamePlayerEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func QueueSubstitutesGameNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
+func QueueSubstituteGameNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Game Not Found",
 		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
@@ -4296,7 +4296,7 @@ func QueueSubstitutesGameNotFoundEmbed(i *discordgo.InteractionCreate, gameNumbe
 	})
 }
 
-func QueueSubstitutesSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int, outgoing, incoming *discordgo.User) *discordgo.MessageEmbed {
+func QueueSubstituteSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int, outgoing, incoming *discordgo.User) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title: "Substitute Assigned",
 		Description: fmt.Sprintf(
@@ -4527,10 +4527,10 @@ func RoleHierarchyEmbed(i *discordgo.InteractionCreate, issue RoleHierarchyIssue
 }
 
 // ============================================================================
-// staff/server_unban.go
+// staff/moderation_unban.go
 // ============================================================================
 
-func UnexpectedErrorServerUnbanEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationUnbanEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while processing the server unban. Please try again later or contact support.",
@@ -4538,7 +4538,7 @@ func UnexpectedErrorServerUnbanEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func ServerUnbanInvalidUserIDEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnbanInvalidUserIDEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid User ID",
 		Description: "That is not a valid Discord user ID. Provide the 17-20 digit ID of the user to unban.",
@@ -4546,7 +4546,7 @@ func ServerUnbanInvalidUserIDEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 	})
 }
 
-func ServerUnbanNotActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnbanNotActiveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Punishment Not Active",
 		Description: "That player is not currently **server banned**. Verify their status with `/punishments`.",
@@ -4554,7 +4554,7 @@ func ServerUnbanNotActiveEmbed(i *discordgo.InteractionCreate) *discordgo.Messag
 	})
 }
 
-func ServerUnbanSuccessEmbed(i *discordgo.InteractionCreate, targetID, username, reason string, unbanned bool) *discordgo.MessageEmbed {
+func ModerationUnbanSuccessEmbed(i *discordgo.InteractionCreate, targetID, username, reason string, unbanned bool) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
 		"Successfully processed the server unban. This action has been logged for staff review.\n\n> **User ID:** `%s`\n> **Username:** `%s`\n> **Reason:** %s",
 		targetID, username, reason,
@@ -4570,10 +4570,10 @@ func ServerUnbanSuccessEmbed(i *discordgo.InteractionCreate, targetID, username,
 }
 
 // ============================================================================
-// staff/strike_issue.go
+// staff/moderation_strike.go
 // ============================================================================
 
-func UnexpectedErrorStrikeIssueEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationStrikeEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while issuing the strike. Please try again later or contact support.",
@@ -4581,7 +4581,7 @@ func UnexpectedErrorStrikeIssueEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func StrikeIssueInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify a player to strike. Select a registered player from the command options.",
@@ -4589,7 +4589,7 @@ func StrikeIssueInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Me
 	})
 }
 
-func StrikeIssueBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts cannot receive strikes. Target a registered player instead.",
@@ -4597,7 +4597,7 @@ func StrikeIssueBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Messag
 	})
 }
 
-func StrikeIssueReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationStrikeReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Reason Required",
 		Description: "You must provide a reason when issuing a strike. Include a clear explanation in the reason field.",
@@ -4605,7 +4605,7 @@ func StrikeIssueReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func StrikeIssueSuccessEmbed(i *discordgo.InteractionCreate, id uint, user *discordgo.User, username, strikeType, reason string) *discordgo.MessageEmbed {
+func ModerationStrikeSuccessEmbed(i *discordgo.InteractionCreate, id uint, user *discordgo.User, username, strikeType, reason string) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
 		"Successfully issued a strike to the player. This action has been logged for staff review.\n\n> **Strike ID:** `#%d`\n> **Player:** <@%s> (**%s**)\n> **Reason:** %s",
 		id, user.ID, username, reason,
@@ -4621,10 +4621,10 @@ func StrikeIssueSuccessEmbed(i *discordgo.InteractionCreate, id uint, user *disc
 }
 
 // ============================================================================
-// staff/strike_remove.go
+// staff/moderation_unstrike.go
 // ============================================================================
 
-func UnexpectedErrorStrikeRemoveEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func UnexpectedErrorModerationUnstrikeEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Unexpected Error",
 		Description: "An unexpected error occurred while voiding the strike. Please try again later or contact support.",
@@ -4632,7 +4632,7 @@ func UnexpectedErrorStrikeRemoveEmbed(i *discordgo.InteractionCreate) *discordgo
 	})
 }
 
-func StrikeRemoveInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnstrikeInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "You must specify a player to remove a strike from. Select a registered player from the command options.",
@@ -4640,7 +4640,7 @@ func StrikeRemoveInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func StrikeRemoveBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnstrikeBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Invalid Target",
 		Description: "Automated bot accounts cannot receive strikes. Target a registered player instead.",
@@ -4648,7 +4648,7 @@ func StrikeRemoveBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 	})
 }
 
-func StrikeRemovePlayerNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnstrikePlayerNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Player Not Registered",
 		Description: "That player is not registered in this guild. Only registered players can receive strikes.",
@@ -4656,7 +4656,7 @@ func StrikeRemovePlayerNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.
 	})
 }
 
-func StrikeRemoveNoStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnstrikeNoStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "No Strikes Found",
 		Description: "This player has no active strikes to void. Their strike history can be reviewed with `/strikes`.",
@@ -4664,7 +4664,7 @@ func StrikeRemoveNoStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 	})
 }
 
-func StrikeRemoveNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnstrikeNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Strike Not Found",
 		Description: "No strike with that ID exists for this player in this guild. Double-check the ID from `/strikes`.",
@@ -4672,7 +4672,7 @@ func StrikeRemoveNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.Messag
 	})
 }
 
-func StrikeRemoveAlreadyVoidedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+func ModerationUnstrikeAlreadyVoidedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Already Voided",
 		Description: "That strike has already been voided. No further action is needed.",
@@ -4680,7 +4680,7 @@ func StrikeRemoveAlreadyVoidedEmbed(i *discordgo.InteractionCreate) *discordgo.M
 	})
 }
 
-func StrikeRemoveSuccessEmbed(i *discordgo.InteractionCreate, id uint, user *discordgo.User, username string) *discordgo.MessageEmbed {
+func ModerationUnstrikeSuccessEmbed(i *discordgo.InteractionCreate, id uint, user *discordgo.User, username string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title: "Strike Voided",
 		Description: fmt.Sprintf(

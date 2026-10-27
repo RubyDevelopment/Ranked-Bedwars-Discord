@@ -9,11 +9,7 @@ import (
 	_ "ranked-bedwars/src/discord/commands/admin"
 	_ "ranked-bedwars/src/discord/commands/general"
 	_ "ranked-bedwars/src/discord/commands/staff"
-	_ "ranked-bedwars/src/discord/events"
-	"ranked-bedwars/src/discord/events/features"
-	_ "ranked-bedwars/src/discord/events/interactions"
-	_ "ranked-bedwars/src/discord/events/punishments"
-	_ "ranked-bedwars/src/discord/events/setup"
+	"ranked-bedwars/src/discord/events"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/utility"
 )
@@ -176,5 +172,5 @@ func (manager *Manager) syncSlashCommands(session *discordgo.Session, appID, gui
 	}
 
 	// Guilds' own commands from the dashboard's Command Builder are registered per guild.
-	features.StartCustomCommandSync(session, appID, guildID, commandsToRegister)
+	events.StartCustomCommandSync(session, appID, guildID, commandsToRegister)
 }

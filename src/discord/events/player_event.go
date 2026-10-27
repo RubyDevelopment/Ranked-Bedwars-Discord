@@ -23,14 +23,3 @@ var AccountAgeEvent = &types.Event{
 func init() {
 	helpers.RegisterEvent(AppearanceSyncEvent)
 }
-
-// AppearanceSyncEvent keeps the bot's per-server nickname, avatar, banner and bio in line with the dashboard.
-var AppearanceSyncEvent = &types.Event{
-	Name:        "Appearance Sync",
-	System:      true,
-	Description: "Re-applies each server's configured bot nickname, avatar, banner and bio on startup and every 30 minutes.",
-	Type:        "ready",
-	Once:        false,
-	Disabled:    false,
-	Execute:     helpers.HandleAppearanceSync,
-}

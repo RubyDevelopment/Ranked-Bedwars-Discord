@@ -395,9 +395,9 @@ func slug(title string) string {
 }
 
 // partyResponses are the embeds /party answers with. They live in embed_helper.go (the event embeds), so only the
-// ones party_group.go sends as the command's answer count (the others are alerts sent to other players).
+// ones party_manage.go sends as the command's answer count (the others are alerts sent to other players).
 func partyResponses(root string, fset *token.FileSet) []response {
-	src, err := os.ReadFile(filepath.Join(root, "src/discord/commands/general/party_group.go"))
+	src, err := os.ReadFile(filepath.Join(root, "src/discord/commands/general/party_manage.go"))
 	check(err)
 	answers := map[string]bool{}
 	for _, m := range regexp.MustCompile(`EditInteractionEmbed\(s, i, helpers\.(\w+)\(`).FindAllStringSubmatch(string(src), -1) {
