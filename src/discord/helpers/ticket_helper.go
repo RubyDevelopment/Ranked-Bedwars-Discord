@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	guildmodel "github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models/guild"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
@@ -3075,8 +3076,8 @@ func (snap ticketSnapshot) panelsChanged(ip *types.InteractivePanels) bool {
 // upserted (live ones keyed by their map key, which is the thread id), live tickets that vanished without being
 // archived are deleted, and changed leaderboard rows, blacklist and counter are included. Closed tickets that merely
 // fell out of the loaded window are left alone: the database keeps every ticket.
-func (snap ticketSnapshot) changesSince(ip *types.InteractivePanels) guildmodel.TicketChanges {
-	var changes guildmodel.TicketChanges
+func (snap ticketSnapshot) changesSince(ip *types.InteractivePanels) models.TicketChanges {
+	var changes models.TicketChanges
 	present := map[string]bool{}
 
 	upsert := func(threadID string, ticket *types.Ticket) {
