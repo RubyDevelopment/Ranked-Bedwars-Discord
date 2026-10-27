@@ -143,3 +143,15 @@ type GuildContext struct {
 type PipelineOptions struct {
 	SkipGuildRegistration bool
 }
+
+// UnmarshalJSON reads a command's settings the way the dashboard shows them: a switch missing from the stored entry is on.
+// Without this a partly saved entry decodes to every switch off, and the bot refuses a command the dashboard shows enabled.
+func (c *CommandConfig) UnmarshalJSON(data []byte) error {
+	type plain CommandConfig
+	p := plain{IsEnabled: true, IsSlashEnabled: true, IsPrefixEnabled: true}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*c = CommandConfig(p)
+	return nil
+}

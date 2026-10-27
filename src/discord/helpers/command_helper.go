@@ -12,10 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	dbjson "github.com/RubyDevelopment/Ranked-Bedwars-Database/src/utility"
+	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 
 	"ranked-bedwars/src/database"
@@ -521,17 +521,17 @@ func CheckPrefixAccess(settings types.GuildSettings, guildID, commandName, subco
 func checkAccess(perm types.GuildCommandPermission, guildID, subcommandPath, channelID string, member *discordgo.Member, isAdmin, isPrefix bool, gate roleGate) types.AccessDecision {
 	// Check if command is enabled
 	if perm.Disabled != nil && *perm.Disabled {
-		return types.AccessDecision{Allowed: false, Title: "Command Disabled", Message: "This command is disabled in this server."}
+		return types.AccessDecision{Allowed: false, Title: "Command Disabled", Message: "This command is disabled in this server. Please contact an staff member if you believe this is a mistake."}
 	}
 
 	// Check if slash/prefix is enabled
 	if isPrefix {
 		if perm.PrefixDisabled != nil && *perm.PrefixDisabled {
-			return types.AccessDecision{Allowed: false, Title: "Prefix Disabled", Message: "This command is disabled for prefix usage in this server."}
+			return types.AccessDecision{Allowed: false, Title: "Prefix Disabled", Message: "This command is disabled for prefix usage in this server. Please contact an staff member if you believe this is a mistake."}
 		}
 	} else {
 		if perm.SlashDisabled != nil && *perm.SlashDisabled {
-			return types.AccessDecision{Allowed: false, Title: "Slash Disabled", Message: "This command is disabled for slash usage in this server."}
+			return types.AccessDecision{Allowed: false, Title: "Slash Disabled", Message: "This command is disabled for slash usage in this server. Please contact an staff member if you believe this is a mistake."}
 		}
 	}
 
