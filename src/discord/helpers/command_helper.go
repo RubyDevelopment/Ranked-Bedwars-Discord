@@ -7,6 +7,7 @@ import (
 	"log"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -497,7 +498,7 @@ func convertMapToSlice(m map[string]bool) []string {
 // CheckSlashAccess validates guild slash command permissions.
 func CheckSlashAccess(settings types.GuildSettings, guildID, commandName, subcommandPath, channelID string, member *discordgo.Member, isAdmin bool) types.AccessDecision {
 	if !settings.SlashEnabled {
-		return types.AccessDecision{Allowed: false, Title: "Slash Commands Disabled", Message: "Slash commands are disabled in this server. Please try again later or contact a server administrator."}
+		return types.AccessDecision{Allowed: false, Title: "Slash Commands Disabled", Message: "Slash commands are disabled in this guild. Please try again later or contact a guild administrator."}
 	}
 
 	// A command with no settings has no allowed roles, so only administrators get through (see checkRoleAccess).
@@ -509,7 +510,7 @@ func CheckSlashAccess(settings types.GuildSettings, guildID, commandName, subcom
 // CheckPrefixAccess validates guild prefix command permissions.
 func CheckPrefixAccess(settings types.GuildSettings, guildID, commandName, subcommandPath, channelID string, member *discordgo.Member, isAdmin bool) types.AccessDecision {
 	if !settings.PrefixEnabled {
-		return types.AccessDecision{Allowed: false, Title: "Prefix Commands Disabled", Message: "Prefix commands are disabled in this server. Please try again later or contact a server administrator."}
+		return types.AccessDecision{Allowed: false, Title: "Prefix Commands Disabled", Message: "Prefix commands are disabled in this guild. Please try again later or contact a guild administrator."}
 	}
 
 	// A command with no settings has no allowed roles, so only administrators get through (see checkRoleAccess).
@@ -521,17 +522,17 @@ func CheckPrefixAccess(settings types.GuildSettings, guildID, commandName, subco
 func checkAccess(perm types.GuildCommandPermission, guildID, subcommandPath, channelID string, member *discordgo.Member, isAdmin, isPrefix bool, gate roleGate) types.AccessDecision {
 	// Check if command is enabled
 	if perm.Disabled != nil && *perm.Disabled {
-		return types.AccessDecision{Allowed: false, Title: "Command Disabled", Message: "This command is disabled in this server. Please contact an staff member if you believe this is a mistake."}
+		return types.AccessDecision{Allowed: false, Title: "Command Disabled", Message: "This command is disabled in this guild. Please contact a staff member if you believe this is a mistake."}
 	}
 
 	// Check if slash/prefix is enabled
 	if isPrefix {
 		if perm.PrefixDisabled != nil && *perm.PrefixDisabled {
-			return types.AccessDecision{Allowed: false, Title: "Prefix Disabled", Message: "This command is disabled for prefix usage in this server. Please contact an staff member if you believe this is a mistake."}
+			return types.AccessDecision{Allowed: false, Title: "Prefix Disabled", Message: "This command is disabled for prefix usage in this guild. Please contact a staff member if you believe this is a mistake."}
 		}
 	} else {
 		if perm.SlashDisabled != nil && *perm.SlashDisabled {
-			return types.AccessDecision{Allowed: false, Title: "Slash Disabled", Message: "This command is disabled for slash usage in this server. Please contact an staff member if you believe this is a mistake."}
+			return types.AccessDecision{Allowed: false, Title: "Slash Disabled", Message: "This command is disabled for slash usage in this guild. Please contact a staff member if you believe this is a mistake."}
 		}
 	}
 
@@ -554,7 +555,7 @@ func checkAccess(perm types.GuildCommandPermission, guildID, subcommandPath, cha
 			}
 
 			if !subEnabled {
-				return types.AccessDecision{Allowed: false, Title: "Subcommand Disabled", Message: fmt.Sprintf("The `%s` subcommand is disabled in this server.", subcommandPath)}
+				return types.AccessDecision{Allowed: false, Title: "Subcommand Disabled", Message: fmt.Sprintf("The `%s` subcommand is disabled in this guild.", subcommandPath)}
 			}
 			if isPrefix {
 				if !subPrefix {
@@ -1585,14 +1586,6 @@ func ackRequirementFix(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 }
 
-func updateRequirementFixMessage(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed, components []discordgo.MessageComponent) {
-	if components == nil {
-		components = []discordgo.MessageComponent{}
-	}
-	embeds := []*discordgo.MessageEmbed{emb}
-	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
-}
-
 func encodeRequirementFixCustomID(phase, cmdName string, remaining []types.Requirement) string {
 	parts := make([]string, 0, 3+len(remaining))
 	parts = append(parts, "reqfix1", phase, cmdName)
@@ -1737,4 +1730,588 @@ func EnsureCommandLogs(cmd *types.Command) {
 	if !types.HasRequirementKey(cmd.Requirements, types.ReqChannel, types.CommandLogsKey) {
 		cmd.Requirements = append(cmd.Requirements[:len(cmd.Requirements):len(cmd.Requirements)], types.Requirement{Type: types.ReqChannel, Key: types.CommandLogsKey, Optional: true})
 	}
+}
+
+// MemberIsAdministrator reports whether the interaction member can manage guild configuration.
+func MemberIsAdministrator(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	if i == nil || i.Member == nil {
+		return false
+	}
+	// Discord sends the member's computed permissions with the interaction: no guild/role API calls needed.
+	perms := i.Member.Permissions
+	if perms == 0 {
+		var err error
+		if perms, err = MemberGuildPermissions(s, i.GuildID, i.Member); err != nil {
+			return false
+		}
+	}
+	return perms&(discordgo.PermissionAdministrator|discordgo.PermissionManageGuild) != 0
+}
+
+// MemberGuildPermissions returns the guild permissions for a member.
+func MemberGuildPermissions(s *discordgo.Session, guildID string, member *discordgo.Member) (int64, error) {
+	if s == nil || member == nil || member.User == nil || guildID == "" {
+		return 0, nil
+	}
+
+	// Get guild to check owner
+	guild, err := s.Guild(guildID)
+	if err != nil || guild == nil {
+		return 0, err
+	}
+
+	// Owner has all permissions
+	if guild.OwnerID == member.User.ID {
+		return discordgo.PermissionAll, nil
+	}
+
+	// Calculate permissions from roles
+	permissions := int64(0)
+	for _, roleID := range member.Roles {
+		role, err := s.State.Role(guildID, roleID)
+		if err != nil {
+			// Try to fetch role if not in state
+			roles, err := s.GuildRoles(guildID)
+			if err != nil {
+				continue
+			}
+			for _, r := range roles {
+				if r.ID == roleID {
+					role = r
+					break
+				}
+			}
+			if role == nil {
+				continue
+			}
+		}
+		permissions |= role.Permissions
+	}
+
+	// @everyone role permissions
+	if everyoneRole, err := s.State.Role(guildID, guildID); err == nil && everyoneRole != nil {
+		permissions |= everyoneRole.Permissions
+	}
+
+	return permissions, nil
+}
+
+// DashboardStaff is defined in package types (permissions.go).
+type DashboardStaff = types.DashboardStaff
+
+// GuildStaff lists the members whose Discord permissions give them the full
+// dashboard (owner, Administrator, Manage Server). roles is the guild's role
+// list; the member list is paged, so a very large guild costs one request per
+// 1000 members.
+func GuildStaff(s *discordgo.Session, guildID string, roles []*discordgo.Role) ([]DashboardStaff, error) {
+	guild, err := s.Guild(guildID)
+	if err != nil {
+		return nil, err
+	}
+	perms := make(map[string]int64, len(roles))
+	for _, r := range roles {
+		if r != nil {
+			perms[r.ID] = r.Permissions
+		}
+	}
+
+	staff := []DashboardStaff{}
+	after := ""
+	for {
+		page, err := s.GuildMembers(guildID, after, 1000)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range page {
+			if m == nil || m.User == nil || m.User.Bot {
+				continue
+			}
+			via := ""
+			if m.User.ID == guild.OwnerID {
+				via = "Owner"
+			} else {
+				p := perms[guildID] // @everyone
+				for _, id := range m.Roles {
+					p |= perms[id]
+				}
+				if p&discordgo.PermissionAdministrator != 0 {
+					via = "Administrator"
+				} else if p&discordgo.PermissionManageGuild != 0 {
+					via = "Manage Server"
+				}
+			}
+			if via == "" {
+				continue
+			}
+			name := m.Nick
+			if name == "" {
+				name = m.User.GlobalName
+			}
+			if name == "" {
+				name = m.User.Username
+			}
+			staff = append(staff, DashboardStaff{ID: m.User.ID, Name: name, AvatarURL: m.User.AvatarURL("64"), Via: via})
+		}
+		if len(page) < 1000 {
+			return staff, nil
+		}
+		after = page[len(page)-1].User.ID
+	}
+}
+
+// Custom events are what a server has the bot do when something happens in Discord (the dashboard's Events page): post a
+// ============================================================================
+// Event Configuration
+// ============================================================================
+
+// The guild config's "event_configs" map mirrors "commands": one entry per
+// registered event with an on/off switch and the roles, channels and categories
+// the event's Requirements declare. An admin assigns them from the dashboard's
+// Events page; the event reads them back with the helpers below.
+
+const (
+	eventConfigField = "event_configs"
+	eventConfigTTL   = 30 * time.Second
+)
+
+type eventConfigEntry struct {
+	configs map[string]types.EventConfig
+	expires time.Time
+}
+
+var (
+	eventConfigMu    sync.Mutex
+	eventConfigCache = map[string]eventConfigEntry{}
+)
+
+// SeedEventConfigs adds a default EventConfig for every registered event the
+// guild doesn't have one for yet, and keeps each entry's requirement slots in
+// step with what the event declares (assigned IDs are kept).
+func SeedEventConfigs(guildID string) error {
+	existing, err := loadEventConfigs(guildID, false)
+	if err != nil {
+		return err
+	}
+
+	changed := false
+	for _, ev := range EventRegistry {
+		if ev == nil || ev.Name == "" {
+			continue
+		}
+		cfg, ok := existing[ev.Name]
+		if !ok {
+			cfg = types.EventConfig{Name: ev.Name, Description: ev.Description, IsEnabled: !ev.Disabled || ev.System, IsSystem: ev.System}
+			changed = true
+		}
+		if cfg.IsSystem != ev.System {
+			cfg.IsSystem = ev.System
+			if ev.System {
+				cfg.IsEnabled = true
+			}
+			changed = true
+		}
+		if cfg.Description != ev.Description {
+			cfg.Description = ev.Description
+			changed = true
+		}
+		if reconcileEventRequirements(&cfg, ev.Requirements) {
+			changed = true
+		}
+		existing[ev.Name] = cfg
+	}
+	if !changed {
+		return nil
+	}
+
+	if err := database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, eventConfigField, existing); err != nil {
+		return err
+	}
+	InvalidateEventConfig(guildID)
+	return nil
+}
+
+func reconcileEventRequirements(cfg *types.EventConfig, requirements []types.Requirement) bool {
+	cc := types.CommandConfig{RequiredRoles: cfg.RequiredRoles, RequiredChannels: cfg.RequiredChannels, RequiredCategories: cfg.RequiredCategories}
+	changed := reconcileRequirements(&cc, requirements)
+	cfg.RequiredRoles, cfg.RequiredChannels, cfg.RequiredCategories = cc.RequiredRoles, cc.RequiredChannels, cc.RequiredCategories
+	return changed
+}
+
+// InvalidateEventConfig drops the cached event configs (call after an edit).
+func InvalidateEventConfig(guildID string) {
+	eventConfigMu.Lock()
+	delete(eventConfigCache, guildID)
+	eventConfigMu.Unlock()
+}
+
+func loadEventConfigs(guildID string, useCache bool) (map[string]types.EventConfig, error) {
+	if useCache {
+		eventConfigMu.Lock()
+		e, ok := eventConfigCache[guildID]
+		eventConfigMu.Unlock()
+		if ok && time.Now().Before(e.expires) {
+			return e.configs, nil
+		}
+	}
+
+	out := map[string]types.EventConfig{}
+	raw, err := database.Must().GuildConfig.Field(guildID, eventConfigField)
+	if err != nil && !sdk.IsNotFound(err) {
+		return nil, err
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, fmt.Errorf("decode %s: %w", eventConfigField, err)
+		}
+	}
+	if out == nil {
+		out = map[string]types.EventConfig{}
+	}
+
+	eventConfigMu.Lock()
+	eventConfigCache[guildID] = eventConfigEntry{configs: out, expires: time.Now().Add(eventConfigTTL)}
+	eventConfigMu.Unlock()
+	return out, nil
+}
+
+// LoadEventConfig returns the guild's config for one event (cached briefly).
+func LoadEventConfig(guildID, eventName string) (types.EventConfig, bool) {
+	configs, err := loadEventConfigs(guildID, true)
+	if err != nil {
+		return types.EventConfig{}, false
+	}
+	cfg, ok := configs[eventName]
+	return cfg, ok
+}
+
+// EventEnabled reports whether the guild has the event switched on. An event
+// without a stored config (not seeded yet) or an unreadable config stays on.
+func EventEnabled(guildID, eventName string) bool {
+	cfg, ok := LoadEventConfig(guildID, eventName)
+	return !ok || cfg.IsEnabled || cfg.IsSystem
+}
+
+// EventRequirementID returns the snowflake an admin assigned to the event's
+// requirement key of the given type ("" when unset or unknown).
+func EventRequirementID(guildID, eventName string, reqType types.RequirementType, key string) string {
+	cfg, ok := LoadEventConfig(guildID, eventName)
+	if !ok {
+		return ""
+	}
+	switch reqType {
+	case types.ReqRole:
+		return cfg.RequiredRoles[key].ID
+	case types.ReqChannel:
+		return cfg.RequiredChannels[key].ID
+	case types.ReqCategory:
+		return cfg.RequiredCategories[key].ID
+	}
+	return ""
+}
+
+// ── merged from event_embeds.go ──
+
+// ============================================================================
+// party
+// ============================================================================
+
+// ============================================================================
+// punishment
+// ============================================================================
+
+// ============================================================================
+// queue
+// ============================================================================
+
+// ============================================================================
+// guild
+// ============================================================================
+
+// ============================================================================
+// ticket
+// ============================================================================
+
+// ============================================================================
+// player
+// ============================================================================
+
+// ============================================================================
+// plan
+// ============================================================================
+
+// ============================================================================
+// command
+// ============================================================================
+
+// ============================================================================
+// interaction
+// ============================================================================
+
+// ============================================================================
+// The hosted game's embeds (game_helper.go renders them; a guild's changes are laid over these defaults)
+// ============================================================================
+
+// ============================================================================
+// punishments and ELO decay (posted by the trackers)
+// ============================================================================
+// SeedCommandConfigs brings the guild's commands map in line with the registered commands: every registered
+// command that has no entry gets a default one, the category of existing entries follows the command's package, an
+// entry of a renamed command moves to its new name (keeping the admin's settings), and an entry of a command that
+// no longer exists is removed. Custom commands (made on the dashboard, they carry a builder) are never removed.
+func SeedCommandConfigs(guildID string) error {
+	config, err := database.Must().GuildConfig.GetFresh(guildID)
+	if err != nil {
+		return err
+	}
+
+	existing := decodeCommandsMap(config.Commands)
+	if !reconcileCommandConfigs(existing, CommandRegistry) {
+		return nil
+	}
+	err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, "commands", existing)
+	return err
+}
+
+// renamedCommands maps the old name of a command to its current one, so an admin's settings survive the rename.
+// Add a line here whenever a command is renamed.
+var renamedCommands = map[string]string{"claimelo": "claim", "voidmatch": "void"}
+
+// reconcileCommandConfigs edits `existing` to match the registry and reports whether it changed anything.
+func reconcileCommandConfigs(existing map[string]types.CommandConfig, registry []*types.Command) bool {
+	changed := false
+
+	live := map[string]bool{}
+	for _, cmd := range registry {
+		if cmd != nil && cmd.Name != "" {
+			live[cmd.Name] = true
+		}
+	}
+
+	for old, current := range renamedCommands {
+		cfg, ok := existing[old]
+		if !ok || len(cfg.Builder) > 0 || !live[current] {
+			continue
+		}
+		if _, taken := existing[current]; !taken {
+			cfg.Name = current
+			existing[current] = cfg
+		}
+		delete(existing, old)
+		changed = true
+	}
+
+	for _, cmd := range registry {
+		if cmd == nil || cmd.Data == nil || cmd.Name == "" {
+			continue
+		}
+		cfg, ok := existing[cmd.Name]
+		if !ok {
+			existing[cmd.Name] = defaultCommandConfig(cmd)
+			changed = true
+			continue
+		}
+		updated := reconcileRequirements(&cfg, cmd.Requirements)
+		if cmd.Category != "" && cfg.Category != cmd.Category {
+			cfg.Category = cmd.Category
+			updated = true
+		}
+		if cfg.Name != cmd.Name {
+			cfg.Name = cmd.Name
+			updated = true
+		}
+		if cmd.Description != "" && cfg.Description != cmd.Description {
+			cfg.Description = cmd.Description
+			updated = true
+		}
+		if want := responsesOf(cmd.Name); !slices.Equal(cfg.Responses, want) {
+			cfg.Responses = want
+			updated = true
+		}
+		if want := layoutsOf(cmd.Name); !slices.EqualFunc(cfg.Layouts, want, func(a, b types.CommandLayout) bool {
+			return a.Key == b.Key && a.Label == b.Label && a.Default == b.Default && a.Repeats == b.Repeats && slices.Equal(a.Vars, b.Vars)
+		}) {
+			cfg.Layouts = want
+			updated = true
+		}
+		if updated {
+			existing[cmd.Name] = cfg
+			changed = true
+		}
+	}
+
+	// An empty registry means the commands did not load: that must never wipe a guild's settings.
+	if len(live) > 0 {
+		for name, cfg := range existing {
+			if !live[name] && len(cfg.Builder) == 0 {
+				delete(existing, name)
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
+func defaultCommandConfig(cmd *types.Command) types.CommandConfig {
+	cfg := types.CommandConfig{
+		Name:            cmd.Name,
+		Category:        cmd.Category,
+		Description:     cmd.Description,
+		Aliases:         append([]string{}, cmd.PrefixAliases...),
+		IsEnabled:       !cmd.Disabled,
+		IsSlashEnabled:  true,
+		IsPrefixEnabled: true,
+		Cooldown:        int(cmd.Cooldown.Seconds()),
+	}
+	reconcileRequirements(&cfg, cmd.Requirements)
+	cfg.Responses = responsesOf(cmd.Name)
+	cfg.Layouts = layoutsOf(cmd.Name)
+	return cfg
+}
+
+func reconcileRequirements(cfg *types.CommandConfig, requirements []types.Requirement) bool {
+	changed := false
+	changed = reconcileRequirementMap(&cfg.RequiredRoles, requirements, types.ReqRole) || changed
+	changed = reconcileRequirementMap(&cfg.RequiredChannels, requirements, types.ReqChannel) || changed
+	changed = reconcileRequirementMap(&cfg.RequiredCategories, requirements, types.ReqCategory) || changed
+	return changed
+}
+
+// renamedRequirements maps the old key of a requirement to its current one, so an admin's assignment survives the rename.
+var renamedRequirements = map[string]string{"chat_mute": "chat_muted_role", "queue_ban": "queue_banned_role", "chat_vc": "vc_muted_role"}
+
+func reconcileRequirementMap(m *map[string]types.RequirementSlot, requirements []types.Requirement, reqType types.RequirementType) bool {
+	declared := map[string]bool{} // key -> Required
+	for _, req := range requirements {
+		if req.Type != reqType || req.Key == "" {
+			continue
+		}
+		declared[req.Key] = !req.Optional
+	}
+
+	changed := false
+	for old, current := range renamedRequirements {
+		if _, wanted := declared[current]; !wanted {
+			continue
+		}
+		if slot, had := (*m)[old]; had {
+			if _, has := (*m)[current]; !has {
+				(*m)[current] = slot
+				changed = true
+			}
+		}
+	}
+	for key, required := range declared {
+		slot, ok := (*m)[key]
+		if !ok {
+			if *m == nil {
+				*m = map[string]types.RequirementSlot{}
+			}
+			(*m)[key] = types.RequirementSlot{Required: required}
+			changed = true
+			continue
+		}
+		if slot.Required != required {
+			slot.Required = required
+			(*m)[key] = slot
+			changed = true
+		}
+	}
+	for key := range *m {
+		if _, ok := declared[key]; !ok {
+			delete(*m, key)
+			changed = true
+		}
+	}
+	return changed
+}
+
+// CommandRequirementSlots returns cmdName's Required* map for the given
+func CommandRequirementSlots(guildID, cmdName string, reqType types.RequirementType) (map[string]types.RequirementSlot, bool, error) {
+	config, err := database.Must().GuildConfig.Get(guildID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	cfg, ok := decodeCommandsMap(config.Commands)[cmdName]
+	if !ok {
+		return nil, false, nil
+	}
+	switch reqType {
+	case types.ReqRole:
+		return cfg.RequiredRoles, true, nil
+	case types.ReqChannel:
+		return cfg.RequiredChannels, true, nil
+	case types.ReqCategory:
+		return cfg.RequiredCategories, true, nil
+	default:
+		return nil, true, nil
+	}
+}
+
+// RequirementSlotID returns the snowflake ID assigned to cmdName's requirement
+// key of the given type (empty if unset, or if the command/key don't exist).
+func RequirementSlotID(guildID, cmdName string, reqType types.RequirementType, key string) (string, error) {
+	slots, _, err := CommandRequirementSlots(guildID, cmdName, reqType)
+	if err != nil {
+		return "", err
+	}
+	return slots[key].ID, nil
+}
+
+// SetRequirementSlotID assigns id as the snowflake for cmdName's requirement
+// key of the given type, leaving the rest of its CommandConfig untouched. A
+// requirement is identified by its type and key, so the same assignment is
+// made on every other command that declares it (chatmute and chatunmute share
+// the chat-muted role), exactly as the dashboard does. Used when an admin
+// resolves a missing requirement inline (see requirement_fix.go's
+// HandleRequirementFixSelect) or explicitly via /config role|channel|category set.
+func SetRequirementSlotID(actor, guildID, cmdName string, reqType types.RequirementType, key, id string) error {
+	config, err := database.Must().GuildConfig.GetFresh(guildID)
+	if err != nil {
+		return err
+	}
+
+	commandsMap := decodeCommandsMap(config.Commands)
+	if _, ok := commandsMap[cmdName]; !ok {
+		return fmt.Errorf("no command config found for %q", cmdName)
+	}
+	if !assignRequirementSlot(commandsMap, cmdName, reqType, key, id) {
+		return fmt.Errorf("unsupported requirement type %q", reqType)
+	}
+
+	err = database.Must().GuildConfig.SaveField(actor, guildID, "commands", commandsMap)
+	return err
+}
+
+// assignRequirementSlot points the slot (reqType, key) at id on cmdName and on every command that already has that
+// slot. It reports false for an unknown requirement type.
+func assignRequirementSlot(commandsMap map[string]types.CommandConfig, cmdName string, reqType types.RequirementType, key, id string) bool {
+	slotsOf := func(cfg *types.CommandConfig) *map[string]types.RequirementSlot {
+		switch reqType {
+		case types.ReqRole:
+			return &cfg.RequiredRoles
+		case types.ReqChannel:
+			return &cfg.RequiredChannels
+		case types.ReqCategory:
+			return &cfg.RequiredCategories
+		}
+		return nil
+	}
+	for name, cfg := range commandsMap {
+		m := slotsOf(&cfg)
+		if m == nil {
+			return false
+		}
+		slot, has := (*m)[key]
+		if name != cmdName && !has {
+			continue
+		}
+		if *m == nil {
+			*m = map[string]types.RequirementSlot{}
+		}
+		slot.ID = id
+		(*m)[key] = slot
+		commandsMap[name] = cfg
+	}
+	return true
 }

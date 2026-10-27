@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -40,11 +38,11 @@ func executeGameMapsCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// Fetch the registered maps & modes for this guild
 	maps, err := helpers.GuildMetaMaps(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorMapsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorMapsEmbed(i))
 	}
 	modes, err := helpers.GuildMetaModes(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorMapsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorMapsEmbed(i))
 	}
 
 	// Filter the maps that are enabled and available for rotation
@@ -57,7 +55,7 @@ func executeGameMapsCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	// If no maps are in rotation, return an error embed
 	if len(rotation) == 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.EmptyMapsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.EmptyMapsEmbed(i))
 	}
 
 	// Get the active mode names for this guild
@@ -66,7 +64,7 @@ func executeGameMapsCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		targetModes = []string{"Default"}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.MapsRotationEmbed(i, rotation, targetModes))
+	return helpers.EditInteractionEmbed(s, i, helpers.MapsRotationEmbed(i, rotation, targetModes))
 }
 
 // ============================================================================

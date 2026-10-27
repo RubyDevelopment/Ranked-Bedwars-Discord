@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -60,14 +58,14 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// 1. Validate the Game Channel & Draft
 	game, ok := helpers.Games.ByChannel(i.ChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickNotGameChannelEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickNotGameChannelEmbed(i))
 	}
 	draftView, err := helpers.Games.Draft(game.ID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickNoActiveDraftEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickNoActiveDraftEmbed(i))
 	}
 	if draftView.Turn < 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickDraftCompleteEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickDraftCompleteEmbed(i))
 	}
 
 	// 2. Resolve the Target Player
@@ -77,13 +75,13 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	} else if name := helpers.SubOptionString(opts, "name"); name != "" {
 		targetUserID = findPlayerByUsername(game, draftView.Pool, name)
 		if targetUserID == "" {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickPlayerNotFoundEmbed(i, name))
+			return helpers.EditInteractionEmbed(s, i, helpers.QueuePickPlayerNotFoundEmbed(i, name))
 		}
 	} else {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickMissingOptionEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickMissingOptionEmbed(i))
 	}
 	if !slices.Contains(draftView.Pool, targetUserID) {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickInvalidSelectionEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueuePickInvalidSelectionEmbed(i))
 	}
 
 	// 3. Make the Pick
@@ -95,7 +93,7 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	if picked, ok := game.Player(targetUserID); ok {
 		targetUsername = picked.Username
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.QueuePickSuccessEmbed(i, targetUsername, actor))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueuePickSuccessEmbed(i, targetUsername, actor))
 }
 
 // ============================================================================

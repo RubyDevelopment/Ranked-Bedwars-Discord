@@ -10,7 +10,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -67,16 +66,16 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeIssueInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeIssueInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeIssueBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeIssueBotTargetEmbed(i))
 	}
 
 	// 2. Validate Reason
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
 	if reason == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeIssueReasonRequiredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeIssueReasonRequiredEmbed(i))
 	}
 	strikeType := strings.TrimSpace(helpers.OptionString(i, "type"))
 	actor := helpers.InteractionUserID(i)
@@ -89,7 +88,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 4. Resolve Target Profile
 	playerID, profile, err := helpers.EnsureModerationTarget(actor, i.GuildID, target)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeIssueEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeIssueEmbed(i))
 	}
 	pid := sdk.UintToString(playerID)
 	username := target.Username
@@ -98,7 +97,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, pid, 0)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeIssueEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeIssueEmbed(i))
 	}
 
 	// 5. The ladder picks the step for this offence count
@@ -112,7 +111,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	if plan.EloRemoval > 0 {
 		taken, err := helpers.Elo.StrikePenalty(actor, i.GuildID, target.ID, plan.EloRemoval)
 		if err != nil && taken == nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeIssueEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeIssueEmbed(i))
 		}
 		newStrike.EloOld, newStrike.EloNew, newStrike.EloChange = taken.Before, taken.After, taken.After-taken.Before
 	}
@@ -121,7 +120,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		if newStrike.EloChange < 0 { // no strike was recorded: give the ELO back
 			_ = helpers.Elo.RefundStrike(actor, i.GuildID, target.ID, &models.PlayerStrikesModel{SeasonID: stats.SeasonID, EloChange: newStrike.EloChange})
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeIssueEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeIssueEmbed(i))
 	}
 
 	// 7. Apply the step's punishment (warning, mute, queue ban...) through the same path as the punishment commands.
@@ -142,7 +141,7 @@ func executeStrikeIssueCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		}
 	}
 
-	embed := cmdcfg.StrikeIssueSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
+	embed := helpers.StrikeIssueSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
 	embed.Description += notes
 	helpers.LogCommandResult(s, i.GuildID, "strike_issue", actor, embed)
 	helpers.SendPunishmentAlert(s, i.GuildID, "strike_issue", "applied", target, username, "strike", "", reason)

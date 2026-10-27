@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -48,15 +47,15 @@ var PlayerScreenshareCommand = &types.Command{
 func executePlayerScreenshareCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	svc := database.Get()
 	if svc == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerScreenshareDatabaseUnavailableEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareDatabaseUnavailableEmbed(i))
 	}
 
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerScreenshareInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerScreenshareBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareBotTargetEmbed(i))
 	}
 
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
@@ -66,5 +65,5 @@ func executePlayerScreenshareCommand(s *discordgo.Session, i *discordgo.Interact
 		username = view.Config.Username
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerScreenshareSubmittedEmbed(i, target, username, reason))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerScreenshareSubmittedEmbed(i, target, username, reason))
 }

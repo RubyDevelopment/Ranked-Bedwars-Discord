@@ -10,7 +10,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -55,7 +54,7 @@ func executeQueueStatusCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	// 3. Neither a game nor a queue channel
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueStatusNoGameOrQueueEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueueStatusNoGameOrQueueEmbed(i))
 }
 
 // ============================================================================
@@ -67,10 +66,10 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 	// Get season info
 	seasonKey, _, err := helpers.ActiveSeasonKey(guildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueStatusEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueStatusEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueStatusNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueStatusNoActiveSeasonEmbed(i))
 	}
 
 	// Build fields for teams
@@ -87,7 +86,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 			for _, p := range teamPlayers {
 				assignedPlayerIDs[p.UserID] = true
 			}
-			fields = append(fields, queueRosterField(guildID, cmdcfg.LayoutQueuesTeamTitle, teamName, teamPlayers))
+			fields = append(fields, queueRosterField(guildID, helpers.LayoutQueuesTeamTitle, teamName, teamPlayers))
 		}
 	}
 
@@ -100,7 +99,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 	}
 
 	if len(unassigned) > 0 {
-		fields = append(fields, queueRosterField(guildID, cmdcfg.LayoutQueuesPoolTitle, "", unassigned))
+		fields = append(fields, queueRosterField(guildID, helpers.LayoutQueuesPoolTitle, "", unassigned))
 	}
 
 	// Check for active draft
@@ -114,12 +113,12 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 			}
 		}
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  helpers.FillLayout(guildID, cmdcfg.LayoutQueuesDraftTitle, nil),
-			Value: helpers.FillLayout(guildID, cmdcfg.LayoutQueuesDraftTurn, map[string]string{"captain": captainName, "captain_mention": "<@" + draftView.Captains[draftView.Turn] + ">"}),
+			Name:  helpers.FillLayout(guildID, helpers.LayoutQueuesDraftTitle, nil),
+			Value: helpers.FillLayout(guildID, helpers.LayoutQueuesDraftTurn, map[string]string{"captain": captainName, "captain_mention": "<@" + draftView.Captains[draftView.Turn] + ">"}),
 		})
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueStatusGameStatsEmbed(i, game, seasonKey, fields))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueueStatusGameStatsEmbed(i, game, seasonKey, fields))
 }
 
 // queueRosterField is a team's (or the draft pool's) field: its heading and a row for each player, from the layouts.
@@ -128,7 +127,7 @@ func queueRosterField(guildID, titleLayout, team string, players []helpers.GameP
 	total := 0
 	for _, p := range players {
 		total += p.EloBefore
-		rows = append(rows, helpers.FillLayout(guildID, cmdcfg.LayoutQueuesPlayer, map[string]string{
+		rows = append(rows, helpers.FillLayout(guildID, helpers.LayoutQueuesPlayer, map[string]string{
 			"mention": "<@" + p.UserID + ">", "id": p.UserID, "name": p.Username, "elo": strconv.Itoa(p.EloBefore), "team": team,
 		}))
 	}
@@ -147,22 +146,22 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 	// Get the queue configuration binding of the channel
 	snapshot, err := helpers.Queues.Snapshot(guildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueStatusEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueStatusEmbed(i))
 	}
 	binding, ok := snapshot.Bindings[voiceChannelID]
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueStatusNotQueueChannelEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueStatusNotQueueChannelEmbed(i))
 	}
 
 	// Check if queues are paused
 	if helpers.Queues.IsPaused(guildID) {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueStatusClosedEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueStatusClosedEmbed(i))
 	}
 
 	// Get the members of the voice channel
 	guild, err := s.State.Guild(guildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueStatusEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueStatusEmbed(i))
 	}
 	var vcMembers []string
 	for _, vs := range guild.VoiceStates {
@@ -175,12 +174,12 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 	// the channel's order.
 	verdicts := make([]string, len(vcMembers)) // "" = eligible, otherwise the line explaining why not
 	blockedRow := func(userID, reason string) string {
-		return helpers.FillLayout(guildID, cmdcfg.LayoutQueuesBlockedRow, map[string]string{"mention": "<@" + userID + ">", "id": userID, "reason": helpers.FillLayout(guildID, reason, nil)})
+		return helpers.FillLayout(guildID, helpers.LayoutQueuesBlockedRow, map[string]string{"mention": "<@" + userID + ">", "id": userID, "reason": helpers.FillLayout(guildID, reason, nil)})
 	}
 	var wg sync.WaitGroup
 	for n, userID := range vcMembers {
 		if helpers.Games.InGame(guildID, userID) {
-			verdicts[n] = blockedRow(userID, cmdcfg.LayoutQueuesReasonInGame)
+			verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonInGame)
 			continue
 		}
 		wg.Add(1)
@@ -188,11 +187,11 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 			defer wg.Done()
 			player, err := database.Must().Player.Get(guildID, userID)
 			if err != nil {
-				verdicts[n] = blockedRow(userID, cmdcfg.LayoutQueuesReasonNoReg)
+				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonNoReg)
 				return
 			}
 			if hasQueueRestriction(guildID, sdk.UintToString(player.Player.ID)) {
-				verdicts[n] = blockedRow(userID, cmdcfg.LayoutQueuesReasonBanned)
+				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonBanned)
 			}
 		}()
 	}
@@ -213,31 +212,31 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 	var fields []*discordgo.MessageEmbedField
 	if len(eligible) < totalSlots {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  helpers.FillLayout(guildID, cmdcfg.LayoutQueuesBlockingTitle, counts),
-			Value: helpers.FillLayout(guildID, cmdcfg.LayoutQueuesBlockingText, counts),
+			Name:  helpers.FillLayout(guildID, helpers.LayoutQueuesBlockingTitle, counts),
+			Value: helpers.FillLayout(guildID, helpers.LayoutQueuesBlockingText, counts),
 		})
 	}
 
 	if len(blocked) > 0 {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  helpers.FillLayout(guildID, cmdcfg.LayoutQueuesBlockedTitle, map[string]string{"count": strconv.Itoa(len(blocked))}),
+			Name:  helpers.FillLayout(guildID, helpers.LayoutQueuesBlockedTitle, map[string]string{"count": strconv.Itoa(len(blocked))}),
 			Value: strings.Join(blocked, "\n"),
 		})
 	}
 
 	if len(fields) == 0 && len(eligible) >= totalSlots {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  helpers.FillLayout(guildID, cmdcfg.LayoutQueuesReadyTitle, counts),
-			Value: helpers.FillLayout(guildID, cmdcfg.LayoutQueuesReadyText, counts),
+			Name:  helpers.FillLayout(guildID, helpers.LayoutQueuesReadyTitle, counts),
+			Value: helpers.FillLayout(guildID, helpers.LayoutQueuesReadyText, counts),
 		})
 	}
 
-	description := helpers.FillLayout(guildID, cmdcfg.LayoutQueuesDetails, map[string]string{
+	description := helpers.FillLayout(guildID, helpers.LayoutQueuesDetails, map[string]string{
 		"channel": "<#" + voiceChannelID + ">", "mode": binding.Mode.Name, "teams": strconv.Itoa(binding.Mode.TeamCount),
 		"per_team": strconv.Itoa(binding.Mode.PlayersPerTeam), "slots": counts["slots"], "eligible": counts["eligible"], "present": counts["present"],
 	})
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueStatusQueueEmbed(i, binding.Mode.Name, description, fields))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueueStatusQueueEmbed(i, binding.Mode.Name, description, fields))
 }
 
 // hasQueueRestriction reports whether the player has an active queue or server ban.

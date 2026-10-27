@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -61,29 +60,29 @@ func executePlayerForceTransferCommand(s *discordgo.Session, i *discordgo.Intera
 	newUser := helpers.OptionUser(s, i, "new_user")
 
 	if oldUser == nil || newUser == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferInvalidTargetEmbed(i))
 	}
 	if oldUser.ID == newUser.ID {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferSameUserEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferSameUserEmbed(i))
 	}
 
 	// 2. Fetch Source Player Profile
 	oldView, err := database.Must().Player.Get(i.GuildID, oldUser.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferSourceNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferSourceNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceTransferEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceTransferEmbed(i))
 	}
 	if oldView.Config.Username == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferSourceProfileNotFoundEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferSourceProfileNotFoundEmbed(i))
 	}
 
 	// 3. Check Target Registration Status
 	if newView, err := database.Must().Player.Get(i.GuildID, newUser.ID); err == nil && newView.Player.ID != oldView.Player.ID {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferDestinationAlreadyRegisteredEmbed(i, newUser, newView.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferDestinationAlreadyRegisteredEmbed(i, newUser, newView.Config.Username))
 	} else if err != nil && !sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceTransferEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceTransferEmbed(i))
 	}
 
 	// 4. Update Snowflake Link in Database
@@ -93,9 +92,9 @@ func executePlayerForceTransferCommand(s *discordgo.Session, i *discordgo.Intera
 
 	if _, err := database.Must().Player.SetSnowflake(actor, pid, newUser.ID); err != nil {
 		if sdk.IsConflict(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferConflictEmbed(i, newUser))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferConflictEmbed(i, newUser))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceTransferEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceTransferEmbed(i))
 	}
 
 	// 5. Reset Source Member Profile
@@ -108,10 +107,10 @@ func executePlayerForceTransferCommand(s *discordgo.Session, i *discordgo.Intera
 	if newMember, _ := helpers.FetchGuildMember(s, i.GuildID, newUser.ID); newMember != nil {
 		syncActions, syncErr := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, oldView.Player.ID, newUser.ID)
 		if syncErr != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceTransferEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceTransferEmbed(i))
 		}
 		actions = syncActions
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceTransferSuccessEmbed(i, oldUser, newUser, username, actions))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceTransferSuccessEmbed(i, oldUser, newUser, username, actions))
 }

@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -67,7 +65,7 @@ func executeGamePartialVoidCommand(s *discordgo.Session, i *discordgo.Interactio
 	// 2. Fetch the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GamePartialVoidNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GamePartialVoidNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Partially Void the Game
@@ -76,5 +74,5 @@ func executeGamePartialVoidCommand(s *discordgo.Session, i *discordgo.Interactio
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("partially void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.GamePartialVoidSuccessEmbed(i, gameNumber, loserIDs))
+	return helpers.EditInteractionEmbed(s, i, helpers.GamePartialVoidSuccessEmbed(i, gameNumber, loserIDs))
 }

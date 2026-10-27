@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +16,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
+	appLog "ranked-bedwars/src/utility"
 	baseutility "ranked-bedwars/src/utility"
 )
 
@@ -474,269 +474,7 @@ func ensureGuildInvite(s *discordgo.Session, guildID string) error {
 // Command Configuration Seeding
 // ============================================================================
 
-// SeedCommandConfigs brings the guild's commands map in line with the registered commands: every registered
-// command that has no entry gets a default one, the category of existing entries follows the command's package, an
-// entry of a renamed command moves to its new name (keeping the admin's settings), and an entry of a command that
-// no longer exists is removed. Custom commands (made on the dashboard, they carry a builder) are never removed.
-func SeedCommandConfigs(guildID string) error {
-	config, err := database.Must().GuildConfig.GetFresh(guildID)
-	if err != nil {
-		return err
-	}
-
-	existing := decodeCommandsMap(config.Commands)
-	if !reconcileCommandConfigs(existing, CommandRegistry) {
-		return nil
-	}
-	err = database.Must().GuildConfig.SaveField(sdk.SystemActor, guildID, "commands", existing)
-	return err
-}
-
-// renamedCommands maps the old name of a command to its current one, so an admin's settings survive the rename.
-// Add a line here whenever a command is renamed.
-var renamedCommands = map[string]string{"claimelo": "claim", "voidmatch": "void"}
-
-// reconcileCommandConfigs edits `existing` to match the registry and reports whether it changed anything.
-func reconcileCommandConfigs(existing map[string]types.CommandConfig, registry []*types.Command) bool {
-	changed := false
-
-	live := map[string]bool{}
-	for _, cmd := range registry {
-		if cmd != nil && cmd.Name != "" {
-			live[cmd.Name] = true
-		}
-	}
-
-	for old, current := range renamedCommands {
-		cfg, ok := existing[old]
-		if !ok || len(cfg.Builder) > 0 || !live[current] {
-			continue
-		}
-		if _, taken := existing[current]; !taken {
-			cfg.Name = current
-			existing[current] = cfg
-		}
-		delete(existing, old)
-		changed = true
-	}
-
-	for _, cmd := range registry {
-		if cmd == nil || cmd.Data == nil || cmd.Name == "" {
-			continue
-		}
-		cfg, ok := existing[cmd.Name]
-		if !ok {
-			existing[cmd.Name] = defaultCommandConfig(cmd)
-			changed = true
-			continue
-		}
-		updated := reconcileRequirements(&cfg, cmd.Requirements)
-		if cmd.Category != "" && cfg.Category != cmd.Category {
-			cfg.Category = cmd.Category
-			updated = true
-		}
-		if cfg.Name != cmd.Name {
-			cfg.Name = cmd.Name
-			updated = true
-		}
-		if cmd.Description != "" && cfg.Description != cmd.Description {
-			cfg.Description = cmd.Description
-			updated = true
-		}
-		if want := responsesOf(cmd.Name); !slices.Equal(cfg.Responses, want) {
-			cfg.Responses = want
-			updated = true
-		}
-		if want := layoutsOf(cmd.Name); !slices.EqualFunc(cfg.Layouts, want, func(a, b types.CommandLayout) bool {
-			return a.Key == b.Key && a.Label == b.Label && a.Default == b.Default && a.Repeats == b.Repeats && slices.Equal(a.Vars, b.Vars)
-		}) {
-			cfg.Layouts = want
-			updated = true
-		}
-		if updated {
-			existing[cmd.Name] = cfg
-			changed = true
-		}
-	}
-
-	// An empty registry means the commands did not load: that must never wipe a guild's settings.
-	if len(live) > 0 {
-		for name, cfg := range existing {
-			if !live[name] && len(cfg.Builder) == 0 {
-				delete(existing, name)
-				changed = true
-			}
-		}
-	}
-	return changed
-}
-
-func defaultCommandConfig(cmd *types.Command) types.CommandConfig {
-	cfg := types.CommandConfig{
-		Name:            cmd.Name,
-		Category:        cmd.Category,
-		Description:     cmd.Description,
-		Aliases:         append([]string{}, cmd.PrefixAliases...),
-		IsEnabled:       !cmd.Disabled,
-		IsSlashEnabled:  true,
-		IsPrefixEnabled: true,
-		Cooldown:        int(cmd.Cooldown.Seconds()),
-	}
-	reconcileRequirements(&cfg, cmd.Requirements)
-	cfg.Responses = responsesOf(cmd.Name)
-	cfg.Layouts = layoutsOf(cmd.Name)
-	return cfg
-}
-
 // reconcileRequirements syncs cfg's Required* maps to match requirements
-
-func reconcileRequirements(cfg *types.CommandConfig, requirements []types.Requirement) bool {
-	changed := false
-	changed = reconcileRequirementMap(&cfg.RequiredRoles, requirements, types.ReqRole) || changed
-	changed = reconcileRequirementMap(&cfg.RequiredChannels, requirements, types.ReqChannel) || changed
-	changed = reconcileRequirementMap(&cfg.RequiredCategories, requirements, types.ReqCategory) || changed
-	return changed
-}
-
-// renamedRequirements maps the old key of a requirement to its current one, so an admin's assignment survives the rename.
-var renamedRequirements = map[string]string{"chat_mute": "chat_muted_role", "queue_ban": "queue_banned_role", "chat_vc": "vc_muted_role"}
-
-func reconcileRequirementMap(m *map[string]types.RequirementSlot, requirements []types.Requirement, reqType types.RequirementType) bool {
-	declared := map[string]bool{} // key -> Required
-	for _, req := range requirements {
-		if req.Type != reqType || req.Key == "" {
-			continue
-		}
-		declared[req.Key] = !req.Optional
-	}
-
-	changed := false
-	for old, current := range renamedRequirements {
-		if _, wanted := declared[current]; !wanted {
-			continue
-		}
-		if slot, had := (*m)[old]; had {
-			if _, has := (*m)[current]; !has {
-				(*m)[current] = slot
-				changed = true
-			}
-		}
-	}
-	for key, required := range declared {
-		slot, ok := (*m)[key]
-		if !ok {
-			if *m == nil {
-				*m = map[string]types.RequirementSlot{}
-			}
-			(*m)[key] = types.RequirementSlot{Required: required}
-			changed = true
-			continue
-		}
-		if slot.Required != required {
-			slot.Required = required
-			(*m)[key] = slot
-			changed = true
-		}
-	}
-	for key := range *m {
-		if _, ok := declared[key]; !ok {
-			delete(*m, key)
-			changed = true
-		}
-	}
-	return changed
-}
-
-// CommandRequirementSlots returns cmdName's Required* map for the given
-func CommandRequirementSlots(guildID, cmdName string, reqType types.RequirementType) (map[string]types.RequirementSlot, bool, error) {
-	config, err := database.Must().GuildConfig.Get(guildID)
-	if err != nil {
-		return nil, false, err
-	}
-
-	cfg, ok := decodeCommandsMap(config.Commands)[cmdName]
-	if !ok {
-		return nil, false, nil
-	}
-	switch reqType {
-	case types.ReqRole:
-		return cfg.RequiredRoles, true, nil
-	case types.ReqChannel:
-		return cfg.RequiredChannels, true, nil
-	case types.ReqCategory:
-		return cfg.RequiredCategories, true, nil
-	default:
-		return nil, true, nil
-	}
-}
-
-// RequirementSlotID returns the snowflake ID assigned to cmdName's requirement
-// key of the given type (empty if unset, or if the command/key don't exist).
-func RequirementSlotID(guildID, cmdName string, reqType types.RequirementType, key string) (string, error) {
-	slots, _, err := CommandRequirementSlots(guildID, cmdName, reqType)
-	if err != nil {
-		return "", err
-	}
-	return slots[key].ID, nil
-}
-
-// SetRequirementSlotID assigns id as the snowflake for cmdName's requirement
-// key of the given type, leaving the rest of its CommandConfig untouched. A
-// requirement is identified by its type and key, so the same assignment is
-// made on every other command that declares it (chatmute and chatunmute share
-// the chat-muted role), exactly as the dashboard does. Used when an admin
-// resolves a missing requirement inline (see requirement_fix.go's
-// HandleRequirementFixSelect) or explicitly via /config role|channel|category set.
-func SetRequirementSlotID(actor, guildID, cmdName string, reqType types.RequirementType, key, id string) error {
-	config, err := database.Must().GuildConfig.GetFresh(guildID)
-	if err != nil {
-		return err
-	}
-
-	commandsMap := decodeCommandsMap(config.Commands)
-	if _, ok := commandsMap[cmdName]; !ok {
-		return fmt.Errorf("no command config found for %q", cmdName)
-	}
-	if !assignRequirementSlot(commandsMap, cmdName, reqType, key, id) {
-		return fmt.Errorf("unsupported requirement type %q", reqType)
-	}
-
-	err = database.Must().GuildConfig.SaveField(actor, guildID, "commands", commandsMap)
-	return err
-}
-
-// assignRequirementSlot points the slot (reqType, key) at id on cmdName and on every command that already has that
-// slot. It reports false for an unknown requirement type.
-func assignRequirementSlot(commandsMap map[string]types.CommandConfig, cmdName string, reqType types.RequirementType, key, id string) bool {
-	slotsOf := func(cfg *types.CommandConfig) *map[string]types.RequirementSlot {
-		switch reqType {
-		case types.ReqRole:
-			return &cfg.RequiredRoles
-		case types.ReqChannel:
-			return &cfg.RequiredChannels
-		case types.ReqCategory:
-			return &cfg.RequiredCategories
-		}
-		return nil
-	}
-	for name, cfg := range commandsMap {
-		m := slotsOf(&cfg)
-		if m == nil {
-			return false
-		}
-		slot, has := (*m)[key]
-		if name != cmdName && !has {
-			continue
-		}
-		if *m == nil {
-			*m = map[string]types.RequirementSlot{}
-		}
-		slot.ID = id
-		(*m)[key] = slot
-		commandsMap[name] = cfg
-	}
-	return true
-}
 
 // ============================================================================
 // Snapshot Synchronization
@@ -1489,4 +1227,350 @@ func discordRestAPI() (*DiscordRestAPI, error) {
 func isDiscordRESTCode(err error, code int) bool {
 	var restErr *discordgo.RESTError
 	return errors.As(err, &restErr) && restErr.Message != nil && restErr.Message.Code == code
+}
+
+// A guild's plan comes from the Database (guilds.tier and tier_expires_at), which the developer sets by hand
+// (approving a plan request in the dashboard) and the Database clears when the period and its grace days run out. The bot only
+// reads it: while the plan is active the bot works, once it lapses commands, buttons and new games are refused with
+// how to renew. Ongoing upkeep (rank decay, syncs, an already running game) is deliberately not stopped.
+
+// ErrPlanInactive is returned when something that needs a plan (starting a game) is refused for lack of one.
+var ErrPlanInactive = errors.New("this server's plan is not active")
+
+// planExemptCommands stay usable without a plan, so an administrator can still set the server up and see its status.
+var planExemptCommands = map[string]bool{"setup": true, "config": true, "bots": true}
+
+// planEnforced is false in development mode and when PLAN_ENFORCEMENT=off (a switch for rolling plans out to servers
+// that were registered before they existed).
+func planEnforced() bool {
+	return !devMode() && strings.ToLower(strings.TrimSpace(os.Getenv("PLAN_ENFORCEMENT"))) != "off"
+}
+
+// planGrandfathered exempts servers that were registered before PLAN_GRANDFATHER_BEFORE (an RFC 3339 date, unset = nobody)
+// and never had a plan, so existing communities can be moved onto paid plans gradually instead of all at once.
+func planGrandfathered(g *models.GuildsModel) bool {
+	raw := strings.TrimSpace(os.Getenv("PLAN_GRANDFATHER_BEFORE"))
+	if raw == "" || g.Tier != nil || g.TierExpiresAt != nil {
+		return false
+	}
+	cutoff, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		cutoff, err = time.Parse("2006-01-02", raw)
+	}
+	return err == nil && g.CreatedAt.Before(cutoff)
+}
+
+// planCounts reports whether the guild may use the bot right now.
+func planCounts(g *models.GuildsModel, now time.Time) bool {
+	return g.IsEnabled && (g.PlanActive(now) || planGrandfathered(g))
+}
+
+// dashboardBase is the dashboard's address from DASHBOARD_URL, without a trailing slash ("" when unset).
+func dashboardBase() string {
+	return strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
+}
+
+// planPageURL is where an administrator asks for or renews a plan: the guild's plan page in the dashboard.
+func planPageURL(guildID string) string {
+	base := dashboardBase()
+	if base == "" {
+		return ""
+	}
+	if guildID == "" {
+		return base + "/setup"
+	}
+	return base + "/dashboard/" + guildID + "/plan"
+}
+
+// lastKnown remembers each guild's most recent plan answer. It makes a click cheap (no Database call within
+// planCacheTTL) and keeps an expired server locked, instead of failing open, while the Database is unreachable.
+type lastKnown struct {
+	active   bool
+	disabled bool
+	expires  *time.Time
+	at       time.Time
+}
+
+const planCacheTTL = 30 * time.Second
+
+var (
+	planMu    sync.Mutex
+	planCache = map[string]lastKnown{}
+)
+
+func rememberPlan(guildID string, g *models.GuildsModel, now time.Time) {
+	planMu.Lock()
+	defer planMu.Unlock()
+	planCache[guildID] = lastKnown{active: planCounts(g, now), disabled: !g.IsEnabled, expires: g.TierExpiresAt, at: now}
+}
+
+func recallPlan(guildID string) (lastKnown, bool) {
+	planMu.Lock()
+	defer planMu.Unlock()
+	k, ok := planCache[guildID]
+	return k, ok
+}
+
+// planDenial is nil when the guild may use the bot right now, else the embed explaining why not. When the guild could
+// not be loaded (gc.Guild nil) it falls back to the last known answer, and lets the command through only if there is none.
+func planDenial(gc GuildContext, guildID string, cmd *types.Command, now time.Time) *discordgo.MessageEmbed {
+	if !planEnforced() || planExemptCommands[cmd.Name] {
+		return nil
+	}
+	if gc.Guild != nil {
+		rememberPlan(guildID, gc.Guild, now)
+		if planCounts(gc.Guild, now) {
+			return nil
+		}
+		return inactiveEmbed(guildID, !gc.Guild.IsEnabled, gc.Guild.TierExpiresAt)
+	}
+	if k, ok := recallPlan(guildID); ok && !k.active {
+		return inactiveEmbed(guildID, k.disabled, k.expires)
+	}
+	return nil
+}
+
+// guildPlanOK answers "may this server use the bot now" from the cache or one Database lookup, failing open only when
+// the server was never seen and cannot be loaded.
+func guildPlanOK(guildID string) (ok bool, embed *discordgo.MessageEmbed) {
+	if !planEnforced() || guildID == "" {
+		return true, nil
+	}
+	now := time.Now()
+	if k, found := recallPlan(guildID); found && now.Sub(k.at) < planCacheTTL {
+		if k.active {
+			return true, nil
+		}
+		return false, inactiveEmbed(guildID, k.disabled, k.expires)
+	}
+	guild, err := lookupGuildBySnowflake(guildID)
+	if err != nil || guild == nil {
+		if k, found := recallPlan(guildID); found && !k.active {
+			return false, inactiveEmbed(guildID, k.disabled, k.expires)
+		}
+		return true, nil
+	}
+	rememberPlan(guildID, guild, now)
+	if planCounts(guild, now) {
+		return true, nil
+	}
+	return false, inactiveEmbed(guildID, !guild.IsEnabled, guild.TierExpiresAt)
+}
+
+// GuildPlanActive reports whether the server may use the bot now (for work that is not a command, e.g. starting a game).
+func GuildPlanActive(guildID string) bool {
+	ok, _ := guildPlanOK(guildID)
+	return ok
+}
+
+// planBlocksComponent answers a button or menu click from a server without a plan and reports that it did.
+func planBlocksComponent(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
+	ok, embed := guildPlanOK(i.GuildID)
+	if ok {
+		return false
+	}
+	_ = Respond(s, i, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Flags: discordgo.MessageFlagsEphemeral},
+	})
+	return true
+}
+
+// GuildHasFeature reports whether the guild's active plan includes `feature` ("automated-hosting", "custom-portal").
+// Fails open when the guild cannot be loaded.
+func GuildHasFeature(guildID, feature string) bool {
+	if !planEnforced() {
+		return true
+	}
+	guild, err := lookupGuildBySnowflake(guildID)
+	if err != nil || guild == nil {
+		return true
+	}
+	if planGrandfathered(guild) {
+		return true
+	}
+	return guild.HasFeature(feature, time.Now())
+}
+
+// devMode is true when DEV_MODE is set: local testing without plan checks.
+func devMode() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("DEV_MODE")))
+	return v == "1" || v == "true" || v == "yes"
+}
+
+// ============================================================================
+// Reminders
+// ============================================================================
+
+const (
+	planReminderEvery  = 6 * time.Hour
+	planReminderWindow = 3 * 24 * time.Hour // warn this long before the plan ends
+	planExpiredWindow  = 7 * 24 * time.Hour // tell the owner about an ended plan for this long after it
+)
+
+// remindedPlans remembers which notice each server's owner already got, per expiry date, so a restart is the only way
+// to be told twice. ponytail: in memory; persist it in the Database if restarts become frequent.
+var (
+	remindMu       sync.Mutex
+	remindedPlans  = map[string]string{}
+	remindedEnding = "ending"
+	remindedEnded  = "ended"
+)
+
+// HandlePlanReminders DMs each server's owner shortly before the plan ends and once after it has, until renewed.
+func HandlePlanReminders(s *discordgo.Session, r *discordgo.Ready) {
+	if !planEnforced() {
+		return
+	}
+	logger := baseutility.CreateModuleLogger("PLAN_REMINDERS", "PlanReminders")
+	go func() {
+		for {
+			runPlanReminders(s, logger, time.Now())
+			time.Sleep(planReminderEvery)
+		}
+	}()
+}
+
+func runPlanReminders(s *discordgo.Session, logger baseutility.AppLogger, now time.Time) {
+	svc := database.Get()
+	if svc == nil {
+		return
+	}
+	guilds, err := svc.Guild.ListAll("", false)
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to fetch guilds for plan reminders: %v", err))
+		return
+	}
+	for i := range guilds {
+		g := &guilds[i]
+		if g.TierExpiresAt == nil {
+			continue
+		}
+		var kind, text string
+		switch {
+		case g.PlanActive(now) && g.Tier != nil && g.TierExpiresAt.Sub(now) <= planReminderWindow && g.TierExpiresAt.After(now):
+			kind = remindedEnding
+			if g.PlanCancelRequestedAt != nil {
+				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D> because you asked to cancel it. To keep the bot running, say so or request a renewal here", g.Name, g.TierExpiresAt.Unix())
+			} else {
+				text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ends on <t:%d:D>. Plans are renewed by hand, so request a renewal here before then", g.Name, g.TierExpiresAt.Unix())
+			}
+		case !g.PlanActive(now) && now.Sub(*g.TierExpiresAt) <= planExpiredWindow:
+			kind = remindedEnded
+			text = fmt.Sprintf("**%s**'s Ranked Bedwars plan ended on <t:%d:D>, so the bot is paused there. Your configuration is kept; request a renewal here to switch it back on", g.Name, g.TierExpiresAt.Unix())
+		default:
+			continue
+		}
+		key := kind + g.TierExpiresAt.Format(time.RFC3339)
+		remindMu.Lock()
+		done := remindedPlans[g.SnowflakeID] == key
+		remindedPlans[g.SnowflakeID] = key
+		remindMu.Unlock()
+		if done {
+			continue
+		}
+		live, err := s.Guild(g.SnowflakeID)
+		if err != nil || live.OwnerID == "" {
+			continue // the bot is no longer in that server
+		}
+		dm, err := s.UserChannelCreate(live.OwnerID)
+		if err != nil {
+			continue
+		}
+		if url := planPageURL(g.SnowflakeID); url != "" {
+			text += ": " + url
+		} else {
+			text += " in the dashboard"
+		}
+		if _, err := s.ChannelMessageSendEmbed(dm.ID, &discordgo.MessageEmbed{Title: "Ranked Bedwars plan", Description: text, Color: ColorError}); err != nil {
+			logger.Error(fmt.Sprintf("Could not DM the owner of %s about the plan: %v", g.SnowflakeID, err))
+		}
+	}
+}
+
+// guildWatch runs a periodic sweep only for guilds that have something pending. A guild is added by Track (the
+// moment something is created, or at startup when the database already holds something) and dropped by the first
+// sweep that reports nothing left. The ticker goroutine exists only while at least one guild is tracked.
+type guildWatch struct {
+	name    string
+	every   time.Duration
+	sweep   func(guildID string) (pending bool)
+	mu      sync.Mutex
+	guilds  map[string]uint64 // guild -> Track count, so a Track during a sweep isn't lost to that sweep's "done"
+	running bool
+}
+
+func newGuildWatch(name string, every time.Duration, sweep func(guildID string) bool) *guildWatch {
+	return &guildWatch{name: name, every: every, sweep: sweep, guilds: map[string]uint64{}}
+}
+
+// Track starts sweeping guildID if it isn't already.
+func (w *guildWatch) Track(guildID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.guilds == nil {
+		w.guilds = map[string]uint64{}
+	}
+	w.guilds[guildID]++
+	if !w.running {
+		w.running = true
+		go w.loop()
+	}
+}
+
+// Seed tracks every guild that has something pending right now; call it once the bot knows its guilds.
+func (w *guildWatch) Seed(guildIDs []string, pending func(guildID string) bool) {
+	for _, g := range guildIDs {
+		if safePending(w.name, g, pending) {
+			w.Track(g)
+		}
+	}
+}
+
+func (w *guildWatch) loop() {
+	t := time.NewTicker(w.every)
+	defer t.Stop()
+	for range t.C {
+		w.mu.Lock()
+		seen := make(map[string]uint64, len(w.guilds))
+		for g, n := range w.guilds {
+			seen[g] = n
+		}
+		w.mu.Unlock()
+
+		for g, n := range seen {
+			if safeSweep(w.name, g, w.sweep) {
+				continue
+			}
+			w.mu.Lock()
+			if w.guilds[g] == n { // nothing was tracked since this sweep began
+				delete(w.guilds, g)
+			}
+			w.mu.Unlock()
+		}
+
+		w.mu.Lock()
+		if len(w.guilds) == 0 {
+			w.running = false
+			w.mu.Unlock()
+			return
+		}
+		w.mu.Unlock()
+	}
+}
+
+// safeSweep keeps a panic or failure in one guild from stopping the rest; a guild that panicked stays tracked.
+func safeSweep(name, guildID string, sweep func(string) bool) (pending bool) {
+	pending = true
+	defer func() {
+		if r := recover(); r != nil {
+			appLog.EngineLogger.Error(fmt.Sprintf("[%s] sweep panic in %s: %v", name, guildID, r))
+			pending = true
+		}
+	}()
+	return sweep(guildID)
+}
+
+func safePending(name, guildID string, pending func(string) bool) bool {
+	return safeSweep(name, guildID, pending)
 }

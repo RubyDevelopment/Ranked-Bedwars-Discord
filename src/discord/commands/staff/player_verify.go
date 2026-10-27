@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -53,19 +52,19 @@ func executePlayerVerifyCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerVerifyInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerVerifyBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyBotTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerVerifyNotRegisteredEmbed(i, target))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyNotRegisteredEmbed(i, target))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerVerifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerVerifyEmbed(i))
 	}
 
 	// 3. Check Account Age
@@ -86,7 +85,7 @@ func executePlayerVerifyCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 4. Check Active Restrictions
 	active, err := database.Must().Punishments.ByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), true, "", sdk.Page{})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerVerifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerVerifyEmbed(i))
 	}
 	restrictions := []string{}
 	for _, row := range active.Data {
@@ -102,5 +101,5 @@ func executePlayerVerifyCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		problems = append(problems, "Currently in a game")
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerVerifyReportEmbed(i, target, view.Config.Username, ageDays, whitelisted, restrictions, inGame, problems))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyReportEmbed(i, target, view.Config.Username, ageDays, whitelisted, restrictions, inGame, problems))
 }

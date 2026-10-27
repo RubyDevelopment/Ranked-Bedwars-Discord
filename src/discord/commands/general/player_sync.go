@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -47,24 +46,24 @@ func executePlayerSyncCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	view, err := database.Must().Player.Get(i.GuildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSyncRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerSyncEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSyncEmbed(i))
 	}
 
 	// 2. Validate Guild Membership
 	member, err := helpers.FetchGuildMember(s, i.GuildID, userID)
 	if err != nil || member == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSyncMemberNotFoundEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncMemberNotFoundEmbed(i))
 	}
 
 	// 3. Synchronize Roles & Nickname
 	actions, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerSyncEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSyncEmbed(i))
 	}
 	if len(actions) == 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSyncUpToDateEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncUpToDateEmbed(i, view.Config.Username))
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSyncSuccessEmbed(i, view.Config.Username, actions))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSyncSuccessEmbed(i, view.Config.Username, actions))
 }

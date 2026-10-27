@@ -84,22 +84,30 @@ func HandlePartyButton(s *discordgo.Session, i *discordgo.InteractionCreate, cus
 	if action == "accept" {
 		party, err := Parties.Accept(i.GuildID, leaderID, targetID)
 		if err != nil {
-			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Embeds: []*discordgo.MessageEmbed{partyErrorEmbedOrGeneric(err)}, Flags: discordgo.MessageFlagsEphemeral})
+			failed := partyErrorEmbedOrGeneric(err)
+			WithGuildFooterIcon(s, i, failed)
+			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Embeds: []*discordgo.MessageEmbed{failed}, Flags: discordgo.MessageFlagsEphemeral})
 			return true
 		}
 		AnnouncePartyJoin(s, i.GuildID, party, targetID)
 		empty := []discordgo.MessageComponent{}
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{PartyJoinedEmbed(party.Leader, len(party.Members), party.MaxSize)}, Components: &empty})
+		joined := PartyJoinedEmbed(party.Leader, len(party.Members), party.MaxSize)
+		WithGuildFooterIcon(s, i, joined)
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{joined}, Components: &empty})
 		return true
 	}
 
 	if err := Parties.Decline(i.GuildID, leaderID, targetID); err != nil {
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Embeds: []*discordgo.MessageEmbed{partyErrorEmbedOrGeneric(err)}, Flags: discordgo.MessageFlagsEphemeral})
+		failed := partyErrorEmbedOrGeneric(err)
+		WithGuildFooterIcon(s, i, failed)
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Embeds: []*discordgo.MessageEmbed{failed}, Flags: discordgo.MessageFlagsEphemeral})
 		return true
 	}
 	_ = SendPartyAlert(s, i.GuildID, PartyCmdName, PartyAlertsKey, leaderID, PartyInvitationDeclinedEmbed(targetID), nil)
 	empty := []discordgo.MessageComponent{}
-	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{PartyDeclinedEmbed()}, Components: &empty})
+	declined := PartyDeclinedEmbed()
+	WithGuildFooterIcon(s, i, declined)
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{declined}, Components: &empty})
 	return true
 }
 
@@ -165,14 +173,6 @@ var partyErrorTexts = []struct {
 	{ErrInvitesDisabled, "Invites Disabled", "That player has party invites turned off. Ask them to enable invites in their settings before inviting them."},
 	{ErrNoInvite, "No Invitation", "There is no pending party invitation. Ask the leader to invite you again."},
 	{ErrInviteExpired, "Invitation Expired", "That party invitation has expired. Ask the leader to invite you again."},
-}
-
-func partyErrorEmbedOrGeneric(err error) *discordgo.MessageEmbed {
-	if e := PartyErrorEmbed(err); e != nil {
-		return e
-	}
-	apputil.DiscordLogger.Error(fmt.Sprintf("[Party] button action failed: %v", err))
-	return CommandErrorEmbed()
 }
 
 func init() {

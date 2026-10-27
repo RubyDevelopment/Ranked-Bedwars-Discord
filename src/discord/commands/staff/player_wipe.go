@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -51,10 +50,10 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeBotTargetEmbed(i))
 	}
 	fromGame := helpers.OptionInt(i, "from_game")
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
@@ -64,9 +63,9 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerWipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerWipeEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 	username := view.Config.Username
@@ -74,22 +73,22 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 3. Validate Active Season & Existing Stats
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerWipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerWipeEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeNoSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeNoSeasonEmbed(i))
 	}
 	if _, err := database.Must().Stats.Get(i.GuildID, pid, seasonID); err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeNoStatsEmbed(i, username))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeNoStatsEmbed(i, username))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerWipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerWipeEmbed(i))
 	}
 
 	// 4. Wipe (recorded by the database so it can be undone)
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerWipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerWipeEmbed(i))
 	}
 	rankName := "Unranked"
 	if r := helpers.RankFor(ranks, helpers.SeasonStartElo); r != nil && r.RankName != "" {
@@ -100,9 +99,9 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	})
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeNoGamesEmbed(i, username, fromGame))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeNoGamesEmbed(i, username, fromGame))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerWipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerWipeEmbed(i))
 	}
 
 	// 5. Sync Rank (a partial wipe changes the ELO, so the rank and its role follow)
@@ -111,7 +110,7 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		newRank = result.Stats.Rank
 	}
 
-	embed := cmdcfg.PlayerWipeSuccessEmbed(i, username, seasonKey, fromGame, result, newRank)
+	embed := helpers.PlayerWipeSuccessEmbed(i, username, seasonKey, fromGame, result, newRank)
 	helpers.LogCommandResult(s, i.GuildID, "player_wipe", actor, embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

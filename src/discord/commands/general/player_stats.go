@@ -9,7 +9,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -60,40 +59,40 @@ func executePlayerStatsCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		target = invoker
 	}
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerStatsInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerStatsBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsBotTargetEmbed(i))
 	}
 
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerStatsNotRegisteredEmbed(i, target))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsNotRegisteredEmbed(i, target))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerStatsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerStatsEmbed(i))
 	}
 	config := view.Config
 
 	executorID := helpers.InteractionUserID(i)
 	isAdmin := helpers.MemberIsAdministrator(s, i)
 	if !config.IsStatsVisible && target.ID != executorID && !isAdmin {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerStatsPrivateEmbed(i, target, config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsPrivateEmbed(i, target, config.Username))
 	}
 
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerStatsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerStatsEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerStatsNoActiveSeasonEmbed(i, config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsNoActiveSeasonEmbed(i, config.Username))
 	}
 
 	// Use GetOrCreate to create stats on-demand if they don't exist
 	playerID := sdk.UintToString(view.Player.ID)
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, playerID, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerStatsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerStatsEmbed(i))
 	}
 	position := 0
 	if rank, err := database.Must().Stats.Rank(i.GuildID, playerID, seasonID); err == nil {
@@ -108,7 +107,7 @@ func executePlayerStatsCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		log.Printf("stats banner for guild %s: %v", i.GuildID, err)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerStatsOverviewEmbed(i, config.Username, stats))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerStatsOverviewEmbed(i, config.Username, stats))
 }
 
 // ============================================================================

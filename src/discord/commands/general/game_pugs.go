@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -62,14 +60,14 @@ func executeGamePugsCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	switch sub {
 	case "list":
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PugsListUnavailableEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PugsListUnavailableEmbed(i))
 	case "vote":
 		target := helpers.SubOptionUser(s, opts, "user")
 		if target == nil || target.Bot {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PugsInvalidTargetEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PugsInvalidTargetEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PugsVoteUnavailableEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PugsVoteUnavailableEmbed(i))
 	default:
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PugsInvalidSubcommandEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PugsInvalidSubcommandEmbed(i))
 	}
 }

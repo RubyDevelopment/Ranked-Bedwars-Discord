@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -51,51 +49,51 @@ func executeQueueCallCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// 1. Validate Target User
 	target := helpers.SubOptionUser(s, i.ApplicationCommandData().Options, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallInvalidTargetEmbed(i))
 	}
 	if target.ID == actor {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallSelfTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallSelfTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallBotTargetEmbed(i))
 	}
 
 	// 2. Fetch the Invoker's Voice State
 	voiceState, err := s.State.VoiceState(i.GuildID, actor)
 	if err != nil || voiceState == nil || voiceState.ChannelID == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallNotInVoiceEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallNotInVoiceEmbed(i))
 	}
 	voiceChannelID := voiceState.ChannelID
 
 	// 3. Validate the Game Behind the Voice Channel
 	game, ok := helpers.Games.ByChannel(voiceChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallNotInGameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallNotInGameEmbed(i))
 	}
 	if _, isParticipant := game.Player(actor); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallNotInMatchEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallNotInMatchEmbed(i))
 	}
 	if _, targetIsParticipant := game.Player(target.ID); targetIsParticipant {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallAlreadyInMatchEmbed(i, target))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallAlreadyInMatchEmbed(i, target))
 	}
 	if !isTeamVoiceChannel(game, voiceChannelID) {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallWrongChannelEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallWrongChannelEmbed(i))
 	}
 
 	// 4. Verify Bot Permissions
 	perms, err := s.State.UserChannelPermissions(s.State.User.ID, voiceChannelID)
 	if err != nil || perms&discordgo.PermissionManageRoles == 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallMissingPermissionsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.QueueCallMissingPermissionsEmbed(i))
 	}
 
 	// 5. Grant the Target Access
 	err = s.ChannelPermissionSet(voiceChannelID, target.ID, discordgo.PermissionOverwriteTypeMember,
 		discordgo.PermissionVoiceConnect|discordgo.PermissionVoiceSpeak, 0)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorQueueCallEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueCallEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.QueueCallSuccessEmbed(i, target, game.Number))
+	return helpers.EditInteractionEmbed(s, i, helpers.QueueCallSuccessEmbed(i, target, game.Number))
 }
 
 // ============================================================================

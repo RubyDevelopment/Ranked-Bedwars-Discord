@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"errors"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -117,7 +118,7 @@ func updateGiveawayState(guildID, id string, fn func(st *giveawayState) bool) er
 	})
 }
 
-var errNoChange = fmt.Errorf("no change")
+var errNoChange = errors.New("no change")
 
 func sweepGiveaways(s *discordgo.Session) {
 	if s == nil {
@@ -219,7 +220,7 @@ func drawGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, st *givea
 		}
 		cur.Ended, cur.Winners = true, winners
 		return true
-	}); err != nil && err != errNoChange {
+	}); err != nil && !errors.Is(err, errNoChange) {
 		panelLogger.Warn(fmt.Sprintf("ending giveaway %s in %s: %v", g.ID, guildID, err))
 		return
 	}
@@ -315,7 +316,7 @@ func HandleGiveawayEntry(s *discordgo.Session, i *discordgo.InteractionCreate, c
 		return true
 	})
 	switch {
-	case err != nil && err != errNoChange:
+	case err != nil && !errors.Is(err, errNoChange):
 		say("Something went wrong. Please try again in a moment.")
 	case !entered:
 		say("You have already entered this giveaway.")

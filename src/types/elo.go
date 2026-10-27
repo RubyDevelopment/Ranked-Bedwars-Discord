@@ -34,8 +34,8 @@ type DecayResult struct {
 // EloAPI is the slice of the database SDK the manager uses. Players are
 // identified by Discord snowflake; stats are for the active season.
 type EloAPI interface {
-	Stats(guildID, userID string) (*models.PlayerStatsModel, error) // get-or-create
-	StatsInSeason(guildID, userID string, seasonID uint) (*models.PlayerStatsModel, error) // get-or-create for one season (0 = active)
+	Stats(guildID, userID string) (*models.PlayerStatsModel, error)                                           // get-or-create
+	StatsInSeason(guildID, userID string, seasonID uint) (*models.PlayerStatsModel, error)                    // get-or-create for one season (0 = active)
 	ApplyElo(actor, guildID, userID string, seasonID uint, e sdk.EloEffect) (*models.PlayerStatsModel, error) // one rating change, applied under a row lock
 	Patch(actor, guildID, userID string, seasonID uint, fields map[string]any) (*models.PlayerStatsModel, error)
 	Reset(actor, guildID, userID string, seasonID uint, startElo int, rank string) (*models.PlayerStatsModel, error)
@@ -81,7 +81,7 @@ type Preview struct {
 // ScoreInput is a finished game to score.
 type ScoreInput struct {
 	GuildID         string
-	SeasonID        uint         // the season the game was played in (0 = active); its stats are scored and written
+	SeasonID        uint // the season the game was played in (0 = active); its stats are scored and written
 	Winners, Losers []string
 	MVP             string       // must be a winner; "" = none (see SelectMVP)
 	Parties         []PartyGroup // groups captured at queue time

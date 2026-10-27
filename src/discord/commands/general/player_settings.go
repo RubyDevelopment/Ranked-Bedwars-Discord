@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -90,7 +89,7 @@ func executePlayerSettingsCommand(s *discordgo.Session, i *discordgo.Interaction
 	case "toggle":
 		return executePlayerSettingsToggle(s, i)
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSettingsInvalidSubcommandEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsInvalidSubcommandEmbed(i))
 }
 
 func executePlayerSettingsView(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -98,12 +97,12 @@ func executePlayerSettingsView(s *discordgo.Session, i *discordgo.InteractionCre
 	view, err := database.Must().Player.Get(i.GuildID, helpers.InteractionUserID(i))
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSettingsRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerSettingsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSettingsEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSettingsOverviewEmbed(i, view.Config))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsOverviewEmbed(i, view.Config))
 }
 
 func executePlayerSettingsToggle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -113,7 +112,7 @@ func executePlayerSettingsToggle(s *discordgo.Session, i *discordgo.InteractionC
 	// 1. Validate Setting
 	toggle := findSettingsToggle(helpers.SubOptionString(options, "option"))
 	if toggle == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSettingsUnknownOptionEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsUnknownOptionEmbed(i))
 	}
 	enabled := helpers.SubOptionBool(options, "enabled")
 
@@ -121,17 +120,17 @@ func executePlayerSettingsToggle(s *discordgo.Session, i *discordgo.InteractionC
 	view, err := database.Must().Player.Get(i.GuildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSettingsRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerSettingsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSettingsEmbed(i))
 	}
 
 	// 3. Update Setting in Database
 	if _, err := database.Must().Player.UpdateConfig(userID, i.GuildID, userID, map[string]any{toggle.key: enabled}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerSettingsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSettingsEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerSettingsToggledEmbed(i, view.Config.Username, toggle.label, enabled))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsToggledEmbed(i, view.Config.Username, toggle.label, enabled))
 }
 
 // ============================================================================

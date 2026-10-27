@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -50,10 +49,10 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeBotTargetEmbed(i))
 	}
 	wipeID := helpers.OptionInt(i, "wipe_id")
 	actor := helpers.InteractionUserID(i)
@@ -62,24 +61,24 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerUnwipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 	username := view.Config.Username
 
 	// 3. Find the Wipe to Undo (this season's wipes, newest first)
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerUnwipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerWipeNoSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerWipeNoSeasonEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 	wipes, err := database.Must().Wipes.AllByPlayer(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerUnwipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 	var wipe *models.PlayerWipe
 	for idx := range wipes {
@@ -91,21 +90,21 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 	switch {
 	case wipe == nil:
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeNothingEmbed(i, username, wipeID))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeNothingEmbed(i, username, wipeID))
 	case wipe.RestoredAt != nil:
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeAlreadyEmbed(i, username, wipe.ID))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeAlreadyEmbed(i, username, wipe.ID))
 	}
 
 	// 4. Restore
 	result, err := database.Must().Wipes.Restore(actor, i.GuildID, pid, seasonID, wipe.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeNothingEmbed(i, username, wipeID))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeNothingEmbed(i, username, wipeID))
 		}
 		if sdk.IsConflict(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerUnwipeAlreadyEmbed(i, username, wipe.ID))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerUnwipeAlreadyEmbed(i, username, wipe.ID))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerUnwipeEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerUnwipeEmbed(i))
 	}
 
 	// 5. Sync Rank
@@ -114,7 +113,7 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		newRank = result.Stats.Rank
 	}
 
-	embed := cmdcfg.PlayerUnwipeSuccessEmbed(i, username, result, newRank)
+	embed := helpers.PlayerUnwipeSuccessEmbed(i, username, result, newRank)
 	helpers.LogCommandResult(s, i.GuildID, "player_unwipe", actor, embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

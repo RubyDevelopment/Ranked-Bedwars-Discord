@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -142,12 +140,12 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			}
 		}
 		if target == nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleInvalidTargetEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleInvalidTargetEmbed(i))
 		}
 
 		member, err := helpers.FetchGuildMember(s, i.GuildID, target.ID)
 		if err != nil || member == nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleMemberNotFoundEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleMemberNotFoundEmbed(i))
 		}
 
 		roleNames := make([]string, 0, len(member.Roles))
@@ -160,9 +158,9 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 
 		if len(roleNames) == 0 {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleListEmptyEmbed(i, target))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleListEmptyEmbed(i, target))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleListEmbed(i, target, strings.Join(roleNames, ", ")))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleListEmbed(i, target, strings.Join(roleNames, ", ")))
 
 	case "mass_add":
 		roleID := helpers.SubOptionRoleID(s, options, "role")
@@ -171,7 +169,7 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		memberIDs := resolveMassMemberIDs(s, i.GuildID, targetRoleID, membersInput)
 		if len(memberIDs) == 0 {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleNoMembersEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleNoMembersEmbed(i))
 		}
 		return executeRoleMassMutation(s, i, roleID, memberIDs, true)
 
@@ -182,7 +180,7 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		memberIDs := resolveMassMemberIDs(s, i.GuildID, targetRoleID, membersInput)
 		if len(memberIDs) == 0 {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleNoMembersEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleNoMembersEmbed(i))
 		}
 		return executeRoleMassMutation(s, i, roleID, memberIDs, false)
 
@@ -191,7 +189,7 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		roleToAddID := helpers.SubOptionRoleID(s, options, "role_to_add")
 		memberIDs := resolveMassMemberIDs(s, i.GuildID, sourceRoleID, "")
 		if len(memberIDs) == 0 {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleNoMembersEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleNoMembersEmbed(i))
 		}
 		return executeRoleMassMutation(s, i, roleToAddID, memberIDs, true)
 
@@ -200,12 +198,12 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		roleToRemoveID := helpers.SubOptionRoleID(s, options, "role_to_remove")
 		memberIDs := resolveMassMemberIDs(s, i.GuildID, sourceRoleID, "")
 		if len(memberIDs) == 0 {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleNoMembersEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleNoMembersEmbed(i))
 		}
 		return executeRoleMassMutation(s, i, roleToRemoveID, memberIDs, false)
 
 	case "sync":
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleSyncEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleSyncEmbed(i))
 	}
 
 	return nil
@@ -217,20 +215,20 @@ func executeServerRoleCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 func mutateMemberRole(s *discordgo.Session, i *discordgo.InteractionCreate, target *discordgo.User, roleID string, add bool) error {
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleInvalidTargetEmbed(i))
 	}
 
 	role, issue, err := validateRoleMutation(s, i, roleID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorRoleEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRoleEmbed(i))
 	}
 	if issue != helpers.RoleHierarchyOK {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleHierarchyEmbed(i, issue))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleHierarchyEmbed(i, issue))
 	}
 
 	member, err := helpers.FetchGuildMember(s, i.GuildID, target.ID)
 	if err != nil || member == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleMemberNotFoundEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleMemberNotFoundEmbed(i))
 	}
 
 	botMember, _ := helpers.FetchGuildMember(s, i.GuildID, s.State.User.ID)
@@ -241,30 +239,30 @@ func mutateMemberRole(s *discordgo.Session, i *discordgo.InteractionCreate, targ
 	hasRole := helpers.MemberHasRole(member, role.ID)
 	if add {
 		if hasRole {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleAlreadyAssignedEmbed(i, target, role.Name))
+			return helpers.EditInteractionEmbed(s, i, helpers.RoleAlreadyAssignedEmbed(i, target, role.Name))
 		}
 		if err := helpers.AddMemberRole(s, i.GuildID, target.ID, role.ID); err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorRoleEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRoleEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleUpdatedEmbed(i, "added", target, role.Name))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleUpdatedEmbed(i, "added", target, role.Name))
 	}
 
 	if !hasRole {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleNotAssignedEmbed(i, target, role.Name))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleNotAssignedEmbed(i, target, role.Name))
 	}
 	if err := helpers.RemoveMemberRole(s, i.GuildID, target.ID, role.ID); err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorRoleEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRoleEmbed(i))
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleUpdatedEmbed(i, "removed", target, role.Name))
+	return helpers.EditInteractionEmbed(s, i, helpers.RoleUpdatedEmbed(i, "removed", target, role.Name))
 }
 
 func executeRoleMassMutation(s *discordgo.Session, i *discordgo.InteractionCreate, roleID string, memberIDs []string, add bool) error {
 	role, issue, err := validateRoleMutation(s, i, roleID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorRoleEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRoleEmbed(i))
 	}
 	if issue != helpers.RoleHierarchyOK {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleHierarchyEmbed(i, issue))
+		return helpers.EditInteractionEmbed(s, i, helpers.RoleHierarchyEmbed(i, issue))
 	}
 
 	botMember, _ := helpers.FetchGuildMember(s, i.GuildID, s.State.User.ID)
@@ -307,7 +305,7 @@ func executeRoleMassMutation(s *discordgo.Session, i *discordgo.InteractionCreat
 	if !add {
 		action = "removed from"
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.RoleMassResultEmbed(i, role.Name, action, success, skipped))
+	return helpers.EditInteractionEmbed(s, i, helpers.RoleMassResultEmbed(i, role.Name, action, success, skipped))
 }
 
 func resolveMassMemberIDs(s *discordgo.Session, guildID string, targetRoleID string, membersInput string) []string {

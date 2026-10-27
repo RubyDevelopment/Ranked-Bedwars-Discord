@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -113,23 +112,23 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 1. Validate Subcommand
 	subcommand, options := types.SelectedSubcommand(i)
 	if subcommand == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifyInvalidSubcommandEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyInvalidSubcommandEmbed(i))
 	}
 
 	// 2. Validate Target User
 	target := helpers.SubOptionUser(s, options, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifyInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifyBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyBotTargetEmbed(i))
 	}
 
 	// 3. Validate Stat Key
 	statKey := helpers.SubOptionString(options, "stat")
 	statLabel := modifyStatLabels[statKey]
 	if statLabel == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifyUnknownStatEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyUnknownStatEmbed(i))
 	}
 	value := helpers.SubOptionInt(options, "value")
 	actor := helpers.InteractionUserID(i)
@@ -138,25 +137,25 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifyRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.GameModifyRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 
 	// 5. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifyNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameModifyNoActiveSeasonEmbed(i))
 	}
 
 	// 6. Get or Create Stats
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 	}
 
 	// 7. Apply Stat Modification
@@ -179,11 +178,11 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			updated, err = helpers.AdjustElo(actor, i.GuildID, pid, seasonID, stats, value)
 		}
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 		newVal = updated.Elo
 		if _, rankErr := helpers.SyncRankForElo(actor, i.GuildID, pid, seasonID, previousRank, newVal); rankErr != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 	} else if subcommand == "set" {
 		absolute := value
@@ -192,7 +191,7 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 		updated, err := database.Must().Stats.Patch(actor, i.GuildID, pid, seasonID, map[string]any{statKey: absolute})
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 		newVal = getStatValue(updated, statKey)
 	} else {
@@ -202,12 +201,12 @@ func executeGameModifyCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 		updated, err := database.Must().Stats.Increment(actor, i.GuildID, pid, seasonID, map[string]int{statKey: delta})
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameModifyEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameModifyEmbed(i))
 		}
 		newVal = getStatValue(updated, statKey)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameModifySuccessEmbed(i, statLabel, target, view.Config.Username, subcommand, newVal, currentVal))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameModifySuccessEmbed(i, statLabel, target, view.Config.Username, subcommand, newVal, currentVal))
 }
 
 // ============================================================================

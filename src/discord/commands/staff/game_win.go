@@ -9,7 +9,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -52,10 +51,10 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameWinInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameWinInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameWinBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameWinBotTargetEmbed(i))
 	}
 
 	// 2. Parse Options
@@ -67,31 +66,31 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.GameWinRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.GameWinRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 	pid := sdk.UintToString(view.Player.ID)
 
 	// 4. Validate Active Season
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameWinNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameWinNoActiveSeasonEmbed(i))
 	}
 
 	// 5. Get or Create Stats
 	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, pid, seasonID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 
 	// 6. Fetch Rank Ladder
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 	sortedRanks := helpers.SortedRanks(ranks)
 
@@ -130,23 +129,23 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	// 8. Update ELO
 	updated, err := helpers.AdjustElo(actor, i.GuildID, pid, seasonID, stats, totalEloGain)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 
 	// 9. Sync Rank
 	newRank, err := helpers.SyncRankForElo(actor, i.GuildID, pid, seasonID, previousRank, updated.Elo)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 	}
 
 	// 10. Update Win Stats if requested
 	if countStats {
 		if _, err := database.Must().Stats.Increment(actor, i.GuildID, pid, seasonID, map[string]int{"wins": winCount}); err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorGameWinEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorGameWinEmbed(i))
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameWinSuccessEmbed(i, target, view.Config.Username, winCount, totalEloGain, previousElo, updated.Elo, previousRank, newRank, countStats, winDetails))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameWinSuccessEmbed(i, target, view.Config.Username, winCount, totalEloGain, previousElo, updated.Elo, previousRank, newRank, countStats, winDetails))
 }
 
 // ============================================================================

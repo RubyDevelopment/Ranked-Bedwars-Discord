@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -115,7 +113,7 @@ func executeTicketManageCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	case "remove":
 		return changeTicketMember(s, i, false)
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.TicketManageInvalidSubcommandEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, helpers.TicketManageInvalidSubcommandEmbed(i))
 }
 
 // executeTicketPanel opens the panel publishing flow for administrators.

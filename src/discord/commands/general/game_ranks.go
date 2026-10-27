@@ -10,7 +10,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -44,16 +43,16 @@ var GameRanksCommand = &types.Command{
 func executeGameRanksCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorRanksEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRanksEmbed(i))
 	}
 
 	sorted := helpers.SortedRanks(ranks)
 	if len(sorted) == 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.EmptyRanksEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.EmptyRanksEmbed(i))
 	}
 
 	content := buildRanksContent(i, sorted)
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.RanksOverviewEmbed(i, content))
+	return helpers.EditInteractionEmbed(s, i, helpers.RanksOverviewEmbed(i, content))
 }
 
 // ============================================================================
@@ -73,7 +72,7 @@ func buildRanksContent(i *discordgo.InteractionCreate, sorted []types.Rank) stri
 			if statsErr == nil && stats != nil {
 				elo := stats.Elo
 				current := helpers.RankForElo(sorted, elo)
-				currentName := helpers.FillLayout(i.GuildID, cmdcfg.LayoutRanksUnranked, nil)
+				currentName := helpers.FillLayout(i.GuildID, helpers.LayoutRanksUnranked, nil)
 				if current != nil {
 					currentName = current.RankName
 				}
@@ -87,9 +86,9 @@ func buildRanksContent(i *discordgo.InteractionCreate, sorted []types.Rank) stri
 				}
 
 				vars := map[string]string{"elo": strconv.Itoa(elo), "rank": currentName}
-				layout := cmdcfg.LayoutRanksProgressMax
+				layout := helpers.LayoutRanksProgressMax
 				if nextRank != nil {
-					layout = cmdcfg.LayoutRanksProgress
+					layout = helpers.LayoutRanksProgress
 					vars["next_rank"], vars["next_min_elo"], vars["next_in"] = nextRank.RankName, strconv.Itoa(nextRank.MinElo), strconv.Itoa(nextRank.MinElo-elo)
 				}
 				description.WriteString(helpers.FillLayout(i.GuildID, layout, vars) + "\n\n")
@@ -98,12 +97,12 @@ func buildRanksContent(i *discordgo.InteractionCreate, sorted []types.Rank) stri
 	}
 
 	if description.Len() == 0 {
-		description.WriteString(helpers.FillLayout(i.GuildID, cmdcfg.LayoutRanksGuest, nil) + "\n\n")
+		description.WriteString(helpers.FillLayout(i.GuildID, helpers.LayoutRanksGuest, nil) + "\n\n")
 	}
 
-	description.WriteString(helpers.FillLayout(i.GuildID, cmdcfg.LayoutRanksHeading, nil) + "\n")
+	description.WriteString(helpers.FillLayout(i.GuildID, helpers.LayoutRanksHeading, nil) + "\n")
 	for _, rank := range sorted {
-		maxElo := helpers.FillLayout(i.GuildID, cmdcfg.LayoutRanksNoMax, nil)
+		maxElo := helpers.FillLayout(i.GuildID, helpers.LayoutRanksNoMax, nil)
 		if rank.MaxElo != 0 {
 			maxElo = strconv.Itoa(rank.MaxElo)
 		}
@@ -111,7 +110,7 @@ func buildRanksContent(i *discordgo.InteractionCreate, sorted []types.Rank) stri
 		if strings.TrimSpace(roleMention) != "" {
 			roleMention = fmt.Sprintf("<@&%s>", roleMention)
 		}
-		description.WriteString(helpers.FillLayout(i.GuildID, cmdcfg.LayoutRanksLine, map[string]string{
+		description.WriteString(helpers.FillLayout(i.GuildID, helpers.LayoutRanksLine, map[string]string{
 			"role": roleMention, "name": rank.RankName, "min_elo": strconv.Itoa(rank.MinElo), "max_elo": maxElo,
 			"win": strconv.Itoa(rank.KFactorWin), "loss": strconv.Itoa(absInt(rank.KFactorLoss)),
 		}) + "\n")

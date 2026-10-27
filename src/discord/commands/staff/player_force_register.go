@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -60,30 +59,30 @@ func executePlayerForceRegisterCommand(s *discordgo.Session, i *discordgo.Intera
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterBotTargetEmbed(i))
 	}
 
 	// 2. Validate Username Format
 	username := strings.TrimSpace(helpers.OptionString(i, "username"))
 	if !helpers.IsValidMcUsername(username) {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterInvalidUsernameEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterInvalidUsernameEmbed(i))
 	}
 
 	// 3. Check for Existing Registration
 	if existing, err := database.Must().Player.Get(i.GuildID, target.ID); err == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterAlreadyRegisteredEmbed(i, existing.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterAlreadyRegisteredEmbed(i, existing.Config.Username))
 	} else if !sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceRegisterEmbed(i))
 	}
 
 	// 4. Require at least one configured rank so the player can be given one (and its role)
 	if ok, rankErr := helpers.HasConfiguredRank(i.GuildID); rankErr != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceRegisterEmbed(i))
 	} else if !ok {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterNoRanksEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterNoRanksEmbed(i))
 	}
 
 	// 5. Register (creates the global player, config, and starting stats atomically)
@@ -91,20 +90,20 @@ func executePlayerForceRegisterCommand(s *discordgo.Session, i *discordgo.Intera
 	reg, err := database.Must().Player.Register(actor, i.GuildID, target.ID, username, 0)
 	if err != nil {
 		if sdk.IsConflict(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterConflictEmbed(i, username))
+			return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterConflictEmbed(i, username))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceRegisterEmbed(i))
 	}
 
 	// 6. Apply the guild's configured starting rank/ELO for new registrations
 	if reg.CreatedGuild {
 		if err := helpers.ApplyStartingRank(i.GuildID, actor, reg.PlayerID); err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceRegisterEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceRegisterEmbed(i))
 		}
 	}
 	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, reg.PlayerID, target.ID); err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorPlayerForceRegisterEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerForceRegisterEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.PlayerForceRegisterSuccessEmbed(i, target, username))
+	return helpers.EditInteractionEmbed(s, i, helpers.PlayerForceRegisterSuccessEmbed(i, target, username))
 }

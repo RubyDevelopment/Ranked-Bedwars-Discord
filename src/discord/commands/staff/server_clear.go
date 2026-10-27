@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -109,22 +107,22 @@ func executeServerClearCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 3. Verify Bot Permissions
 	perms, err := s.UserChannelPermissions(s.State.User.ID, channelID)
 	if err != nil || perms&discordgo.PermissionManageMessages == 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.ClearMissingPermissionsEmbed(i, channelID))
+		return helpers.EditInteractionEmbed(s, i, helpers.ClearMissingPermissionsEmbed(i, channelID))
 	}
 
 	// 4. Delete Messages with Filters
 	deleted, skipped, err := clearChannelMessagesFiltered(s, channelID, amount, targetUser, contentType, override)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorClearEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorClearEmbed(i))
 	}
 
 	if deleted == 0 && skipped == 0 {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.ClearNoMessagesEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.ClearNoMessagesEmbed(i))
 	}
 	if skipped > 0 && !override {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.ClearPartialEmbed(i, channelID, deleted, skipped))
+		return helpers.EditInteractionEmbed(s, i, helpers.ClearPartialEmbed(i, channelID, deleted, skipped))
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.ClearSuccessEmbed(i, channelID, deleted))
+	return helpers.EditInteractionEmbed(s, i, helpers.ClearSuccessEmbed(i, channelID, deleted))
 }
 
 // ============================================================================

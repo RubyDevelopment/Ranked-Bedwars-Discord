@@ -1064,7 +1064,7 @@ func (c PerkContext) MapVoteWeight() float64 {
 type draftUI struct {
 	channelID string
 	messageID string
-	turnKey   string // changes whenever someone picks, so a stale auto-pick timer does nothing
+	turnKey   string     // changes whenever someone picks, so a stale auto-pick timer does nothing
 	endsAt    int64      // when the current pick times out (Unix seconds), 0 without a time limit
 	prev      [][]string // the rosters as the message last showed them, to tell who a pick pulled along
 }
@@ -1558,10 +1558,10 @@ type statLabel struct {
 }
 
 type guildFlow struct {
-	Embeds    map[string]embedTemplate
-	Stats     []statLabel
-	Announced map[string]bool // embeds the pipeline posts itself with an Announce step
-	PartyInvite string // the profile's party invite command, with {players}
+	Embeds      map[string]embedTemplate
+	Stats       []statLabel
+	Announced   map[string]bool // embeds the pipeline posts itself with an Announce step
+	PartyInvite string          // the profile's party invite command, with {players}
 }
 
 func (f guildFlow) announces(id string) bool {
@@ -1993,61 +1993,6 @@ func pingsOf(g Game) string {
 // ============================================================================
 // Embed Builders
 // ============================================================================
-
-// UnexpectedErrorGameEmbed is the fallback for a game action that failed for an unknown reason.
-func UnexpectedErrorGameEmbed(action string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Unexpected Error",
-		Description: fmt.Sprintf("An unexpected error occurred while trying to %s. Please contact an administrator for assistance or try again later.", action),
-	})
-}
-
-// GameActionErrorEmbed maps a GameManager error to the embed for it. action completes
-// "trying to ..." in the fallback embed (e.g. "void the game").
-func GameActionErrorEmbed(action string, err error) *discordgo.MessageEmbed {
-	switch {
-	case errors.Is(err, ErrGameNotFound):
-		return gameErrorEmbed("Game Not Found", "That game could not be found. It may have already been cleaned up.")
-	case errors.Is(err, ErrWrongState):
-		return gameErrorEmbed("Invalid Game State", "That game is not in the right state for this action.")
-	case errors.Is(err, ErrNotParticipant):
-		return gameErrorEmbed("Not in Match", "That player is not a participant in this game.")
-	case errors.Is(err, ErrAlreadySubmitted):
-		return gameErrorEmbed("Already Submitted", "A result has already been submitted for this game.")
-	case errors.Is(err, ErrUnknownTeam):
-		return gameErrorEmbed("Unknown Team", "That team does not exist in this game.")
-	case errors.Is(err, ErrNoSeason):
-		return gameErrorEmbed("No Active Season", "This guild does not have an active season configured. Please contact an administrator to configure a season.")
-	case errors.Is(err, ErrNothingToRestore):
-		return gameErrorEmbed("Nothing to Restore", "That game has no recorded result to restore.")
-	case errors.Is(err, ErrBusy):
-		return gameErrorEmbed("Game Busy", "That game is currently being scored. Please try again in a moment.")
-	case errors.Is(err, ErrAlreadyVoided):
-		return gameErrorEmbed("Already Voided", "That game has already been voided.")
-	case errors.Is(err, ErrNotScored):
-		return gameErrorEmbed("Not Scored", "That game has not been scored yet.")
-	case errors.Is(err, ErrRescoreIncomplete):
-		return gameErrorEmbed("Rescore Incomplete", "The old results were reversed but the new ones could not be applied. Run the score again to finish.")
-	case errors.Is(err, ErrNotYourTurn):
-		return gameErrorEmbed("Not Your Turn", "It is not your turn to pick.")
-	case errors.Is(err, ErrNotInPool):
-		return gameErrorEmbed("Invalid Selection", "That player is not available to pick.")
-	case errors.Is(err, ErrDraftOver):
-		return gameErrorEmbed("Draft Complete", "The captain draft is already complete.")
-	case errors.Is(err, ErrNoDraftYet):
-		return gameErrorEmbed("No Active Draft", "There is no active captain draft for this game.")
-	case errors.Is(err, ErrNotACaptain):
-		return gameErrorEmbed("Not a Captain", "Only team captains can pick players during the draft.")
-	}
-	return UnexpectedErrorGameEmbed(action)
-}
-
-func gameErrorEmbed(title, description string) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       title,
-		Description: description,
-	})
-}
 
 // ============================================================================
 // Game logs
@@ -5653,35 +5598,6 @@ func (h *HostSession) start(s *discordgo.Session, i *discordgo.InteractionCreate
 	delete(hostSessions.byID, h.ID)
 	hostSessions.Unlock()
 	respondHostGame(s, i, HostGameDoneEmbed(fmt.Sprintf("Game **#%d** is being set up in `%s`. Its channels will appear in a moment.", game.Number, chosen.Mode.Name)), nil)
-}
-
-func HostGameErrorEmbed(err error) *discordgo.MessageEmbed {
-	var busy *BusyError
-	var unregistered *NotRegisteredError
-	text := err.Error()
-	switch {
-	case errors.Is(err, ErrGameNotFound):
-		text = "That game isn't running any more."
-	case errors.Is(err, ErrNotCustom):
-		text = "That game wasn't built with `/host`."
-	case errors.Is(err, ErrBotHosted):
-		text = "A bot is hosting that game, so its roster can't be changed."
-	case errors.Is(err, ErrUnknownTeam):
-		text = "That game doesn't have that team."
-	case errors.Is(err, ErrNotParticipant):
-		text = "That player isn't in the game."
-	case errors.Is(err, ErrWrongState):
-		text = "The game isn't in a state where that can be done."
-	case errors.As(err, &busy):
-		text = fmt.Sprintf("<@%s> is already in a game.", busy.UserID)
-	case errors.As(err, &unregistered):
-		text = "That player isn't registered."
-	}
-	return Preset("error", types.PresetOptions{Title: "Hosted Game", Description: text})
-}
-
-func HostGameDoneEmbed(text string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{Title: "Hosted Game", Description: text})
 }
 
 // ============================================================================

@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -112,18 +110,18 @@ func executeGameHostCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		return helpers.EditInteractionComponents(s, i, embed, components)
 	}
 	if sub == "list" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHostListEmbed(i, helpers.Games.CustomGames(guildID)))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHostListEmbed(i, helpers.Games.CustomGames(guildID)))
 	}
 
 	number := helpers.SubOptionInt(opts, "game")
 	g, ok := helpers.Games.ByNumber(guildID, number)
 	if !ok || g.Custom == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHostNotFoundEmbed(i, number))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHostNotFoundEmbed(i, number))
 	}
 
 	switch sub {
 	case "view":
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameHostViewEmbed(i, g))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameHostViewEmbed(i, g))
 
 	case "cancel":
 		if err := helpers.Games.Void(actor, guildID, g.ID, helpers.SubOptionString(opts, "reason"), helpers.VoidOptions{}); err != nil {

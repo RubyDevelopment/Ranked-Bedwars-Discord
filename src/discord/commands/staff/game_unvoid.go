@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -57,10 +55,10 @@ func executeGameUnvoidCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 1. Validate the Game
 	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameUnvoidNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidNotFoundEmbed(i, gameNumber))
 	}
 	if game.State != helpers.GameVoided {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.GameUnvoidNotVoidedEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidNotVoidedEmbed(i, gameNumber))
 	}
 
 	// 2. Restore the Game
@@ -69,5 +67,5 @@ func executeGameUnvoidCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("unvoid the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.GameUnvoidSuccessEmbed(i, gameNumber, len(result.Results)))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidSuccessEmbed(i, gameNumber, len(result.Results)))
 }

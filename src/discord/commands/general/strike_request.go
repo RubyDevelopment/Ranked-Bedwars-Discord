@@ -8,7 +8,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -59,30 +58,30 @@ func executeStrikeRequestCommand(s *discordgo.Session, i *discordgo.InteractionC
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRequestInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeRequestInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRequestBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeRequestBotTargetEmbed(i))
 	}
 
 	// 2. Validate Reason
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
 	if reason == "" {
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRequestReasonRequiredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.StrikeRequestReasonRequiredEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRequestNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.StrikeRequestNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorStrikeRequestEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorStrikeRequestEmbed(i))
 	}
 
 	username := target.Username
 	if view.Config != nil && view.Config.Username != "" {
 		username = view.Config.Username
 	}
-	return helpers.EditInteractionEmbed(s, i, cmdcfg.StrikeRequestSubmittedEmbed(i, target, username, reason))
+	return helpers.EditInteractionEmbed(s, i, helpers.StrikeRequestSubmittedEmbed(i, target, username, reason))
 }

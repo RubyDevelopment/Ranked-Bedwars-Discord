@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
+	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
@@ -851,56 +851,6 @@ func OptionChannelID(i *discordgo.InteractionCreate, name string) string {
 // Punishment Helper Functions
 // ============================================================================
 
-// ParseDurationMs parses duration strings like "30m", "1d", "perm" into milliseconds.
-func ParseDurationMs(input string) (time.Duration, bool, bool) {
-	input = strings.ToLower(strings.TrimSpace(input))
-	if input == "" || input == "perm" || input == "permanent" || input == "permanentban" {
-		return 0, true, true
-	}
-
-	var duration time.Duration
-	var found bool
-
-	for i := 0; i < len(input); i++ {
-		if input[i] >= '0' && input[i] <= '9' {
-			numStr := ""
-			for i < len(input) && (input[i] >= '0' && input[i] <= '9') {
-				numStr += string(input[i])
-				i++
-			}
-			if i < len(input) {
-				unit := string(input[i])
-				num, err := strconv.ParseInt(numStr, 10, 64)
-				if err != nil {
-					continue
-				}
-				switch unit {
-				case "s":
-					duration += time.Duration(num) * time.Second
-					found = true
-				case "m":
-					duration += time.Duration(num) * time.Minute
-					found = true
-				case "h":
-					duration += time.Duration(num) * time.Hour
-					found = true
-				case "d":
-					duration += time.Duration(num) * 24 * time.Hour
-					found = true
-				case "w":
-					duration += time.Duration(num) * 7 * 24 * time.Hour
-					found = true
-				}
-			}
-		}
-	}
-
-	if !found {
-		return 0, false, false
-	}
-	return duration, true, false
-}
-
 // ParseTimeFilter parses duration filters such as 1d, 7d, or 2w.
 func ParseTimeFilter(input string) (time.Duration, bool) {
 	input = strings.TrimSpace(strings.ToLower(input))
@@ -1590,6 +1540,10 @@ func markAcked(id string, channelMessage bool) bool {
 
 // InteractionRespond answers an interaction, converting the response when the interaction was already acknowledged.
 func InteractionRespond(s *discordgo.Session, it *discordgo.Interaction, resp *discordgo.InteractionResponse) error {
+	// Every answer to an interaction, commands and events alike, carries the server's icon in its footer.
+	if resp != nil && resp.Data != nil && it != nil {
+		WithGuildFooterIconForGuild(s, it.GuildID, resp.Data.Embeds...)
+	}
 	channelMessage := resp.Type == discordgo.InteractionResponseDeferredChannelMessageWithSource
 	if markAcked(it.ID, channelMessage) {
 		return s.InteractionRespond(it, resp)
@@ -1651,4 +1605,25 @@ func WatchInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		_ = InteractionRespond(s, i.Interaction, deferral)
 	})
+}
+func editComponentEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	WithGuildFooterIcon(s, i, embed)
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}})
+}
+
+// followupEmbed sends an ephemeral embed after the click was already acknowledged.
+func followupEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
+	WithGuildFooterIcon(s, i, embed)
+	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{embed},
+		Flags:  discordgo.MessageFlagsEphemeral,
+	})
+}
+func updateRequirementFixMessage(s *discordgo.Session, i *discordgo.InteractionCreate, emb *discordgo.MessageEmbed, components []discordgo.MessageComponent) {
+	if components == nil {
+		components = []discordgo.MessageComponent{}
+	}
+	WithGuildFooterIcon(s, i, emb)
+	embeds := []*discordgo.MessageEmbed{emb}
+	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
 }

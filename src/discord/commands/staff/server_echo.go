@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-
-	cmdcfg "ranked-bedwars/src/discord/config"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
 )
@@ -96,9 +94,9 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 
 		if _, err := s.ChannelMessageSend(targetChannelID, content); err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorEchoEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorEchoEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.EchoSuccessEmbed(i, targetChannelID))
+		return helpers.EditInteractionEmbed(s, i, helpers.EchoSuccessEmbed(i, targetChannelID))
 
 	case "link":
 		link := helpers.SubOptionString(options, "url")
@@ -106,10 +104,10 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		parsed := parseDiscordMessageLink(link)
 		if parsed == nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.EchoInvalidLinkEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.EchoInvalidLinkEmbed(i))
 		}
 		if i.GuildID != "" && parsed.guildID != i.GuildID {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.EchoRestrictedDestinationEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.EchoRestrictedDestinationEmbed(i))
 		}
 
 		if embedErr := ensureEchoChannelAccess(s, i, targetChannelID); embedErr != nil {
@@ -118,7 +116,7 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		sourceMessage, err := s.ChannelMessage(parsed.channelID, parsed.messageID)
 		if err != nil || sourceMessage == nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.EchoInvalidLinkEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.EchoInvalidLinkEmbed(i))
 		}
 
 		send := &discordgo.MessageSend{
@@ -126,10 +124,10 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			Embeds:  sourceMessage.Embeds,
 		}
 		if _, err := s.ChannelMessageSendComplex(targetChannelID, send); err != nil {
-			return helpers.EditInteractionEmbed(s, i, cmdcfg.UnexpectedErrorEchoEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorEchoEmbed(i))
 		}
 
-		return helpers.EditInteractionEmbed(s, i, cmdcfg.EchoSuccessEmbed(i, targetChannelID))
+		return helpers.EditInteractionEmbed(s, i, helpers.EchoSuccessEmbed(i, targetChannelID))
 	}
 
 	return nil
@@ -150,16 +148,16 @@ func ensureEchoChannelAccess(s *discordgo.Session, i *discordgo.InteractionCreat
 	if i.GuildID != "" {
 		channel, err := s.Channel(channelID)
 		if err != nil {
-			return cmdcfg.EchoInvalidChannelEmbed(i)
+			return helpers.EchoInvalidChannelEmbed(i)
 		}
 		if channel.GuildID != "" && channel.GuildID != i.GuildID {
-			return cmdcfg.EchoRestrictedDestinationEmbed(i)
+			return helpers.EchoRestrictedDestinationEmbed(i)
 		}
 	}
 
 	perms, err := s.UserChannelPermissions(s.State.User.ID, channelID)
 	if err != nil || perms&(discordgo.PermissionViewChannel|discordgo.PermissionSendMessages) != (discordgo.PermissionViewChannel|discordgo.PermissionSendMessages) {
-		return cmdcfg.EchoInsufficientPermissionsEmbed(i)
+		return helpers.EchoInsufficientPermissionsEmbed(i)
 	}
 	return nil
 }

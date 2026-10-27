@@ -32,13 +32,6 @@
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "ban.invalid-duration",
-					"slug": "invalid-duration",
-					"title": "Invalid Duration",
-					"look": "error",
-					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
-				},
-				{
 					"key": "ban.hierarchy-error",
 					"slug": "hierarchy-error",
 					"title": "Hierarchy Error",
@@ -465,7 +458,7 @@
 					"slug": "restricted-destination",
 					"title": "Restricted Destination",
 					"look": "error",
-					"description": "That message link points outside this server. Only links from this guild can be used."
+					"description": "That message link points outside this guild. Only links from this guild can be used."
 				},
 				{
 					"key": "echo.invalid-channel",
@@ -1234,13 +1227,6 @@
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "mute.invalid-duration",
-					"slug": "invalid-duration",
-					"title": "Invalid Duration",
-					"look": "error",
-					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
-				},
-				{
 					"key": "mute.hierarchy-error",
 					"slug": "hierarchy-error",
 					"title": "Hierarchy Error",
@@ -1882,13 +1868,6 @@
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "queueban.invalid-duration",
-					"slug": "invalid-duration",
-					"title": "Invalid Duration",
-					"look": "error",
-					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
-				},
-				{
 					"key": "queueban.hierarchy-error",
 					"slug": "hierarchy-error",
 					"title": "Hierarchy Error",
@@ -2306,14 +2285,14 @@
 					"slug": "invalid-target",
 					"title": "Invalid Target",
 					"look": "error",
-					"description": "That member could not be updated. Verify the user is in this server and try again."
+					"description": "That member could not be updated. Verify the user is in this guild and try again."
 				},
 				{
 					"key": "role.member-not-found",
 					"slug": "member-not-found",
 					"title": "Member Not Found",
 					"look": "error",
-					"description": "That member is not in this server. They may have left or been removed."
+					"description": "That member is not in this guild. They may have left or been removed."
 				},
 				{
 					"key": "role.no-members-found",
@@ -2362,7 +2341,7 @@
 					"slug": "role-synchronization-started",
 					"title": "Role Synchronization Started",
 					"look": "success",
-					"description": "Queued background role synchronization for verified server members."
+					"description": "Queued background role synchronization for verified guild members."
 				},
 				{
 					"key": "role.role-not-manageable",
@@ -3551,18 +3530,11 @@
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "vcmute.invalid-duration",
-					"slug": "invalid-duration",
-					"title": "Invalid Duration",
-					"look": "error",
-					"description": "That duration format is not recognized. Use values like `30m`, `1d`, `2w`, or `perm`."
-				},
-				{
 					"key": "vcmute.member-not-found",
 					"slug": "member-not-found",
 					"title": "Member Not Found",
 					"look": "error",
-					"description": "That user is not currently in this server. They must be in the server to apply a …."
+					"description": "That user is not currently in this guild. They must be in the guild to apply a …."
 				},
 				{
 					"key": "vcmute.hierarchy-error",
