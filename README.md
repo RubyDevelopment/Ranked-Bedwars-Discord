@@ -133,7 +133,7 @@ go generate ./src/discord/helpers
 
 ## Depending on the Database module
 
-The bot imports the Database repository as a Go module for its SDK and wire types, and pins a version in `go.mod`. The Database repository tags every successful push to `main`, so update with:
+The bot imports the Database repository as a Go module for its SDK and wire types, and pins a version in `go.mod`. The Database repository tags every successful push to `main`, and `.github/workflows/update-database.yml` moves this repository to the newest tag on every push or merge to `main`: it updates `go.mod` and `go.sum`, checks the bot still builds and vets, and commits the change back. It needs a `DATABASE_REPO_TOKEN` repository secret (read-only Contents access to the Database repository). To update by hand:
 
 ```bash
 go get github.com/RubyDevelopment/Ranked-Bedwars-Database@vX.Y.Z
