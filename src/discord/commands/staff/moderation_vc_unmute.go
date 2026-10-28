@@ -53,7 +53,8 @@ var ModerationVcUnmuteCommand = &types.Command{
 
 func executeModerationVcUnmuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:       "server_vc_mute", // Use server_vc_mute for shared alerts
+		Command:       "vcmute",
+		Ladder:        "vc_mute",
 		RoleKey:       "vc_muted_role",
 		Action:        "Voice Mute",
 		Adjective:     "voice muted",

@@ -53,7 +53,7 @@ var ModerationKickCommand = &types.Command{
 
 func executeModerationKickCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
-		Command:       "server_kick",
+		Command:       "kick",
 		Action:        "kick",
 		Adjective:     "kicked",
 		Summary:       "the kick",

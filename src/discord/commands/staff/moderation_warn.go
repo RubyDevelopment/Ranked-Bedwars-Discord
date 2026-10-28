@@ -53,7 +53,7 @@ var ModerationWarnCommand = &types.Command{
 // ============================================================================
 
 var warnSpec = &helpers.ApplySpec{
-	Command:       "warn_issue",
+	Command:       "warn",
 	Action:        "warn",
 	Adjective:     "warned",
 	Summary:       "the warning",

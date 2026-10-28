@@ -53,7 +53,8 @@ var ModerationUnmuteCommand = &types.Command{
 
 func executeModerationUnmuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "server_mute", // Use server_mute for shared alerts
+		Command:   "mute",
+		Ladder:    "chat_mute",
 		RoleKey:   "chat_muted_role",
 		Action:    "Chat Mute",
 		Adjective: "chat muted",

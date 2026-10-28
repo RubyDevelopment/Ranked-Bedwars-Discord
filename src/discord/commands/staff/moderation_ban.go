@@ -53,7 +53,7 @@ var ModerationBanCommand = &types.Command{
 // ============================================================================
 
 var serverBanSpec = &helpers.ApplySpec{
-	Command:     "server_ban",
+	Command:     "ban",
 	Action:      "server ban",
 	Adjective:   "server banned",
 	Summary:     "the server ban",

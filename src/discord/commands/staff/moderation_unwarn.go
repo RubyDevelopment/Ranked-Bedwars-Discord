@@ -53,7 +53,7 @@ var ModerationUnwarnCommand = &types.Command{
 
 func executeModerationUnwarnCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "warn_issue", // Use warn_issue for shared alerts
+		Command:   "warn",
 		Action:    "Warning",
 		Adjective: "warned",
 		Type:      "warn",

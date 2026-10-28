@@ -54,7 +54,8 @@ var ModerationQueueUnbanCommand = &types.Command{
 
 func executeModerationQueueUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "queue_ban", // Use queue_ban for shared alerts
+		Command:   "queueban",
+		Ladder:    "queue_ban",
 		RoleKey:   "queue_banned_role",
 		Action:    "Queue Ban",
 		Adjective: "queue banned",

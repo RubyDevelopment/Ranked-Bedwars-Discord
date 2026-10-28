@@ -180,7 +180,7 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 
 	bannedRoles := []string{
 		EventRequirementID(guildID, QueueEventName, types.ReqRole, QueueRoleBanned),
-		SettingRole(guildID, "queue_ban", "queue_banned_role"), // the role /queue_ban hands out
+		LadderRole(guildID, "queue_ban"), // the role /queueban hands out
 	}
 	for _, id := range bannedRoles {
 		if id == "" || !memberHasRole(s, guildID, userID, id) {

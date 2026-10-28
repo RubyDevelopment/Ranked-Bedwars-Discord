@@ -143,7 +143,7 @@ func executeModerationStrikeCommand(s *discordgo.Session, i *discordgo.Interacti
 
 	embed := helpers.ModerationStrikeSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
 	embed.Description += notes
-	helpers.LogCommandResult(s, i.GuildID, "strike_issue", actor, embed)
-	helpers.SendPunishmentAlert(s, i.GuildID, "strike_issue", "applied", target, username, "strike", "", reason)
+	helpers.LogCommandResult(s, i.GuildID, "strike", actor, embed)
+	helpers.SendPunishmentAlert(s, i.GuildID, "strike", "applied", target, username, "strike", "", reason)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

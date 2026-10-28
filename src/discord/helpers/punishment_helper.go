@@ -55,7 +55,8 @@ type ApplySpec struct {
 
 	// Command is the command whose settings apply: its log channels, and the role named by RoleKey.
 	Command string
-	// RoleKey, when set, is that command's role requirement: the role given to the target (taken off again on revoke).
+	// RoleKey, when set, means the punishment hands the target a role (taken off again on revoke): the one chosen for
+	// Ladder in the punishment ladder settings, else the command's own role requirement (see LadderRole).
 	RoleKey string
 
 	Discord     DiscordAction
@@ -75,9 +76,12 @@ type RevokeSpec struct {
 	DiscordActive func(s *discordgo.Session, guildID, targetID string) bool
 	Discord       DiscordAction
 
-	// Command and RoleKey name the command (the one that applies this punishment) whose log channels and role to use.
+	// Command names the command (the one that applies this punishment) whose log channels to use.
 	Command string
+	// RoleKey, when set, means the punishment handed out a role, which is taken off again; Ladder names the punishment
+	// ladder type whose role that is (see LadderRole).
 	RoleKey string
+	Ladder  string
 }
 
 func (spec *ApplySpec) activeTypes() []string {
@@ -228,7 +232,7 @@ func ApplyPunishmentTo(s *discordgo.Session, guildID, actor string, target *disc
 		applied = spec.Discord(s, guildID, target.ID, reason)
 	}
 	if spec.RoleKey != "" {
-		if roleID := SettingRole(guildID, spec.Command, spec.RoleKey); roleID != "" && s.GuildMemberRoleAdd(guildID, target.ID, roleID) == nil {
+		if roleID := LadderRole(guildID, spec.Ladder); roleID != "" && s.GuildMemberRoleAdd(guildID, target.ID, roleID) == nil {
 			applied = true
 		}
 	}
@@ -299,7 +303,7 @@ func RevokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec
 	}
 
 	if spec.RoleKey != "" {
-		if roleID := SettingRole(i.GuildID, spec.Command, spec.RoleKey); roleID != "" {
+		if roleID := LadderRole(i.GuildID, spec.Ladder); roleID != "" {
 			_ = s.GuildMemberRoleRemove(i.GuildID, target.ID, roleID)
 		}
 	}
@@ -346,14 +350,38 @@ const (
 	punishmentSweepBatch = 100
 )
 
-// restrictionRole is the command and role requirement a punishment type hands out.
-type restrictionRole struct{ command, roleKey string }
+// restrictionRole pairs a command with a name: for restrictionRoles it is the command that applied a punishment type
+// and the ladder type whose role it hands out; for ladderRoleCommands it is a command and its role requirement key.
+type restrictionRole struct{ command, name string }
 
 var restrictionRoles = map[string]restrictionRole{
-	"mute":     {"server_mute", "chat_muted_role"},
-	"ban":      {"queue_ban", "queue_banned_role"},
-	"vc_mute":  {"server_vc_mute", "vc_muted_role"},
-	"restrict": {"server_vc_mute", "vc_muted_role"},
+	"mute":     {"mute", "chat_mute"},
+	"ban":      {"queueban", "queue_ban"},
+	"vc_mute":  {"vcmute", "vc_mute"},
+	"restrict": {"vcmute", "vc_mute"},
+}
+
+// ladderRoleCommands is the command whose role requirement stands in for a ladder type with no role chosen in the
+// punishment ladder settings (the assignment made before those settings had role pickers).
+var ladderRoleCommands = map[string]restrictionRole{
+	"chat_mute": {"mute", "chat_muted_role"},
+	"queue_ban": {"queueban", "queue_banned_role"},
+	"vc_mute":   {"vcmute", "vc_muted_role"},
+}
+
+// LadderRole is the role a punishment of the given ladder type hands out ("" when none is set): the one chosen in the
+// punishment ladder settings, else the role the command itself has assigned.
+func LadderRole(guildID, ladderType string) string {
+	if raw, err := database.Must().GuildConfig.Field(guildID, "punishment_ladder"); err == nil {
+		var cfg ladderConfig
+		if json.Unmarshal(raw, &cfg) == nil && cfg.Roles[ladderType] != "" {
+			return cfg.Roles[ladderType]
+		}
+	}
+	if fallback, ok := ladderRoleCommands[ladderType]; ok {
+		return SettingRole(guildID, fallback.command, fallback.name)
+	}
+	return ""
 }
 
 // punishmentWatch sweeps only guilds that have a timed punishment outstanding. TrackPunishmentExpiry adds a guild when
@@ -447,15 +475,15 @@ func undoExpiredPunishment(s *discordgo.Session, guildID string, p models.Player
 		command = rr.command
 		sameRole := func(typ string) bool { return restrictionRoles[typ] == rr }
 		if !stillHeld(sameRole) {
-			if roleID := SettingRole(guildID, rr.command, rr.roleKey); roleID != "" {
+			if roleID := LadderRole(guildID, rr.name); roleID != "" {
 				_ = s.GuildMemberRoleRemove(guildID, userID, roleID)
 			}
-			if rr.roleKey == "vc_muted_role" {
+			if rr.name == "vc_mute" {
 				_ = s.GuildMemberMute(guildID, userID, false)
 			}
 		}
 	case p.Type == "server_ban":
-		command = "serverunban"
+		command = "unban"
 		if !stillHeld(func(typ string) bool { return typ == "server_ban" }) {
 			if err := s.GuildBanDelete(guildID, userID); err != nil {
 				punishmentLogger.Warn(fmt.Sprintf("unbanning %s in %s after expiry: %v", userID, guildID, err))
@@ -484,15 +512,15 @@ func SendPunishmentAlert(s *discordgo.Session, guildID, command, action string, 
 	// Map commands to their alert channel keys
 	alertKey := types.ModerationAlertsKey
 	switch command {
-	case "queue_ban", "queue_unban":
+	case "queueban", "queueunban":
 		alertKey = "queue_ban_alerts"
-	case "server_ban", "server_unban":
+	case "ban", "unban":
 		alertKey = "server_ban_alerts"
-	case "server_mute", "server_unmute":
+	case "mute", "unmute":
 		alertKey = "server_mute_alerts"
-	case "server_vc_mute", "server_vc_unmute":
+	case "vcmute", "vcunmute":
 		alertKey = "server_vc_mute_alerts"
-	case "server_kick":
+	case "kick":
 		alertKey = "server_kick_alerts"
 	}
 
@@ -571,6 +599,7 @@ type keyedLevel struct {
 type ladderConfig struct {
 	OffenceMode string                 `json:"offence_mode"` // persistent (default), active_only or season_reset
 	Levels      map[string]ladderLevel `json:"levels"`
+	Roles       map[string]string      `json:"roles"` // punishment ladder: the role chat_mute, vc_mute and queue_ban each hand out
 }
 
 // enabledLevels lists the usable levels (enabled, with at least one step) in a stable order.
@@ -708,13 +737,9 @@ func PlanStrike(guildID, playerID, strikeType string, seasonID uint) (*StrikePla
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now()
-	count := 1 // the strike being issued
+	count := 1 // the strike being issued (strikes never expire: persistent, or per season)
 	for _, s := range prior {
 		if s.LadderLevel != lvl.Key || s.IsVoided || s.IsAppealed {
-			continue
-		}
-		if cfg.OffenceMode == "active_only" && s.ExpiresAt != nil && !s.ExpiresAt.After(now) {
 			continue
 		}
 		count++

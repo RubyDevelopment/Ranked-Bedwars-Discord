@@ -53,7 +53,7 @@ var ModerationVcMuteCommand = &types.Command{
 // ============================================================================
 
 var vcMuteSpec = &helpers.ApplySpec{
-	Command:       "server_vc_mute",
+	Command:       "vcmute",
 	RoleKey:       "vc_muted_role",
 	Action:        "voice mute",
 	Adjective:     "voice muted",
@@ -67,7 +67,7 @@ var vcMuteSpec = &helpers.ApplySpec{
 	MemberActive:  func(member *discordgo.Member) bool { return member.Mute },
 	Discord:       voiceMuteMember,
 	AppliedNote:   "The member is now server-muted in voice channels.",
-	FailedNote:    "The punishment was recorded, but the Discord voice mute could not be applied due to missing permissions.",
+	FailedNote:    "The punishment was recorded, but the Discord voice mute could not be applied (the member may not be in a voice channel, and no voice muted role may be set). Choose one in the dashboard under Moderation > Punishment ladders.",
 	Ladder:        "vc_mute",
 }
 

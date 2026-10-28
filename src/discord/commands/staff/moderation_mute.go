@@ -53,7 +53,7 @@ var ModerationMuteCommand = &types.Command{
 // ============================================================================
 
 var muteSpec = &helpers.ApplySpec{
-	Command:    "server_mute",
+	Command:    "mute",
 	RoleKey:    "chat_muted_role",
 	Action:     "chat mute",
 	Adjective:  "chat muted",
@@ -62,6 +62,8 @@ var muteSpec = &helpers.ApplySpec{
 	Type:       "mute",
 	Duration:   true,
 	Duplicates: true,
+	AppliedNote: "The chat muted role was given to the member.",
+	FailedNote:  "The punishment was recorded, but no chat muted role is set (or it could not be given). Choose one in the dashboard under Moderation > Punishment ladders.",
 	Ladder:     "chat_mute",
 }
 

@@ -54,7 +54,7 @@ var ModerationQueueBanCommand = &types.Command{
 // ============================================================================
 
 var queueBanSpec = &helpers.ApplySpec{
-	Command:    "queue_ban",
+	Command:    "queueban",
 	RoleKey:    "queue_banned_role",
 	Action:     "queue ban",
 	Adjective:  "queue banned",
@@ -63,6 +63,8 @@ var queueBanSpec = &helpers.ApplySpec{
 	Type:       "ban",
 	Duration:   true,
 	Duplicates: true,
+	AppliedNote: "The queue banned role was given to the member.",
+	FailedNote:  "The punishment was recorded, but no queue banned role is set (or it could not be given). Choose one in the dashboard under Moderation > Punishment ladders.",
 	Ladder:     "queue_ban",
 }
 
