@@ -75,9 +75,13 @@ type TicketSettings struct {
 	DeleteOnClose   bool     `json:"delete_on_close"`
 	OwnerCanClose   bool     `json:"owner_can_close"`
 	Mode            string   `json:"mode"` // "thread" or "channel"
-	// InactivityEnabled turns the idle reminder on. Tickets are never closed for inactivity.
+	// InactivityEnabled turns the idle message on. It repeats every InactivityReminderHours of silence (a reminder),
+	// unless InactivityCloseEnabled: then it is sent once and the ticket is closed InactivityCloseHours later when
+	// nobody has replied in the meantime.
 	InactivityEnabled       bool   `json:"inactivity_enabled"`
 	InactivityReminderHours int    `json:"inactivity_reminder_hours"`
+	InactivityCloseEnabled  bool   `json:"inactivity_close_enabled"`
+	InactivityCloseHours    int    `json:"inactivity_close_hours"`
 	InactivityMessage       string `json:"inactivity_message"`
 	// InactivityMessageID is a saved Embed Builder message (message, embeds or Components V2) used for the reminder
 	// instead of InactivityMessage; empty or missing falls back to the plain text.

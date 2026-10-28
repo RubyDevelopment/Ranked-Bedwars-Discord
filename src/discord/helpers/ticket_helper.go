@@ -47,8 +47,7 @@ const (
 
 	defaultInactivityReminderHours = 12
 	maxInactivityHours             = 8760
-	// inactivityCloser only labels tickets that older versions closed automatically; nothing closes tickets for
-	// inactivity any more.
+	// inactivityCloser labels tickets closed by the inactivity policy (a panel with auto-close turned on).
 	inactivityCloser = "inactivity"
 )
 
@@ -904,6 +903,7 @@ type ticketInactivityAction uint8
 const (
 	ticketInactivityNone ticketInactivityAction = iota
 	ticketInactivityRemind
+	ticketInactivityClose
 )
 
 func ticketInactivityActionFor(settings types.TicketSettings, ticket *types.Ticket, now time.Time) ticketInactivityAction {
@@ -912,6 +912,16 @@ func ticketInactivityActionFor(settings types.TicketSettings, ticket *types.Tick
 	}
 	lastActive := ticketLastActivity(ticket)
 	idle := now.Sub(time.Unix(lastActive, 0))
+	noticed := ticket.LastInactivityNoticeAt > 0 && ticket.LastInactivityNoticeAt >= lastActive // a message since the last reply
+	if settings.InactivityCloseEnabled {
+		// The message goes out once; the ticket closes InactivityCloseHours after it if nobody has replied since.
+		if noticed {
+			if now.Sub(time.Unix(ticket.LastInactivityNoticeAt, 0)) >= time.Duration(settings.InactivityCloseHours)*time.Hour {
+				return ticketInactivityClose
+			}
+			return ticketInactivityNone
+		}
+	}
 	if idle < time.Duration(settings.InactivityReminderHours)*time.Hour {
 		return ticketInactivityNone
 	}
@@ -1054,7 +1064,7 @@ func sweepTicketInactivity(s *discordgo.Session) {
 				continue
 			}
 
-			notify := false
+			notify, closing := false, action == ticketInactivityClose
 			err := Tickets.UpdateOpen(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 				ticket := current.Tickets.Open[candidate.ThreadID]
 				if ticket == nil {
@@ -1065,18 +1075,28 @@ func sweepTicketInactivity(s *discordgo.Session) {
 					return nil
 				}
 				currentSettings := currentPanel.Ticket.Settings
-				if ticketInactivityActionFor(currentSettings, ticket, now) != ticketInactivityRemind {
+				if ticketInactivityActionFor(currentSettings, ticket, now) != action {
+					closing = false // somebody replied (or the settings changed) since the sweep looked
 					return nil
 				}
-				ticket.LastInactivityNoticeAt = now.Unix()
+				if action == ticketInactivityRemind {
+					ticket.LastInactivityNoticeAt = now.Unix()
+					notify = true
+				}
 				candidate = copyTicket(ticket)
 				panel = currentPanel
 				settings = currentSettings
-				notify = true
 				return nil
 			})
 			if err != nil {
 				log.Printf("[Tickets] could not schedule inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+				continue
+			}
+			if closing {
+				_, _ = s.ChannelMessageSend(candidate.ThreadID, "Nobody replied in time, so this ticket is being closed for inactivity.")
+				if _, err := closeTicket(s, guild.ID, candidate.ThreadID, inactivityCloser, false); err != nil {
+					log.Printf("[Tickets] could not close inactive ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
+				}
 				continue
 			}
 			if !notify {
@@ -1090,6 +1110,10 @@ func sweepTicketInactivity(s *discordgo.Session) {
 				"reference":      candidate.Ref,
 				"number":         strconv.Itoa(candidate.Number),
 				"category":       candidate.CategoryLabel,
+			}
+			if settings.InactivityCloseEnabled {
+				vars["close_hours"] = strconv.Itoa(settings.InactivityCloseHours)
+				vars["hours_until_close"] = vars["close_hours"]
 			}
 			message, err := sendInactivityReminder(s, guild.ID, candidate.ThreadID, candidate.OwnerID, settings, vars)
 			if err != nil {
@@ -1107,6 +1131,9 @@ func sweepTicketInactivity(s *discordgo.Session) {
 }
 
 func validInactivitySettings(settings types.TicketSettings) bool {
+	if settings.InactivityCloseEnabled && (settings.InactivityCloseHours <= 0 || settings.InactivityCloseHours > maxInactivityHours) {
+		return false
+	}
 	return settings.InactivityReminderHours > 0 && settings.InactivityReminderHours <= maxInactivityHours
 }
 
