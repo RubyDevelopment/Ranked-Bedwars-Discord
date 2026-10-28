@@ -2928,7 +2928,6 @@ func SetTicketLocked(s *discordgo.Session, guildID, threadID, staffID string, lo
 type ticketSnapshot struct {
 	tickets   map[string]string // thread id -> JSON of the ticket
 	inOpen    map[string]bool   // thread ids that were live tickets
-	stats     map[string]string // staff id -> JSON of the leaderboard row
 	blacklist string
 	counter   int
 	panels    string
@@ -3076,7 +3075,6 @@ func snapshotInteractivePanels(ip *types.InteractivePanels) ticketSnapshot {
 	snap := ticketSnapshot{
 		tickets:   map[string]string{},
 		inOpen:    map[string]bool{},
-		stats:     map[string]string{},
 		blacklist: jsonString(ip.Tickets.Blacklist),
 		counter:   ip.Tickets.Counter,
 		panels:    jsonString(ip),
@@ -3088,9 +3086,6 @@ func snapshotInteractivePanels(ip *types.InteractivePanels) ticketSnapshot {
 	for _, ticket := range ip.Tickets.History {
 		snap.tickets[ticket.ThreadID] = jsonString(ticket)
 	}
-	for staffID, stats := range ip.Tickets.Stats {
-		snap.stats[staffID] = jsonString(stats)
-	}
 	return snap
 }
 
@@ -3101,7 +3096,7 @@ func (snap ticketSnapshot) panelsChanged(ip *types.InteractivePanels) bool {
 
 // changesSince builds the write that turns the snapshot into the current state: tickets that are new or differ are
 // upserted (live ones keyed by their map key, which is the thread id), live tickets that vanished without being
-// archived are deleted, and changed leaderboard rows, blacklist and counter are included. Closed tickets that merely
+// archived are deleted, and a changed blacklist and counter are included. The leaderboard is counted by the database. Closed tickets that merely
 // fell out of the loaded window are left alone: the database keeps every ticket.
 func (snap ticketSnapshot) changesSince(ip *types.InteractivePanels) models.TicketChanges {
 	var changes models.TicketChanges
@@ -3130,18 +3125,6 @@ func (snap ticketSnapshot) changesSince(ip *types.InteractivePanels) models.Tick
 		if !present[threadID] {
 			changes.Delete = append(changes.Delete, threadID)
 		}
-	}
-
-	for staffID, stats := range ip.Tickets.Stats {
-		if stats == nil {
-			continue
-		}
-		if previous, ok := snap.stats[staffID]; ok && previous == jsonString(stats) {
-			continue
-		}
-		changes.Stats = append(changes.Stats, guildmodel.GuildTicketStaffStatsModel{
-			StaffID: staffID, Claimed: stats.Claimed, Closed: stats.Closed, LastClaimedAt: timeOf(stats.LastClaimedAt),
-		})
 	}
 
 	if jsonString(ip.Tickets.Blacklist) != snap.blacklist {
