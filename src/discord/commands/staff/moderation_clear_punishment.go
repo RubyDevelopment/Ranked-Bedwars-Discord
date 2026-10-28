@@ -107,6 +107,6 @@ func executeModerationClearPunishmentCommand(s *discordgo.Session, i *discordgo.
 	}
 
 	embed := helpers.ModerationClearPunishmentSuccessEmbed(i, punishmentID, punishType, target)
-	helpers.LogCommandResult(s, i.GuildID, "punishment_clear", actor, embed)
+	helpers.LogCommandResult(s, i.GuildID, "clearpunishment", actor, embed)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

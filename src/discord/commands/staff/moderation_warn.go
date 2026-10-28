@@ -30,24 +30,10 @@ var ModerationWarnCommand = &types.Command{
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Name:        "user",
-				Description: "Discord user to warn",
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Required:    true,
-			},
-			{
-				Name:        "reason",
-				Description: "Reason for the warning",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    true,
-			},
-			helpers.PunishmentLevelOption(),
-		},
+		Options: helpers.PunishmentOptions("Discord user to warn", "Reason for the warning", true, true, false),
 	},
 	Autocomplete: helpers.PunishmentLevelAutocomplete("warning"),
-	Execute: executeModerationWarnCommand,
+	Execute:      executeModerationWarnCommand,
 }
 
 // ============================================================================

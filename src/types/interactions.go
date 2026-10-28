@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -231,11 +232,15 @@ var StaffRequirements = []Requirement{
 }
 
 // PunishmentRequirements is declared by a punishment command and by its reversal alike (ban and unban, chat mute and
-// unmute, ...): the staff role, the punishment's own log channel and the roles it hands out and takes back. Requirements
+// unmute, ...): the staff role, the punishment's own log channel, its optional alerts channel (the log key with
+// "_alerts": chat_mute_logs gives chat_mute_alerts) where the punished player is pinged, and the roles it hands out and
+// takes back. Requirements
 // are identified by type and key, so one assignment of each applies to every command that declares it. Strikes pass the
 // queue-banned role as well, as they queue-ban.
 func PunishmentRequirements(logsKey string, roleKeys ...string) []Requirement {
-	reqs := append(append([]Requirement{}, StaffRequirements...), Requirement{Type: ReqChannel, Key: logsKey, Optional: true})
+	reqs := append(append([]Requirement{}, StaffRequirements...),
+		Requirement{Type: ReqChannel, Key: logsKey, Optional: true},
+		Requirement{Type: ReqChannel, Key: strings.TrimSuffix(logsKey, "_logs") + "_alerts", Optional: true})
 	for _, key := range roleKeys {
 		reqs = append(reqs, Requirement{Type: ReqRole, Key: key, Grants: true})
 	}

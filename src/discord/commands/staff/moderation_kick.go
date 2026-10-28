@@ -29,20 +29,7 @@ var ModerationKickCommand = &types.Command{
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Name:        "user",
-				Description: "Discord user to kick",
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Required:    true,
-			},
-			{
-				Name:        "reason",
-				Description: "Reason for the kick",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    true,
-			},
-		},
+		Options: helpers.PunishmentOptions("Discord user to kick", "Reason for the kick", true, false, false),
 	},
 	Execute: executeModerationKickCommand,
 }

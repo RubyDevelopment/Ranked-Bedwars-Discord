@@ -31,24 +31,10 @@ var ModerationQueueBanCommand = &types.Command{
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Name:        "user",
-				Description: "Discord user to queue ban",
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Required:    true,
-			},
-			{
-				Name:        "reason",
-				Description: "Reason for the queue ban",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    true,
-			},
-			helpers.PunishmentLevelOption(),
-		},
+		Options: helpers.PunishmentOptions("Discord user to queue ban", "Reason for the queue ban", true, true, true),
 	},
 	Autocomplete: helpers.PunishmentLevelAutocomplete("queue_ban"),
-	Execute: executeModerationQueueBanCommand,
+	Execute:      executeModerationQueueBanCommand,
 }
 
 // ============================================================================
@@ -56,18 +42,18 @@ var ModerationQueueBanCommand = &types.Command{
 // ============================================================================
 
 var queueBanSpec = &helpers.ApplySpec{
-	Command:    "queueban",
-	RoleKey:    "queue_banned_role",
-	Action:     "queue ban",
-	Adjective:  "queue banned",
-	Summary:    "the queue ban",
-	Title:      "Queue Ban Applied",
-	Type:       "ban",
-	Duration:   true,
-	Duplicates: true,
+	Command:     "queueban",
+	RoleKey:     "queue_banned_role",
+	Action:      "queue ban",
+	Adjective:   "queue banned",
+	Summary:     "the queue ban",
+	Title:       "Queue Ban Applied",
+	Type:        "ban",
+	Duration:    true,
+	Duplicates:  true,
 	AppliedNote: "The queue banned role was given to the member.",
 	FailedNote:  "The punishment was recorded, but no queue banned role is set (or it could not be given). Choose one in the dashboard under Moderation > Punishment ladders.",
-	Ladder:     "queue_ban",
+	Ladder:      "queue_ban",
 }
 
 func executeModerationQueueBanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {

@@ -30,20 +30,7 @@ var ModerationQueueUnbanCommand = &types.Command{
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Name:        "user",
-				Description: "Discord user to queue unban",
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Required:    true,
-			},
-			{
-				Name:        "reason",
-				Description: "Reason for the queue unban",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
-		},
+		Options: helpers.PunishmentOptions("Discord user to queue unban", "Reason for the queue unban", false, false, false),
 	},
 	Execute: executeModerationQueueUnbanCommand,
 }

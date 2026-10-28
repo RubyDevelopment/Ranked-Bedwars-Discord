@@ -5070,6 +5070,14 @@ func punishmentReasonRequiredEmbed() *discordgo.MessageEmbed {
 	})
 }
 
+func punishmentInvalidDurationEmbed(err error) *discordgo.MessageEmbed {
+	return Preset("error", types.PresetOptions{
+		Title:       "Invalid Duration",
+		Description: "The duration could not be read: " + err.Error() + ".",
+		Thumbnail:   ThumbFlag,
+	})
+}
+
 func punishmentHierarchyEmbed() *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Hierarchy Error",

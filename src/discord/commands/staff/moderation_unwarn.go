@@ -29,20 +29,7 @@ var ModerationUnwarnCommand = &types.Command{
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Name:        "user",
-				Description: "Discord user to unwarn",
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Required:    true,
-			},
-			{
-				Name:        "reason",
-				Description: "Reason for removing the warning",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
-		},
+		Options: helpers.PunishmentOptions("Discord user to unwarn", "Reason for removing the warning", false, false, false),
 	},
 	Execute: executeModerationUnwarnCommand,
 }

@@ -29,20 +29,7 @@ var ModerationVcUnmuteCommand = &types.Command{
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Name:        "user",
-				Description: "Discord user to voice unmute",
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Required:    true,
-			},
-			{
-				Name:        "reason",
-				Description: "Reason for the voice unmute",
-				Type:        discordgo.ApplicationCommandOptionString,
-				Required:    false,
-			},
-		},
+		Options: helpers.PunishmentOptions("Discord user to voice unmute", "Reason for the voice unmute", false, false, false),
 	},
 	Execute: executeModerationVcUnmuteCommand,
 }

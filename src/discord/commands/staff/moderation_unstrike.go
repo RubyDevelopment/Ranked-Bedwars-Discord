@@ -117,7 +117,7 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 		username = view.Config.Username
 	}
 	embed := helpers.ModerationUnstrikeSuccessEmbed(i, strikeID, target, username)
-	helpers.LogCommandResult(s, i.GuildID, "strike_remove", actor, embed)
+	helpers.LogCommandResult(s, i.GuildID, "unstrike", actor, embed)
 	helpers.SendPunishmentAlert(s, i.GuildID, "strike", "revoked", target, username, "strike", "voided", "Strike voided by staff")
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
