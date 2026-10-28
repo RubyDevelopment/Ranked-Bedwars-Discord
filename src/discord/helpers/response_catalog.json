@@ -1238,7 +1238,7 @@
 					"slug": "chat-mute-applied",
 					"title": "Chat Mute Applied",
 					"look": "success",
-					"description": "Successfully recorded the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …"
+					"description": "Successfully recorded the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe chat muted role was given to the member."
 				}
 			]
 		},
@@ -1879,7 +1879,7 @@
 					"slug": "queue-ban-applied",
 					"title": "Queue Ban Applied",
 					"look": "success",
-					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …"
+					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe queue banned role was given to the member."
 				}
 			]
 		},
