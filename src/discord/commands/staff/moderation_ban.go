@@ -43,8 +43,10 @@ var ModerationBanCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
+			helpers.PunishmentLevelOption(),
 		},
 	},
+	Autocomplete: helpers.PunishmentLevelAutocomplete("server_ban"),
 	Execute: executeModerationBanCommand,
 }
 

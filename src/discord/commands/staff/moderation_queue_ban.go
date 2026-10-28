@@ -44,8 +44,10 @@ var ModerationQueueBanCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
+			helpers.PunishmentLevelOption(),
 		},
 	},
+	Autocomplete: helpers.PunishmentLevelAutocomplete("queue_ban"),
 	Execute: executeModerationQueueBanCommand,
 }
 

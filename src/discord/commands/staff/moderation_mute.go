@@ -43,8 +43,10 @@ var ModerationMuteCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
+			helpers.PunishmentLevelOption(),
 		},
 	},
+	Autocomplete: helpers.PunishmentLevelAutocomplete("chat_mute"),
 	Execute: executeModerationMuteCommand,
 }
 

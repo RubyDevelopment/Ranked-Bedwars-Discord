@@ -147,7 +147,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 
 	// 3. Require the ladder before anything is created
 	if spec.Ladder != "" {
-		if err := RequirePunishmentLadder(i.GuildID, spec.Ladder); err != nil {
+		if err := RequirePunishmentLadder(i.GuildID, spec.Ladder, OptionString(i, "level")); err != nil {
 			return EditInteractionEmbed(s, i, ladderNotConfiguredEmbed(err))
 		}
 	}
@@ -161,7 +161,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	// 5. The ladder picks the step for this offence: its action and duration are what is applied
 	level, expiresAt, durationLabel := "", "", "Permanent"
 	if spec.Ladder != "" {
-		plan, err := PlanPunishment(i.GuildID, sdk.UintToString(playerID), spec.Ladder)
+		plan, err := PlanPunishment(i.GuildID, sdk.UintToString(playerID), spec.Ladder, OptionString(i, "level"))
 		if err != nil {
 			return EditInteractionEmbed(s, i, ladderNotConfiguredEmbed(err))
 		}
@@ -586,7 +586,6 @@ func (s ladderStep) span() time.Duration {
 type ladderLevel struct {
 	ID             string       `json:"id"`
 	Name           string       `json:"name"`
-	PunishmentType string       `json:"punishmentType"`
 	Enabled        *bool        `json:"enabled"`
 	Steps          []ladderStep `json:"steps"`
 }
@@ -600,6 +599,23 @@ type ladderConfig struct {
 	OffenceMode string                 `json:"offence_mode"` // persistent (default), active_only or season_reset
 	Levels      map[string]ladderLevel `json:"levels"`
 	Roles       map[string]string      `json:"roles"` // punishment ladder: the role chat_mute, vc_mute and queue_ban each hand out
+}
+
+// handles reports whether one of the level's steps applies the given action, which is what makes the level usable
+// from that action's command (a level that warns and then mutes shows up for both /warn and /mute).
+func (l ladderLevel) handles(action string) bool {
+	for _, step := range l.Steps {
+		if step.action() == action {
+			return true
+		}
+	}
+	return false
+}
+
+// matches reports whether name is the level's key, id or name, ignoring case.
+func (l keyedLevel) matches(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return strings.ToLower(l.Key) == name || strings.ToLower(l.ID) == name || strings.ToLower(l.Name) == name
 }
 
 // enabledLevels lists the usable levels (enabled, with at least one step) in a stable order.
@@ -655,11 +671,12 @@ type PunishmentPlan struct {
 	Span   time.Duration
 }
 
-// PlanPunishment finds the step the punishment ladder prescribes for the player's next offence under the level whose
-// punishment type is ladderType ("queue_ban", "chat_mute"...). Offences are the player's earlier punishments recorded
-// under that level, counted per the ladder's offence mode; past the last step the last step repeats.
-func PlanPunishment(guildID, playerID, ladderType string) (*PunishmentPlan, error) {
-	cfg, lvl, err := punishmentLevel(guildID, ladderType)
+// PlanPunishment finds the step the punishment ladder prescribes for the player's next offence under the level named
+// levelName (the first level that has a step for ladderType - "queue_ban", "chat_mute"... - when empty). Offences are
+// the player's earlier punishments recorded under that level, counted per the ladder's offence mode; past the last step
+// the last step repeats.
+func PlanPunishment(guildID, playerID, ladderType, levelName string) (*PunishmentPlan, error) {
+	cfg, lvl, err := punishmentLevel(guildID, ladderType, levelName)
 	if err != nil {
 		return nil, err
 	}
@@ -687,24 +704,84 @@ func PlanPunishment(guildID, playerID, ladderType string) (*PunishmentPlan, erro
 	return &PunishmentPlan{Level: lvl.Key, Step: idx + 1, Action: step.action(), Span: step.span()}, nil
 }
 
-// RequirePunishmentLadder fails unless the punishment ladder has an enabled level with steps for ladderType, so a
-// command can refuse before it touches anything.
-func RequirePunishmentLadder(guildID, ladderType string) error {
-	_, _, err := punishmentLevel(guildID, ladderType)
+// RequirePunishmentLadder fails unless the punishment ladder has an enabled level (the one named levelName, if given)
+// with a step for ladderType, so a command can refuse before it touches anything.
+func RequirePunishmentLadder(guildID, ladderType, levelName string) error {
+	_, _, err := punishmentLevel(guildID, ladderType, levelName)
 	return err
 }
 
-func punishmentLevel(guildID, ladderType string) (*ladderConfig, *keyedLevel, error) {
+func punishmentLevel(guildID, ladderType, levelName string) (*ladderConfig, *keyedLevel, error) {
 	cfg, err := loadLadder(guildID, "punishment_ladder", "Punishment ladders")
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, lvl := range cfg.enabledLevels() {
-		if lvl.PunishmentType == ladderType {
-			return cfg, &lvl, nil
+	label := strings.ReplaceAll(ladderType, "_", " ")
+	if strings.TrimSpace(levelName) == "" {
+		for _, lvl := range cfg.enabledLevels() {
+			if lvl.handles(ladderType) {
+				return cfg, &lvl, nil
+			}
 		}
+		return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("The punishment ladder has no enabled level with a %s step. Add one on the dashboard (Moderation > Punishment ladders) before using this command.", label)}
 	}
-	return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("The punishment ladder has no enabled level with steps for the %s punishment type. Add one on the dashboard (Moderation > Punishment ladders) before using this command.", strings.ReplaceAll(ladderType, "_", " "))}
+	for _, lvl := range cfg.enabledLevels() {
+		if !lvl.matches(levelName) {
+			continue
+		}
+		if !lvl.handles(ladderType) {
+			return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("The level %q has no %s step, so this command cannot be used for it. Pick a level from the list, or use the command that matches its steps.", lvl.Name, label)}
+		}
+		return cfg, &lvl, nil
+	}
+	return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("The punishment ladder has no enabled level named %q. Pick one from the list (Moderation > Punishment ladders on the dashboard).", levelName)}
+}
+
+// PunishmentLevelOption is the optional "level" option every ladder punishment command takes: the offence category
+// whose steps decide the punishment.
+func PunishmentLevelOption() *discordgo.ApplicationCommandOption {
+	return &discordgo.ApplicationCommandOption{
+		Name:         "level",
+		Description:  "Offence category from the punishment ladder (defaults to the first one for this punishment)",
+		Type:         discordgo.ApplicationCommandOptionString,
+		Required:     false,
+		Autocomplete: true,
+	}
+}
+
+// PunishmentLevelAutocomplete suggests the ladder levels that have a step for ladderType.
+func PunishmentLevelAutocomplete(ladderType string) func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		typed := ""
+		for _, opt := range i.ApplicationCommandData().Options {
+			if opt.Focused {
+				typed = strings.ToLower(opt.StringValue())
+			}
+		}
+		var choices []*discordgo.ApplicationCommandOptionChoice
+		if cfg, err := loadLadder(i.GuildID, "punishment_ladder", "Punishment ladders"); err == nil {
+			for _, lvl := range cfg.enabledLevels() {
+				name := lvl.Name
+				if name == "" {
+					name = lvl.Key
+				}
+				if !lvl.handles(ladderType) || (typed != "" && !strings.Contains(strings.ToLower(name), typed)) {
+					continue
+				}
+				if r := []rune(name); len(r) > 100 {
+					name = string(r[:100])
+				}
+				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: name, Value: lvl.Key})
+				if len(choices) == 25 {
+					break
+				}
+			}
+		}
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{Choices: choices},
+		})
+	}
 }
 
 // ============================================================================

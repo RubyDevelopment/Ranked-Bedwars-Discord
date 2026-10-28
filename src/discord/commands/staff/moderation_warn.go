@@ -43,8 +43,10 @@ var ModerationWarnCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
+			helpers.PunishmentLevelOption(),
 		},
 	},
+	Autocomplete: helpers.PunishmentLevelAutocomplete("warning"),
 	Execute: executeModerationWarnCommand,
 }
 

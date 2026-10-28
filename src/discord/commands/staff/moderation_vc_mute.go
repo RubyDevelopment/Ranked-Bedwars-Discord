@@ -43,8 +43,10 @@ var ModerationVcMuteCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
+			helpers.PunishmentLevelOption(),
 		},
 	},
+	Autocomplete: helpers.PunishmentLevelAutocomplete("vc_mute"),
 	Execute: executeModerationVcMuteCommand,
 }
 
