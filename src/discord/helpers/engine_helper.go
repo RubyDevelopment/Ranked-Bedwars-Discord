@@ -242,6 +242,7 @@ func (b *EngineBridge) Listen(ctx context.Context, addr, secret string) error {
 	mux.HandleFunc("/engine/ws", b.serveWS)
 	mux.Handle("/live/chat", LiveChat)                     // the dashboard's live bot chat (LIVE_CHAT_SECRET)
 	mux.HandleFunc("/live/control", LiveChat.ServeControl) // the dashboard's live console: actions on a bot (same secret)
+	mux.HandleFunc("/live/appearance", ServeAppearance)    // the dashboard saved a server's bot name, icon or banner (same secret)
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	b.logf("bridge listening on %s", addr)
 	go func() {

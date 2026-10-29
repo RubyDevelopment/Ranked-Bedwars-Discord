@@ -1026,21 +1026,13 @@ func HandleRoleDelete(s *discordgo.Session, r *discordgo.GuildRoleDelete) {
 	}
 }
 
-const appearanceSyncInterval = 30 * time.Minute
-
+// HandleAppearanceSync brings every server up to date once when the bot starts (it may have been offline while the
+// dashboard changed something). Later changes arrive one at a time through ServeAppearance, as they are saved.
 func HandleAppearanceSync(s *discordgo.Session, r *discordgo.Ready) {
 	logger := baseutility.CreateModuleLogger("APPEARANCE_SYNC", "AppearanceSync")
 
+	appearanceSession.Store(s)
 	go runAppearanceSyncCycle(s, logger)
-
-	go func() {
-		ticker := time.NewTicker(appearanceSyncInterval)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			runAppearanceSyncCycle(s, logger)
-		}
-	}()
 }
 
 func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) {
@@ -1086,7 +1078,8 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 		return fmt.Errorf("guild has no snowflake")
 	}
 
-	config, err := database.Must().GuildConfig.Get(snowflakeID)
+	// Fresh, not cached: this runs right after the dashboard saved, and a cached copy would still be the old profile.
+	config, err := database.Must().GuildConfig.GetFresh(snowflakeID)
 	if sdk.IsNotFound(err) {
 		return nil // no config row yet: nothing to sync
 	}

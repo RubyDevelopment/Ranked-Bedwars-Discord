@@ -157,7 +157,7 @@ var PlanReminderEvent = &types.Event{
 var AppearanceSyncEvent = &types.Event{
 	Name:        "Appearance Sync",
 	System:      true,
-	Description: "Re-applies each server's configured bot nickname, avatar, banner and bio on startup and every 30 minutes.",
+	Description: "Re-applies each server's configured bot nickname, avatar, banner and bio on startup; later changes are applied the moment the dashboard saves them (POST /live/appearance).",
 	Type:        "ready",
 	Once:        false,
 	Disabled:    false,
