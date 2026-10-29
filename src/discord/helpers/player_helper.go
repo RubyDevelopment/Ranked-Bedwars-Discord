@@ -224,64 +224,47 @@ func (api *DiscordRestAPI) SetBotToken(token string) {
 // Guild Member API Methods
 // ============================================================================
 
-// UpdateGuildMemberBio updates the bot's bio for a specific guild via REST API
-func (api *DiscordRestAPI) UpdateGuildMemberBio(guildID, bio string) error {
+// UpdateGuildMemberProfile changes the bot's own profile in one server (nick, avatar, banner, bio) with a single request
+// that holds only the fields in `fields`: a field that is not in the map is left exactly as it is, and a nil value clears it.
+// Never send these one at a time as a whole GuildMember: every field of it that is not set would be sent as null, and Discord
+// clears whatever it receives as null.
+//
+// If Discord refuses the combined request (one picture is rejected, say), each field is tried on its own, so the others still
+// land. It returns the fields that were changed and, for the ones that were not, why.
+func (api *DiscordRestAPI) UpdateGuildMemberProfile(guildID string, fields map[string]any) (done []string, failures map[string]error) {
 	endpoint := fmt.Sprintf("%s/guilds/%s/members/@me", api.baseURL, guildID)
-
-	var payload GuildMember
-	if bio == "" {
-		// Send null to remove bio
-		payload.Bio = nil
-	} else {
-		// Safely trim bio to Discord's 190 character limit using runes (UTF-8 safe)
-		runes := []rune(bio)
-		if len(runes) > 190 {
-			bio = string(runes[:190])
+	err := api.makeRequest("PATCH", endpoint, fields)
+	if err == nil {
+		for key := range fields {
+			done = append(done, key)
 		}
-		payload.Bio = &bio
+		return done, nil
 	}
-
-	return api.makeRequest("PATCH", endpoint, payload)
+	if len(fields) == 1 {
+		for key := range fields {
+			return nil, map[string]error{key: err}
+		}
+	}
+	failures = map[string]error{}
+	for key, value := range fields {
+		if one := api.makeRequest("PATCH", endpoint, map[string]any{key: value}); one != nil {
+			failures[key] = one
+		} else {
+			done = append(done, key)
+		}
+	}
+	return done, failures
 }
 
-// UpdateGuildMemberAvatar updates the bot's avatar for a specific guild via REST API
-func (api *DiscordRestAPI) UpdateGuildMemberAvatar(guildID, imageURL string) error {
-	endpoint := fmt.Sprintf("%s/guilds/%s/members/@me", api.baseURL, guildID)
-
-	var payload GuildMember
-	if imageURL == "" {
-		// Send null to remove avatar
-		payload.Avatar = nil
-	} else {
-		// Fetch and convert image to base64
-		imageData, err := api.fetchImageAsBase64(imageURL)
-		if err != nil {
-			return fmt.Errorf("failed to fetch avatar image: %w", err)
-		}
-		payload.Avatar = &imageData
+// discordProfileText is a nick or bio as Discord takes it: empty clears it (null), and it is cut to `limit` characters.
+func discordProfileText(text string, limit int) any {
+	if text == "" {
+		return nil
 	}
-
-	return api.makeRequest("PATCH", endpoint, payload)
-}
-
-// UpdateGuildMemberBanner updates the bot's banner for a specific guild via REST API
-func (api *DiscordRestAPI) UpdateGuildMemberBanner(guildID, imageURL string) error {
-	endpoint := fmt.Sprintf("%s/guilds/%s/members/@me", api.baseURL, guildID)
-
-	var payload GuildMember
-	if imageURL == "" {
-		// Send null to remove banner
-		payload.Banner = nil
-	} else {
-		// Fetch and convert image to base64
-		imageData, err := api.fetchImageAsBase64(imageURL)
-		if err != nil {
-			return fmt.Errorf("failed to fetch banner image: %w", err)
-		}
-		payload.Banner = &imageData
+	if runes := []rune(text); len(runes) > limit {
+		return string(runes[:limit])
 	}
-
-	return api.makeRequest("PATCH", endpoint, payload)
+	return text
 }
 
 // GetGuildMember retrieves the current guild member info via REST API
