@@ -30,6 +30,9 @@ type QueueChannelSetting struct {
 	// Allowed/Denied hold rank names or division labels; Denied wins, empty Allowed = everyone.
 	AllowedRanks []string `json:"allowed_ranks,omitempty"`
 	DeniedRanks  []string `json:"denied_ranks,omitempty"`
+	// Allowed/Denied hold Discord role ids; Denied wins, empty Allowed = everyone.
+	AllowedRoles []string `json:"allowed_roles,omitempty"`
+	DeniedRoles  []string `json:"denied_roles,omitempty"`
 	// EloDecay is the decay for players whose last game was in this queue's mode; nil = the guild's older default.
 	EloDecay *EloDecaySetting `json:"elo_decay,omitempty"`
 }

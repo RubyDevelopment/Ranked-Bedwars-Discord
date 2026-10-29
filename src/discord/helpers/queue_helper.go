@@ -191,6 +191,12 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 		return false
 	}
 
+	if msg := queueRoleGate(s, guildID, userID, bind.Channel); msg != "" {
+		ejectFromQueue(s, guildID, userID, snap.WaitingVC(channelID))
+		sendQueueAlert(s, guildID, userID, queueDeniedEmbed(msg))
+		return false
+	}
+
 	view, err := database.Must().Player.Get(guildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
@@ -247,6 +253,25 @@ func queueRestriction(guildID, playerID string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// queueRoleGate returns a denial message when the member's roles fail the channel's
+// allowed/denied role lists ("" = admitted). Denied wins; empty allowed admits everyone.
+func queueRoleGate(s *discordgo.Session, guildID, userID string, c types.QueueChannelSetting) string {
+	for _, id := range c.DeniedRoles {
+		if id != "" && memberHasRole(s, guildID, userID, id) {
+			return "Your roles are not allowed to join this queue."
+		}
+	}
+	if len(c.AllowedRoles) == 0 {
+		return ""
+	}
+	for _, id := range c.AllowedRoles {
+		if id != "" && memberHasRole(s, guildID, userID, id) {
+			return ""
+		}
+	}
+	return "You need one of the required roles to join this queue."
 }
 
 func rankDenyMessage(reason, rank string) string {
