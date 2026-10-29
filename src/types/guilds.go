@@ -22,7 +22,7 @@ type DiscordGuildProfile struct {
 	SyncedAt          string              `json:"synced_at"`
 	BotProfileVersion int                 `json:"bot_profile_version,omitempty"`
 	Nickname          string              `json:"nickname"`
-	BotIconMode       string              `json:"bot_icon_mode"`
+	BotIconMode       string              `json:"bot_icon_mode"` // default (the bot's own), server or custom
 	BotIconURL        string              `json:"bot_icon_url"`
 	BotBannerMode     string              `json:"bot_banner_mode"`
 	BotBannerURL      string              `json:"bot_banner_url"`
@@ -94,25 +94,25 @@ func (profile *DiscordGuildProfile) MigrateLegacyAppearance(appearance Appearanc
 		profile.Bio = appearance.Bio
 	}
 	if profile.BotIconMode == "" {
-		if appearance.BotIconMode == "server" || appearance.BotIconMode == "custom" {
+		if appearance.BotIconMode == "server" || appearance.BotIconMode == "custom" || appearance.BotIconMode == "default" {
 			profile.BotIconMode = appearance.BotIconMode
 		} else {
 			profile.BotIconMode = "custom"
-			if profile.BotIconURL == "" ||
-				profile.BotIconURL == profile.ServerIconURL ||
-				profile.BotIconURL == previous.ServerIconURL {
+			if profile.BotIconURL == "" {
+				profile.BotIconMode = "default"
+			} else if profile.BotIconURL == profile.ServerIconURL || profile.BotIconURL == previous.ServerIconURL {
 				profile.BotIconMode = "server"
 			}
 		}
 	}
 	if profile.BotBannerMode == "" {
-		if appearance.BotBannerMode == "server" || appearance.BotBannerMode == "custom" {
+		if appearance.BotBannerMode == "server" || appearance.BotBannerMode == "custom" || appearance.BotBannerMode == "default" {
 			profile.BotBannerMode = appearance.BotBannerMode
 		} else {
 			profile.BotBannerMode = "custom"
-			if profile.BotBannerURL == "" ||
-				profile.BotBannerURL == profile.ServerBannerURL ||
-				profile.BotBannerURL == previous.ServerBannerURL {
+			if profile.BotBannerURL == "" {
+				profile.BotBannerMode = "default"
+			} else if profile.BotBannerURL == profile.ServerBannerURL || profile.BotBannerURL == previous.ServerBannerURL {
 				profile.BotBannerMode = "server"
 			}
 		}

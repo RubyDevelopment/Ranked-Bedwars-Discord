@@ -1106,14 +1106,18 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 		Nickname: profile.Nickname,
 		Bio:      profile.Bio,
 	}
-	if profile.BotIconMode == "custom" {
+	// Unless someone configures it, the bot keeps its own icon and banner ("default" sends nothing, and clears an
+	// override that was set before): the server's are only used when the guild picks "server".
+	switch profile.BotIconMode {
+	case "custom":
 		desired.Avatar = profile.BotIconURL
-	} else {
+	case "server":
 		desired.Avatar = profile.ServerIconURL
 	}
-	if profile.BotBannerMode == "custom" {
+	switch profile.BotBannerMode {
+	case "custom":
 		desired.Banner = profile.BotBannerURL
-	} else {
+	case "server":
 		desired.Banner = profile.ServerBannerURL
 	}
 
