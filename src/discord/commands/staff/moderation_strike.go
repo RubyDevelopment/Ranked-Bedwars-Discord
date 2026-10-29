@@ -141,6 +141,8 @@ func executeModerationStrikeCommand(s *discordgo.Session, i *discordgo.Interacti
 		}
 	}
 
+	notes += helpers.ApplyExtraActions(s, i.GuildID, actor, target, playerID, username, "Strike #"+sdk.UintToString(strike.ID)+": "+reason, plan.Also)
+
 	embed := helpers.ModerationStrikeSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
 	embed.Description += notes
 	helpers.LogCommandResult(s, i.GuildID, "strike", actor, embed)

@@ -1335,8 +1335,7 @@ func SyncRankForElo(actor, guildID, pid string, seasonID uint, currentRank strin
 // the game config, filtered by the member's roles. session returns the live
 // Discord session (nil = nobody has perks).
 //
-// Vote perks (Source "topgg_vote") are skipped: they follow vote state, which
-// the bot doesn't track yet. A member boosting the server gets one booster
+// A member boosting the server gets one booster
 // stack, and a perk whose allowed roles include one of their managed
 // (subscriber) roles counts as a booster perk.
 func NewPerkResolver(session func() *discordgo.Session) func(guildID, userID string) PerkContext {
@@ -1382,7 +1381,7 @@ func NewPerkResolver(session func() *discordgo.Session) func(guildID, userID str
 
 		ctx := PerkContext{BoosterStacks: stacks}
 		for _, p := range MarkBoosters(perks, boosterRoles...) {
-			if p.Source != "topgg_vote" && p.QualifiesFor(held, nil) {
+			if p.QualifiesFor(held, nil) {
 				ctx.Perks = append(ctx.Perks, p)
 			}
 		}

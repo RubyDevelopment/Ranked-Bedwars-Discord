@@ -125,6 +125,41 @@ type ladderStep struct {
 	Duration        float64 `json:"duration"`
 	DurationUnit    string  `json:"durationUnit"`
 	EloRemoval      int     `json:"elo_removal"`
+	// Also lists further actions applied together with the step's own action.
+	Also []ladderAction `json:"also"`
+}
+
+// ladderAction is one extra action of a step (same fields as the step's own action).
+type ladderAction struct {
+	Action       string  `json:"action"`
+	Type         string  `json:"type"`
+	Duration     float64 `json:"duration"`
+	DurationUnit string  `json:"durationUnit"`
+	EloRemoval   int     `json:"elo_removal"`
+}
+
+// PlannedAction is an extra action a ladder step applies together with its main one.
+type PlannedAction struct {
+	Action     string
+	Span       time.Duration
+	EloRemoval int
+}
+
+// extras returns the step's additional actions with an ELO-removal action's amount carried in EloRemoval.
+func (s ladderStep) extras() []PlannedAction {
+	var out []PlannedAction
+	for _, a := range s.Also {
+		action := a.Action
+		if action == "" {
+			action = a.Type
+		}
+		if action == "" {
+			continue
+		}
+		span := ladderStep{Duration: a.Duration, DurationUnit: a.DurationUnit}.span()
+		out = append(out, PlannedAction{Action: action, Span: span, EloRemoval: max(0, a.EloRemoval)})
+	}
+	return out
 }
 
 func (s ladderStep) action() string {
@@ -232,6 +267,7 @@ type PunishmentPlan struct {
 	Step   int    // 1-based
 	Action string // the step's action: warning, chat_mute, vc_mute, queue_ban, server_ban...
 	Span   time.Duration
+	Also   []PlannedAction // further actions applied together with Action
 }
 
 // PlanPunishment finds the step the punishment ladder prescribes for the player's next offence under the level named
@@ -264,7 +300,7 @@ func PlanPunishment(guildID, playerID, ladderType, levelName string) (*Punishmen
 	}
 	idx := min(count, len(lvl.Steps)-1)
 	step := lvl.Steps[idx]
-	return &PunishmentPlan{Level: lvl.Key, Step: idx + 1, Action: step.action(), Span: step.span()}, nil
+	return &PunishmentPlan{Level: lvl.Key, Step: idx + 1, Action: step.action(), Span: step.span(), Also: step.extras()}, nil
 }
 
 // RequirePunishmentLadder fails unless the punishment ladder has an enabled level (the one named levelName, if given)
@@ -385,7 +421,8 @@ type StrikePlan struct {
 	Step       int    // the step the offence count reached (0 = below the first step: the strike is only recorded)
 	Action     string // the step's action; an ELO-only action applies no punishment
 	Span       time.Duration
-	EloRemoval int
+	EloRemoval int             // total ELO to take: the step's own amount plus every elo_removal action
+	Also       []PlannedAction // further actions applied together with Action
 }
 
 // PlanStrike finds the step the strike ladder prescribes for the player's next strike. strikeType names the level (its
@@ -418,6 +455,10 @@ func PlanStrike(guildID, playerID, strikeType string, seasonID uint) (*StrikePla
 		if step.StrikesRequired <= count && step.StrikesRequired >= best {
 			best = step.StrikesRequired
 			plan.Step, plan.Action, plan.Span, plan.EloRemoval = i+1, step.action(), step.span(), max(0, step.EloRemoval)
+			plan.Also = step.extras()
+			for _, a := range plan.Also {
+				plan.EloRemoval += a.EloRemoval
+			}
 		}
 	}
 	return plan, nil
@@ -541,6 +582,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	// replaces the duration only)
 	level, expiresAt, durationLabel := "", "", "Permanent"
 	span := customSpan
+	var extras []PlannedAction
 	if useLadder {
 		plan, err := PlanPunishment(i.GuildID, sdk.UintToString(playerID), spec.Ladder, OptionString(i, "level"))
 		if err != nil {
@@ -551,7 +593,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 			return EditInteractionEmbed(s, i, ladderNotConfiguredEmbed(&ErrLadderNotConfigured{Reason: fmt.Sprintf(
 				"Step %d of the punishment ladder uses the %q action, which a standard punishment cannot apply. Change it on the dashboard to warning, chat mute, voice mute, queue ban or server ban.", plan.Step, plan.Action)}))
 		}
-		spec, level = resolved, plan.Level
+		spec, level, extras = resolved, plan.Level, plan.Also
 		if !customDuration {
 			span = plan.Span
 		}
@@ -565,8 +607,34 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	if profile != nil && profile.Username != "" {
 		username = profile.Username
 	}
-	embed, _ := ApplyPunishmentTo(s, i.GuildID, actor, target, playerID, username, reason, spec, level, expiresAt, durationLabel)
+	embed, ok := ApplyPunishmentTo(s, i.GuildID, actor, target, playerID, username, reason, spec, level, expiresAt, durationLabel)
+	if ok {
+		// Extra actions of the step run too; they are recorded under no ladder level so the offence is counted once.
+		embed.Description += ApplyExtraActions(s, i.GuildID, actor, target, playerID, username, reason, extras)
+	}
 	return EditInteractionEmbed(s, i, embed)
+}
+
+// ApplyExtraActions applies the extra actions of a ladder step (warning, mute, ban...) and returns a note listing what
+// happened for each, to append to the result embed. ELO-removal actions are the caller's job and are skipped here.
+func ApplyExtraActions(s *discordgo.Session, guildID, actor string, target *discordgo.User, playerID uint, username, reason string, extras []PlannedAction) string {
+	notes := ""
+	for _, a := range extras {
+		spec := LadderActionSpec(a.Action)
+		if spec == nil {
+			continue
+		}
+		expiresAt, label := "", "Permanent"
+		if spec.Duration && a.Span > 0 {
+			expiresAt, label = time.Now().Add(a.Span).UTC().Format(time.RFC3339), FormatSpan(a.Span)
+		}
+		if _, ok := ApplyPunishmentTo(s, guildID, actor, target, playerID, username, reason, spec, "", expiresAt, label); ok {
+			notes += fmt.Sprintf("\n> **Also applied:** %s (%s)", spec.Title, label)
+		} else {
+			notes += fmt.Sprintf("\n> **Also:** %s could not be applied (already active, or the member cannot be moderated).", spec.Action)
+		}
+	}
+	return notes
 }
 
 // ApplyPunishmentTo checks the target against spec, records the punishment under the ladder level that chose it, and

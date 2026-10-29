@@ -175,7 +175,6 @@ type Perk struct {
 	MapVotingMultiplier float64  `json:"map_voting_multiplier"`
 	AllowedRoles        []string `json:"allowed_roles"`
 	DeniedRoles         []string `json:"denied_roles"`
-	Source              string   `json:"source,omitempty"`
 
 	// Booster marks a perk gated on the server-booster roles (see MarkBoosters).
 	Booster bool `json:"-"`
@@ -193,9 +192,7 @@ type PerkContext struct {
 // QualifiesFor reports whether a member holding roleIDs gets this perk: it must
 // be enabled and named, no denied role may be held (denied wins), and an empty
 // allowed list means everyone. resolve maps a config entry (a snowflake or a
-// role key) to a role ID; nil treats entries as snowflakes. Vote perks
-// (Source "topgg_vote") are granted by vote state, not roles, so callers
-// should not pass them here.
+// role key) to a role ID; nil treats entries as snowflakes.
 func (p Perk) QualifiesFor(roleIDs map[string]bool, resolve func(string) string) bool {
 	if !p.IsEnabled || strings.TrimSpace(p.Name) == "" {
 		return false
