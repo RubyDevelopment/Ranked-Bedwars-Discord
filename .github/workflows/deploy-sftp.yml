@@ -1,0 +1,72 @@
+name: Deploy to server (SFTP)
+
+# Every push to main copies the repository's files to the game server over SFTP, but only after the "Update Database
+# module" workflow has finished successfully, so the upload carries the go.mod and go.sum it commits. If that workflow
+# fails (the bot no longer builds with the newest Database tag), nothing is uploaded. Files that are not in the
+# repository (the server's .env, logs) are left alone and nothing on the server is deleted.
+#
+# Needs one repository secret, SFTP_PASSWORD: the panel account's password (the SFTP password is the same).
+# Optional secret, SFTP_KNOWN_HOSTS: the server's host key line(s) from `ssh-keyscan -p 2022 v-par-11.apollopanel.com`. With it the
+# connection is checked against that key; without it the key is fetched on each run, which protects less.
+
+on:
+  workflow_run:
+    workflows: ["Update Database module"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-sftp
+  cancel-in-progress: false # let an upload finish; the next one queues behind it
+
+env:
+  SFTP_HOST: v-par-11.apollopanel.com
+  SFTP_PORT: "2022"
+  SFTP_USER: wiggels.9c3c30b9
+
+jobs:
+  deploy:
+    # A finished Update Database run only counts when it succeeded.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # the newest main, which includes a go.mod bump committed after the push that started this
+
+      - name: Install lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Trust the server's host key
+        env:
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          if [ -n "$SFTP_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SFTP_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::SFTP_KNOWN_HOSTS is not set: the host key is fetched now instead of checked against a known one."
+            ssh-keyscan -p "$SFTP_PORT" -H "$SFTP_HOST" > ~/.ssh/known_hosts
+          fi
+
+      - name: Upload the files
+        env:
+          LFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          if [ -z "$LFTP_PASSWORD" ]; then
+            echo "::error::Add the SFTP_PASSWORD repository secret."
+            exit 1
+          fi
+          lftp -u "$SFTP_USER" "sftp://$SFTP_HOST:$SFTP_PORT" <<EOF
+          set sftp:connect-program "ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          set net:max-retries 3
+          set net:timeout 30
+          mirror --reverse --parallel=4 --verbose \
+            --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ --exclude-glob .env \
+            . /
+          bye
+          EOF
