@@ -56,7 +56,7 @@ func ServeAppearance(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		logger := baseutility.CreateModuleLogger("APPEARANCE_SYNC", "AppearanceEndpoint")
 		logger.Info(fmt.Sprintf("The dashboard changed the appearance of guild %s: applying it", guild))
-		if err := updateGuildAppearance(session, guild, logger); err != nil {
+		if err := forceGuildAppearance(session, guild, logger); err != nil {
 			logger.Error(fmt.Sprintf("Failed to apply appearance for guild %s: %v", guild, err))
 		}
 	}()

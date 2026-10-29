@@ -1060,7 +1060,7 @@ func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) 
 		if err := syncGuildDiscordProfile(s, liveGuild); err != nil {
 			logger.Error(fmt.Sprintf("Failed to save server branding for guild %s: %v", guild.SnowflakeID, err))
 		}
-		if err := updateGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
+		if err := forceGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
 			logger.Error(fmt.Sprintf("Failed to update appearance for guild %s: %v", guild.SnowflakeID, err))
 		}
 	}
@@ -1071,6 +1071,15 @@ var appearanceApplyMu sync.Mutex
 // updateGuildAppearance applies only values that differ from the last values
 // successfully sent to Discord.
 func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger) error {
+	return applyGuildAppearance(s, snowflakeID, logger, false)
+}
+
+// forceGuildAppearance sends the server's whole current profile again, whatever was applied before.
+func forceGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger) error {
+	return applyGuildAppearance(s, snowflakeID, logger, true)
+}
+
+func applyGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger, force bool) error {
 	appearanceApplyMu.Lock()
 	defer appearanceApplyMu.Unlock()
 
@@ -1120,69 +1129,76 @@ func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger base
 	nextBlockedBanner := profile.BlockedBannerURL
 	stateChanged := false
 
-	if types.ShouldApplyAppearance(desired.Nickname, applied.Nickname, false) {
-		if err := s.GuildMemberNickname(snowflakeID, "@me", desired.Nickname); err != nil {
-			if !isDiscordRESTCode(err, 10007) {
-				logger.Error(fmt.Sprintf("Failed to update nickname for guild %s: %v", snowflakeID, err))
-			}
-		} else {
-			nextApplied.Nickname = desired.Nickname
-			stateChanged = true
-		}
+	restAPI, err := discordRestAPI()
+	if err != nil {
+		return err
 	}
 
-	if types.ShouldApplyAppearance(desired.Avatar, applied.Avatar, desired.Avatar != "" && desired.Avatar == profile.BlockedAvatarURL) {
-		restAPI, err := discordRestAPI()
-		if err != nil {
-			return err
+	// Everything that has to change goes to Discord in ONE request, and only the fields that change are in it. A field left
+	// out is not touched; a field sent on its own as part of a bigger payload used to clear the others.
+	// With force the whole profile is sent again (the current value of every field that has one, or had one), which also
+	// repairs a server whose profile was cleared by those older requests.
+	wants := func(current, want string, blocked bool) bool {
+		if force {
+			return (want != "" || current != "") && !blocked
 		}
-		if err := restAPI.UpdateGuildMemberAvatar(snowflakeID, desired.Avatar); err != nil {
+		return types.ShouldApplyAppearance(want, current, blocked)
+	}
+	changes := map[string]any{}
+	addImage := func(key, label, want string, nextBlocked *string) {
+		if want == "" {
+			changes[key] = nil // clears the bot's own picture for this server, back to its default
+			return
+		}
+		data, err := restAPI.fetchImageAsBase64(want)
+		if err != nil {
 			if isMissingDiscordImage(err) {
-				logger.Error(fmt.Sprintf("Skipping unavailable avatar URL for guild %s until it changes: %v", snowflakeID, err))
-				nextBlockedAvatar = desired.Avatar
+				logger.Error(fmt.Sprintf("Skipping unavailable %s URL for guild %s until it changes: %v", label, snowflakeID, err))
+				*nextBlocked = want
 				stateChanged = true
-			} else if !isDiscordRESTCode(err, 10007) {
-				logger.Error(fmt.Sprintf("Failed to update avatar for guild %s: %v", snowflakeID, err))
+			} else {
+				logger.Error(fmt.Sprintf("Failed to read the %s image for guild %s: %v", label, snowflakeID, err))
 			}
-		} else {
-			nextApplied.Avatar = desired.Avatar
-			nextBlockedAvatar = ""
-			stateChanged = true
+			return
 		}
+		changes[key] = data
 	}
 
-	if types.ShouldApplyAppearance(desired.Banner, applied.Banner, desired.Banner != "" && desired.Banner == profile.BlockedBannerURL) {
-		restAPI, err := discordRestAPI()
-		if err != nil {
-			return err
-		}
-		if err := restAPI.UpdateGuildMemberBanner(snowflakeID, desired.Banner); err != nil {
-			if isMissingDiscordImage(err) {
-				logger.Error(fmt.Sprintf("Skipping unavailable banner URL for guild %s until it changes: %v", snowflakeID, err))
-				nextBlockedBanner = desired.Banner
-				stateChanged = true
-			} else if !isDiscordRESTCode(err, 10007) {
-				logger.Error(fmt.Sprintf("Failed to update banner for guild %s: %v", snowflakeID, err))
-			}
-		} else {
-			nextApplied.Banner = desired.Banner
-			nextBlockedBanner = ""
-			stateChanged = true
-		}
+	if wants(applied.Nickname, desired.Nickname, false) {
+		changes["nick"] = discordProfileText(desired.Nickname, 32)
+	}
+	if wants(applied.Avatar, desired.Avatar, desired.Avatar != "" && desired.Avatar == profile.BlockedAvatarURL) {
+		addImage("avatar", "avatar", desired.Avatar, &nextBlockedAvatar)
+	}
+	if wants(applied.Banner, desired.Banner, desired.Banner != "" && desired.Banner == profile.BlockedBannerURL) {
+		addImage("banner", "banner", desired.Banner, &nextBlockedBanner)
+	}
+	if wants(applied.Bio, desired.Bio, false) {
+		changes["bio"] = discordProfileText(desired.Bio, 190)
 	}
 
-	if types.ShouldApplyAppearance(desired.Bio, applied.Bio, false) {
-		restAPI, err := discordRestAPI()
-		if err != nil {
-			return err
-		}
-		if err := restAPI.UpdateGuildMemberBio(snowflakeID, desired.Bio); err != nil {
-			if !isDiscordRESTCode(err, 10007) {
-				logger.Error(fmt.Sprintf("Failed to update bio for guild %s: %v", snowflakeID, err))
+	if len(changes) > 0 {
+		done, failures := restAPI.UpdateGuildMemberProfile(snowflakeID, changes)
+		for _, key := range done {
+			switch key {
+			case "nick":
+				nextApplied.Nickname = desired.Nickname
+			case "avatar":
+				nextApplied.Avatar = desired.Avatar
+				nextBlockedAvatar = ""
+			case "banner":
+				nextApplied.Banner = desired.Banner
+				nextBlockedBanner = ""
+			case "bio":
+				nextApplied.Bio = desired.Bio
 			}
-		} else {
-			nextApplied.Bio = desired.Bio
 			stateChanged = true
+		}
+		for key, failure := range failures {
+			if strings.Contains(failure.Error(), "10007") { // the bot is no longer in that server
+				continue
+			}
+			logger.Error(fmt.Sprintf("Failed to update the bot's %s for guild %s: %v", key, snowflakeID, failure))
 		}
 	}
 
