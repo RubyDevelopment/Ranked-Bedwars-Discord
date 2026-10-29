@@ -1270,7 +1270,7 @@ func dashboardBase() string {
 	return strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
 }
 
-// planPageURL is where an administrator goes about a plan: the guild's dashboard (the plan page no longer exists).
+// planPageURL is where an administrator asks for or renews a plan: the guild's plan page in the dashboard.
 func planPageURL(guildID string) string {
 	base := dashboardBase()
 	if base == "" {
@@ -1279,7 +1279,7 @@ func planPageURL(guildID string) string {
 	if guildID == "" {
 		return base + "/setup"
 	}
-	return base + "/dashboard/" + guildID
+	return base + "/dashboard/" + guildID + "/plan"
 }
 
 // lastKnown remembers each guild's most recent plan answer. It makes a click cheap (no Database call within
