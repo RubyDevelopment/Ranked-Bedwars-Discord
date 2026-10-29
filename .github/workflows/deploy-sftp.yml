@@ -3,7 +3,8 @@ name: Deploy to server (SFTP)
 # Every push to main copies the repository's files to the game server over SFTP, but only after the "Update Database
 # module" workflow has finished successfully, so the upload carries the go.mod and go.sum it commits. If that workflow
 # fails (the bot no longer builds with the newest Database tag), nothing is uploaded. Files that are not in the
-# repository (the server's .env, logs) are left alone and nothing on the server is deleted.
+# repository (the server's .env, logs) are left alone and files deleted from the repository are deleted on the server too;
+# everything excluded below (and git-ignored server-only files) is neither uploaded nor deleted. Run it once by hand with dry_run ticked to preview.
 #
 # Needs one repository secret, SFTP_PASSWORD: the panel account's password (the SFTP password is the same).
 # Optional secret, SFTP_KNOWN_HOSTS: the server's host key line(s) from `ssh-keyscan -p 2022 v-par-11.apollopanel.com`. With it the
@@ -15,6 +16,11 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be uploaded or deleted without changing the server
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -56,6 +62,7 @@ jobs:
       - name: Upload the files
         env:
           LFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          DRY: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: |
           if [ -z "$LFTP_PASSWORD" ]; then
             echo "::error::Add the SFTP_PASSWORD repository secret."
@@ -65,8 +72,9 @@ jobs:
           set sftp:connect-program "ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
           set net:max-retries 3
           set net:timeout 30
-          mirror --reverse --parallel=4 --verbose \
+          mirror --reverse --delete $DRY --parallel=4 --verbose \
             --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ --exclude-glob .env \
+            --exclude-glob data/ --exclude-glob .ignore/ --exclude-glob .old/ --exclude-glob .env* --exclude-glob go.work --exclude-glob go.work.sum \
             . /
           bye
           EOF
