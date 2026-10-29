@@ -2920,8 +2920,8 @@ func SetTicketLocked(s *discordgo.Session, guildID, threadID, staffID string, lo
 	return ticket, nil
 }
 
-// Tickets live in their own database tables (guild_tickets, guild_ticket_logs, guild_ticket_staff_stats,
-// guild_ticket_blacklist and guild_ticket_counters). The bot still works on one in-memory types.TicketState per guild:
+// Tickets live in two database tables: guild_tickets (each ticket with its activity log and its number, so the highest
+// number is the counter) and guild_ticket_blacklist. The leaderboard is counted from the tickets. The bot still works on one in-memory types.TicketState per guild:
 // it is loaded from the Database API before a change, the change runs, and only what differs is written back.
 
 // ticketSnapshot remembers what a guild's ticket state looked like when it was loaded, so the write can be a diff.
@@ -2929,7 +2929,6 @@ type ticketSnapshot struct {
 	tickets   map[string]string // thread id -> JSON of the ticket
 	inOpen    map[string]bool   // thread ids that were live tickets
 	blacklist string
-	counter   int
 	panels    string
 }
 
@@ -3025,9 +3024,9 @@ func ticketToRow(ticket *types.Ticket) guildmodel.GuildTicketsModel {
 	if created := timeOf(ticket.CreatedAt); created != nil {
 		row.CreatedAt = *created
 	}
-	row.Logs = make([]guildmodel.GuildTicketLogsModel, 0, len(ticket.Logs))
+	row.Logs = make(guildmodel.TicketLogs, 0, len(ticket.Logs))
 	for _, entry := range ticket.Logs {
-		log := guildmodel.GuildTicketLogsModel{Type: entry.Type, ActorID: entry.ActorID, Message: entry.Message}
+		log := guildmodel.TicketLog{Type: entry.Type, ActorID: entry.ActorID, Message: entry.Message}
 		if at := timeOf(entry.CreatedAt); at != nil {
 			log.CreatedAt = *at
 		}
@@ -3076,7 +3075,6 @@ func snapshotInteractivePanels(ip *types.InteractivePanels) ticketSnapshot {
 		tickets:   map[string]string{},
 		inOpen:    map[string]bool{},
 		blacklist: jsonString(ip.Tickets.Blacklist),
-		counter:   ip.Tickets.Counter,
 		panels:    jsonString(ip),
 	}
 	for threadID, ticket := range ip.Tickets.Open {
@@ -3096,7 +3094,7 @@ func (snap ticketSnapshot) panelsChanged(ip *types.InteractivePanels) bool {
 
 // changesSince builds the write that turns the snapshot into the current state: tickets that are new or differ are
 // upserted (live ones keyed by their map key, which is the thread id), live tickets that vanished without being
-// archived are deleted, and a changed blacklist and counter are included. The leaderboard is counted by the database. Closed tickets that merely
+// archived are deleted, and a changed blacklist is included. The leaderboard is counted by the database. Closed tickets that merely
 // fell out of the loaded window are left alone: the database keeps every ticket.
 func (snap ticketSnapshot) changesSince(ip *types.InteractivePanels) models.TicketChanges {
 	var changes models.TicketChanges
@@ -3144,9 +3142,5 @@ func (snap ticketSnapshot) changesSince(ip *types.InteractivePanels) models.Tick
 		changes.Blacklist = &entries
 	}
 
-	if ip.Tickets.Counter > snap.counter {
-		counter := uint(ip.Tickets.Counter)
-		changes.Counter = &counter
-	}
 	return changes
 }
