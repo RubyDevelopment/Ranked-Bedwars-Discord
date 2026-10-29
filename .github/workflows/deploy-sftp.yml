@@ -61,7 +61,7 @@ jobs:
             echo "::error::Add the SFTP_PASSWORD repository secret."
             exit 1
           fi
-          lftp -u "$SFTP_USER" "sftp://$SFTP_HOST:$SFTP_PORT" <<EOF
+          lftp -u "$SFTP_USER","$LFTP_PASSWORD" "sftp://$SFTP_HOST:$SFTP_PORT" <<EOF
           set sftp:connect-program "ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
           set net:max-retries 3
           set net:timeout 30
