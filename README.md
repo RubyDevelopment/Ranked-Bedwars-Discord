@@ -3,7 +3,7 @@
 The Discord front end of Ranked Bedwars, written in Go. It runs the queue, matchmaking, ranked games, moderation and support tickets for every registered server from one process. It keeps no state of its own: all data lives in the Ranked Bedwars Database, and all Minecraft work is done by the Engine.
 
 ## Where it fits
-
+ 
 ```mermaid
 flowchart LR
     DISCORD(["Discord"])
