@@ -1137,20 +1137,27 @@ func validInactivitySettings(settings types.TicketSettings) bool {
 	return settings.InactivityReminderHours > 0 && settings.InactivityReminderHours <= maxInactivityHours
 }
 
-// sendInactivityReminder posts the reminder into the ticket: the saved Embed Builder message the panel points at
-// (plain message, embeds or Components V2) when it still exists, otherwise the panel's plain text. It returns the
+// sendInactivityReminder posts the reminder into the ticket: the message built in the panel editor, else the saved Embed
+// Builder message the panel points at (plain message, embeds or Components V2) when it still exists, else the panel's plain text. It returns the
 // text kept in the ticket log. Nothing is closed or deleted.
 func sendInactivityReminder(s *discordgo.Session, guildID, threadID, ownerID string, settings types.TicketSettings, vars map[string]string) (string, error) {
 	fill := VarFiller(vars)
-	if id := strings.TrimSpace(settings.InactivityMessageID); id != "" {
-		if doc := savedMessageDoc(guildID, id); doc != nil {
-			payload := doc.Payload(fill)
-			if !doc.AllowMentions && doc.AllowedMentions == nil {
-				payload["allowed_mentions"] = map[string]any{"parse": []string{}, "users": []string{ownerID}}
-			}
-			_, err := SendPayload(s, threadID, payload)
-			return "Inactivity reminder (" + doc.Name + ")", err
+	var doc *MessageDoc
+	label := "Inactivity reminder"
+	if settings.InactivityReply != nil {
+		doc = replyDoc(settings.InactivityReply)
+	} else if id := strings.TrimSpace(settings.InactivityMessageID); id != "" {
+		if doc = savedMessageDoc(guildID, id); doc != nil {
+			label = "Inactivity reminder (" + doc.Name + ")"
 		}
+	}
+	if doc != nil {
+		payload := doc.Payload(fill)
+		if !doc.AllowMentions && doc.AllowedMentions == nil {
+			payload["allowed_mentions"] = map[string]any{"parse": []string{}, "users": []string{ownerID}}
+		}
+		_, err := SendPayload(s, threadID, payload)
+		return label, err
 	}
 	text := fill(settings.InactivityMessage)
 	_, err := s.ChannelMessageSendComplex(threadID, &discordgo.MessageSend{

@@ -85,8 +85,11 @@ type TicketSettings struct {
 	InactivityMessage       string `json:"inactivity_message"`
 	// InactivityMessageID is a saved Embed Builder message (message, embeds or Components V2) used for the reminder
 	// instead of InactivityMessage; empty or missing falls back to the plain text.
-	InactivityMessageID   string `json:"inactivity_message_id"`
-	InlineCategoryButtons bool   `json:"inline_category_buttons"`
+	InactivityMessageID string `json:"inactivity_message_id"`
+	// InactivityReply is a reminder built right in the panel editor (plain message, embeds or Components V2); it wins over
+	// InactivityMessageID and InactivityMessage when set.
+	InactivityReply       *ResponseReply `json:"inactivity_reply,omitempty"`
+	InlineCategoryButtons bool           `json:"inline_category_buttons"`
 }
 
 // TicketState is the runtime state of every ticket panel in a guild.
