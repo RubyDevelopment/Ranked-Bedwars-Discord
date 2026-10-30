@@ -626,9 +626,9 @@ func checkRoleAccess(allowed, denied []string, guildID string, member *discordgo
 		}
 	}
 
-	// Staff commands need the staff role first. Allowed roles then narrow it further: when any are set the member must
-	// hold one of them as well as the staff role.
-	if gate.staff && !MemberHasRole(member, gate.staffID) {
+	// Staff commands default to the staff role. Allowed roles, when set, are the access list instead (as in the old bot):
+	// a member holding one of them may run the command whether or not they hold the staff role.
+	if gate.staff && len(allowed) == 0 && !MemberHasRole(member, gate.staffID) {
 		return types.AccessDecision{Allowed: false, Title: "Staff Only", Message: "This command is restricted to staff members. Please contact a staff member for assistance."}
 	}
 
