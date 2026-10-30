@@ -72,9 +72,12 @@ jobs:
           set sftp:connect-program "ssh -a -x -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
           set net:max-retries 3
           set net:timeout 30
-          mirror --reverse --delete $DRY --parallel=4 --verbose \
+          set net:reconnect-interval-base 5
+          mirror --reverse --delete --no-perms --ignore-time $DRY --parallel=4 --verbose \
             --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ --exclude-glob .env \
             --exclude-glob data/ --exclude-glob .ignore/ --exclude-glob .old/ --exclude-glob .env* --exclude-glob go.work --exclude-glob go.work.sum \
+            --exclude-glob *.exe --exclude-glob *.test --exclude-glob *.out --exclude-glob coverage.* --exclude-glob *.coverprofile --exclude-glob profile.cov \
+            --exclude-glob bin/ --exclude-glob dist/ --exclude-glob main --exclude-glob vendor/ \
             . /
           bye
           EOF
