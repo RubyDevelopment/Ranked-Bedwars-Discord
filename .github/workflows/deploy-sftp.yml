@@ -1,14 +1,7 @@
-name: Deploy to server (SFTP)
+name: Deploy Database & Engine Update (SFTP)
 
-# Every push to main copies the repository's files to the game server over SFTP, but only after the "Update Database
-# module" workflow has finished successfully, so the upload carries the go.mod and go.sum it commits. If that workflow
-# fails (the bot no longer builds with the newest Database tag), nothing is uploaded. Files that are not in the
-# repository (the server's .env, logs) are left alone and files deleted from the repository are deleted on the server too;
-# everything excluded below (and git-ignored server-only files) is neither uploaded nor deleted. Run it once by hand with dry_run ticked to preview.
-#
-# Needs one repository secret, SFTP_PASSWORD: the panel account's password (the SFTP password is the same).
-# Optional secret, SFTP_KNOWN_HOSTS: the server's host key line(s) from `ssh-keyscan -p 2022 v-par-11.apollopanel.com`. With it the
-# connection is checked against that key; without it the key is fetched on each run, which protects less.
+# Triggers automatically when the database module build/update workflow succeeds.
+# Syncs engine source code, go.mod/go.sum, and package files while keeping server databases and environment configs untouched.
 
 on:
   workflow_run:
@@ -27,7 +20,7 @@ permissions:
 
 concurrency:
   group: deploy-sftp
-  cancel-in-progress: false # let an upload finish; the next one queues behind it
+  cancel-in-progress: false
 
 env:
   SFTP_HOST: v-par-11.apollopanel.com
@@ -36,13 +29,12 @@ env:
 
 jobs:
   deploy:
-    # A finished Update Database run only counts when it succeeded.
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main # the newest main, which includes a go.mod bump committed after the push that started this
+          ref: main
 
       - name: Install lftp
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
@@ -74,10 +66,12 @@ jobs:
           set net:timeout 30
           set net:reconnect-interval-base 5
           mirror --reverse --delete --no-perms --ignore-time $DRY --parallel=4 --verbose \
-            --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ --exclude-glob .env \
-            --exclude-glob data/ --exclude-glob .ignore/ --exclude-glob .old/ --exclude-glob .env* --exclude-glob go.work --exclude-glob go.work.sum \
-            --exclude-glob *.exe --exclude-glob *.test --exclude-glob *.out --exclude-glob coverage.* --exclude-glob *.coverprofile --exclude-glob profile.cov \
+            --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ \
+            --exclude-glob .env --exclude-glob .env* --exclude-glob go.work --exclude-glob go.work.sum \
+            --exclude-glob *.db --exclude-glob *.sqlite --exclude-glob *.sqlite3 --exclude-glob data/ \
+            --exclude-glob .cache/ --exclude-glob .go/ \
             --exclude-glob bin/ --exclude-glob dist/ --exclude-glob main --exclude-glob vendor/ \
+            --exclude-glob *.exe --exclude-glob *.test --exclude-glob *.out \
             . /
           bye
           EOF
