@@ -3365,7 +3365,12 @@ const (
 
 func isCaptainMode(m types.Mode) bool {
 	t := strings.ToLower(strings.TrimSpace(m.Type))
-	return t == "captain" || t == "elo" // "elo" is the legacy name of the captain flow
+	return t == "captains" || t == "captain" || t == "elo" // "captain" and "elo" are legacy names of the captain flow
+}
+
+// isRandomMode reports whether the mode's type is "random": a plain shuffle when it picks no formation.
+func isRandomMode(m types.Mode) bool {
+	return strings.EqualFold(strings.TrimSpace(m.Type), "random")
 }
 
 func (g Game) inParty(userID string) bool {
@@ -5806,6 +5811,11 @@ func (f FlowSettings) IsCaptain(m types.Mode) bool {
 func (f FlowSettings) StandardFor(m types.Mode) StandardFlow {
 	s := f.Standard
 	x, ok := f.formationOf(m)
+	if !ok && isRandomMode(m) {
+		s.IsEnabled = true
+		s.RandomnessPercent = 100
+		return s
+	}
 	if !ok || x.Kind == FormationCaptains {
 		return s
 	}

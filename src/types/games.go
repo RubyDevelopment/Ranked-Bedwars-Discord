@@ -55,7 +55,7 @@ func (m Map) TeamsFor(mode string) []string {
 type Mode struct {
 	Name                   string  `json:"name"`
 	StableID               string  `json:"stable_id"`
-	Type                   string  `json:"type"` // standard, captain, ffa
+	Type                   string  `json:"type"` // random, balanced, captains, party (older: standard, captain, elo, ...)
 	Description            *string `json:"description,omitempty"`
 	Category               *string `json:"category,omitempty"`
 	TeamCount              int     `json:"team_count"`
