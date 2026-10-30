@@ -1,12 +1,7 @@
-name: Deploy Database & Engine Update (SFTP)
-
-# Triggers automatically when the database module build/update workflow succeeds.
-# Syncs engine source code, go.mod/go.sum, and package files while keeping server databases and environment configs untouched.
+name: Deploy Discord Bot to Server (SFTP)
 
 on:
-  workflow_run:
-    workflows: ["Update Database module"]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -25,16 +20,13 @@ concurrency:
 env:
   SFTP_HOST: v-par-11.apollopanel.com
   SFTP_PORT: "2022"
-  SFTP_USER: wiggels.9c3c30b9
+  SFTP_USER: wiggels.048ab4e6
 
 jobs:
   deploy:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Install lftp
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
@@ -66,12 +58,14 @@ jobs:
           set net:timeout 30
           set net:reconnect-interval-base 5
           mirror --reverse --delete --no-perms --ignore-time $DRY --parallel=4 --verbose \
-            --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ \
-            --exclude-glob .env --exclude-glob .env* --exclude-glob go.work --exclude-glob go.work.sum \
+            --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ --exclude-glob backups/ \
+            --exclude-glob .env --exclude-glob .env* \
+            --exclude-glob .trash/ \
             --exclude-glob *.db --exclude-glob *.sqlite --exclude-glob *.sqlite3 --exclude-glob data/ \
-            --exclude-glob .cache/ --exclude-glob .go/ \
+            --exclude-glob .cache/ --exclude-glob .go/ --exclude-glob node_modules/ \
             --exclude-glob bin/ --exclude-glob dist/ --exclude-glob main --exclude-glob vendor/ \
-            --exclude-glob *.exe --exclude-glob *.test --exclude-glob *.out \
+            --exclude-glob *.exe --exclude-glob *.test --exclude-glob *.out --exclude-glob coverage.* \
+            --exclude-glob .idea/ --exclude-glob .vscode/ --exclude-glob *.swp --exclude-glob .DS_Store \
             . /
           bye
           EOF
