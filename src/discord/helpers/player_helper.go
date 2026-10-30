@@ -436,7 +436,7 @@ func FilterPunishmentHistoryEntries(entries []models.PlayerPunishmentsModel, act
 
 	for _, entry := range entries {
 		// Filter by active status
-		if activeOnly && (!entry.IsEnabled || entry.IsVoided) {
+		if activeOnly && punishmentHistoryStatus(entry, time.Now()) != "Active" {
 			continue
 		}
 		// Filter by time window
@@ -601,14 +601,14 @@ func BuildPunishmentHistoryDescriptionsDirect(entries []models.PlayerPunishments
 		emoji := DotGreen
 		status := punishmentHistoryStatus(punishment, time.Now())
 		switch {
-		case punishment.IsVoided || status == "Revoked":
+		case punishment.IsVoided || punishment.IsAppealed || status == "Revoked":
 			emoji = DotGray
 		case status != "Active":
 			emoji = DotRed
 		}
 
 		valueLines := []string{
-			fmt.Sprintf("> **Type:** `%s`", punishment.Type),
+			fmt.Sprintf("> **Type:** `%s`", PunishmentTypeLabel(punishment.Type)),
 			fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(punishment.StaffID)),
 			fmt.Sprintf("> **Reason:** %s", punishment.Reason),
 			fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(punishment.CreatedAt)),
@@ -622,9 +622,31 @@ func BuildPunishmentHistoryDescriptionsDirect(entries []models.PlayerPunishments
 			valueLines[len(valueLines)-1] = fmt.Sprintf("> **%s:** %s", expiryLabel, DiscordRelativeTimestamp(*punishment.ExpiresAt))
 		}
 
-		descriptions = append(descriptions, fmt.Sprintf("%s **%s #%d | %s**\n%s", emoji, strings.Title(punishment.Type), punishment.ID, status, strings.Join(valueLines, "\n")))
+		descriptions = append(descriptions, fmt.Sprintf("%s **%s #%d | %s**\n%s", emoji, PunishmentTypeLabel(punishment.Type), punishment.ID, status, strings.Join(valueLines, "\n")))
 	}
 	return descriptions
+}
+
+// punishmentExpiredReason is the revoke reason the expiry sweep records when a punishment's time runs out.
+const punishmentExpiredReason = "Punishment expired"
+
+// PunishmentTypeLabel is how a stored punishment type reads to people: "ban" is a queue ban, "mute" a chat mute.
+func PunishmentTypeLabel(typ string) string {
+	switch typ {
+	case "warn":
+		return "Warning"
+	case "mute":
+		return "Chat mute"
+	case "ban":
+		return "Queue ban"
+	case "vc_mute":
+		return "Voice mute"
+	case "server_ban":
+		return "Server ban"
+	case "kick":
+		return "Kick"
+	}
+	return strings.Title(strings.ReplaceAll(typ, "_", " "))
 }
 
 func punishmentHistoryStatus(punishment models.PlayerPunishmentsModel, now time.Time) string {
@@ -634,6 +656,10 @@ func punishmentHistoryStatus(punishment models.PlayerPunishmentsModel, now time.
 	case punishment.IsAppealed:
 		return "Appealed"
 	case punishment.RevokedAt != nil || punishment.RevokedBy != nil:
+		// The bot's expiry sweep revokes a punishment when its time runs out: that is an expiry, not a staff revoke.
+		if punishment.RevokeReason != nil && *punishment.RevokeReason == punishmentExpiredReason {
+			return "Expired"
+		}
 		return "Revoked"
 	case punishment.ExpiresAt != nil && !punishment.ExpiresAt.After(now):
 		return "Expired"
