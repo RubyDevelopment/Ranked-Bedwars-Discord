@@ -146,6 +146,7 @@ type engineInbound struct {
 	Vars       map[string]string `json:"vars"`
 	JoinedIDs  []string          `json:"joined_ids"`
 	WaitingIDs []string          `json:"waiting_ids"`
+	InvitedIDs []string          `json:"invited_ids"`
 
 	// game.event
 	Killer     string  `json:"killer"`
@@ -591,7 +592,7 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		Games.Notify(msg.GameID, GameEvent{Kind: EventHostStatus, Stage: msg.Stage, Reason: msg.Detail, Waiting: msg.Waiting})
 
 	case "host.embed":
-		Games.Notify(msg.GameID, GameEvent{Kind: EventEmbed, Key: msg.Key, Vars: msg.Vars, JoinedIDs: msg.JoinedIDs, WaitingIDs: msg.WaitingIDs})
+		Games.Notify(msg.GameID, GameEvent{Kind: EventEmbed, Key: msg.Key, Vars: msg.Vars, JoinedIDs: msg.JoinedIDs, WaitingIDs: msg.WaitingIDs, InvitedIDs: msg.InvitedIDs})
 
 	case "game.event":
 		Games.Notify(msg.GameID, GameEvent{Kind: EventMatch, Match: &MatchEvent{
@@ -739,7 +740,7 @@ func (b *EngineBridge) hostFailed(msg engineInbound) {
 		}
 		switch msg.Code {
 		case "party":
-			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "partyTimeout", WaitingIDs: msg.Missing})
+			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "partyTimeout", JoinedIDs: playersExcept(g, msg.Missing), WaitingIDs: msg.Missing})
 			b.strikeNoShows(g, msg.Missing)
 		case "teams":
 			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "teamTimeout", WaitingIDs: msg.Missing})

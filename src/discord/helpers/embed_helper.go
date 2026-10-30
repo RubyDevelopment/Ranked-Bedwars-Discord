@@ -6008,13 +6008,17 @@ const (
 	ThumbTrashCan     = "https://i.imgur.com/bKH6mWU.png"
 )
 
-// statusFields is how the old party embeds listed who was still missing and who had joined.
+// statusFields is how the old party embeds listed who was not invited yet, who was invited and who had joined.
 var statusFields = []embedField{
 	{Name: DotRed + " Waiting ({waitingCount})", Value: "{waiting}", Inline: true},
+	{Name: DotYellow + " Invited ({invitedCount})", Value: "{invited}", Inline: true},
 	{Name: DotGreen + " Joined ({joinedCount}/{playerCount})", Value: "{joined}", Inline: true},
 }
 
 var teamStatusField = embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}
+
+// mapScoreField is one field per map of the vote, best first: the map and its score, the winner marked.
+var mapScoreField = embedField{Name: "{mapIcon} {mapName}{winnerTag}", Value: "`Score: {mapScore}`", Inline: true, Each: "map"}
 
 var submitYourWin = thumb(tpl("info", "Submit Your Win",
 	"When your match ends, send a **screenshot of the win screen** in this channel.\n\nYou can submit **3 minutes** after the match starts.\n\nRun **`/submit`** and attach the image, or send **`=submit`** with the screenshot attached to the same message."), ThumbSprout)
@@ -6023,7 +6027,7 @@ var submitYourWin = thumb(tpl("info", "Submit Your Win",
 var defaultEmbeds = map[string]embedTemplate{
 	// Pre-game
 	"introduction": func() embedTemplate {
-		t := thumb(tpl("success", "Welcome to Game #{game}", "Welcome to **Standard {mode}** teams have been automatically assigned. Defend your bed, destroy enemy beds, and fight until one team remains. Your team voice channel is ready, join it to coordinate with your team!", teamField), ThumbDoubleSwords)
+		t := thumb(tpl("success", "Welcome to Game #{game}", "Welcome to **{flow} {mode}** {teamClause}. Defend your bed, destroy enemy beds, and fight until one team remains. Your team voice channel is ready, join it to coordinate with your team!", teamField), ThumbDoubleSwords)
 		t.Ping = yes(true)
 		return t
 	}(),
@@ -6038,14 +6042,18 @@ var defaultEmbeds = map[string]embedTemplate{
 			{Name: "​", Value: "​", Inline: true},
 		}, statusFields...)...), ThumbTimer),
 	// The map vote and the captain draft: interactive, so they are always posted, but their wording is the guild's.
-	"mapVoting": thumb(tpl("pending", "Map Voting", "Vote for the map you want to play using the buttons below.\n\n**Voting ends:** <t:{endsAt}:R>",
-		embedField{Name: "Votes ({voted}/{playerCount})", Value: "{mapVotes}"}), ThumbTimer),
-	"mapVoteEnded": thumb(tpl("pending", "Map Voting Ended", "**{map}** won the vote.\n\nWaiting for all party members to join before the map is selected…"), ThumbTimer),
+	"mapVoting": thumb(tpl("pending", "Map Voting", "Vote for the map you want to play using the menu below.\n\n**Voting ends:** <t:{endsAt}:R>", mapScoreField), ThumbTimer),
+	"mapVoteEnded": thumb(tpl("success", "Map Voting Ended", "The majority of votes went to **{map}**! Please wait while the map is being selected...", mapScoreField), ThumbTada),
 	"noMaps":       thumb(tpl("caution", "Map Setup", "No maps are enabled for this server right now. Contact staff if you think this is a mistake."), ThumbFlag),
-	"captainPicking": tpl("pending", "Captain Picking", "It is {captain}'s turn to pick for **{team}**. Choose a player from the menu below, or use `=pick`.\n\n**Time left:** {timeLeft}",
-		embedField{Name: "{team}", Value: "{teamPlayers}", Inline: true, Each: "team"}),
+	"captainPicking": func() embedTemplate {
+		t := tpl("pending", "Captain Picking", "It is {captain}'s turn to pick for **{team}**. Choose a player from the menu below, or use `=pick`.\n\n**Time left:** {timeLeft}",
+			embedField{Name: "{team}", Value: "{teamPlayers}", Inline: true, Each: "team"}, embedField{Name: "Remaining Players", Value: "{remaining}"})
+		t.Thumbnail = str("{captainAvatar}")
+		return t
+	}(),
 	"partyMembersAutoAssigned": thumb(tpl("info", "Party Members Joined", "{names} {wasWere} placed on **{team}** to stay with `{captain}`."), ThumbPlayers),
-	"matchJoined":              thumb(tpl("pending", "Match Joined", "The bot joined the private game lobby and is waiting for the Team Selector to open. Teams will be checked once it does."), ThumbTimer),
+	"matchJoined": thumb(tpl("pending", "Match Joined", "The bot joined the private game lobby and is waiting for the Team Selector to open. Teams will be checked once it does.",
+		embedField{Name: "Team TBD", Value: "{teamPlayers}", Inline: true, Each: "team"}), ThumbTimer),
 	// Hosted by hand: nobody joins the server for the players, so they are told how to set the game up.
 	"partySetup": thumb(tpl("pending", "Party Setup", "It is time to get everyone into a Minecraft party. **Decide who will host**, then invite the rest of the lobby.\n\nBefore inviting, make sure that:\n1. You are **on the server**.\n2. **Party invites** are set to **On**.\n3. Your status is set to **Online**.",
 		embedField{Name: "Party Command", Value: "```{inviteCommand}```"}, teamField), ThumbPlayers),
@@ -6059,7 +6067,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	"hostProblem": thumb(tpl("error", "Hosting Problem", "The hosting bot got stuck on **{step}**.\n\n> **What happened:** {reason}\n\n{hint}",
 		embedField{Name: "What the bot last saw", Value: "```{diagnosis}```"},
 		embedField{Name: "For whoever set this server up", Value: "Lines starting with ⚠ had no rule that reacted to them. Fix it in the dashboard under Game Server → Minecraft Server → Server automations (Rules and Commands), then host again."}), ThumbFlag),
-	"mapSelected": thumb(tpl("success", "Map Voting Ended", "The map selection has concluded! The winning map is **{map}**. Please wait while the game prepares the lobby."), ThumbTada),
+	"mapSelected": thumb(tpl("success", "Map Voting Ended", "The map selection has concluded! The winning map is **{map}**. Please wait while the game prepares the lobby.", mapScoreField), ThumbTada),
 	"teamSelection": thumb(tpl("pending", "Team Selection",
 		"The bot is checking that every player is on their assigned team.\n\n**What to do:**\n1. Open the **Team Selector** item.\n2. Join your assigned **Team Color**.\n\n**Ends:** <t:{endsAt}:R>",
 		teamStatusField), ThumbTimer),

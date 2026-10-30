@@ -579,7 +579,7 @@ func (m *GameManager) SetTeamVoice(guildID string, id uint, team int, channelID 
 // happens; this only shows it and collects the clicks.
 
 const (
-	mapVoteDuration   = 30 * time.Second
+	mapVoteDuration   = 45 * time.Second
 	draftIDPrefix     = "gdraft1|"
 	mapVoteIDPrefix   = "gmvote1|"
 	maxMapVoteOptions = 20 // five rows of five, minus the room Discord keeps
@@ -596,17 +596,24 @@ type GameDiscordEffects struct {
 // registers the component handlers their buttons and menus need. session
 // returns the live Discord session.
 func NewGameDiscordEffects(session func() *discordgo.Session) GameDiscordEffects {
-	d := &gameDiscord{session: session, votes: map[uint]*mapVote{}, drafts: map[uint]*draftUI{}, live: map[uint]*embedState{}}
+	d := &gameDiscord{session: session, votes: map[uint]*mapVote{}, closedVotes: map[uint]*closedVote{}, drafts: map[uint]*draftUI{}, live: map[uint]*embedState{}}
 	RegisterComponentHandler(d.handleComponent)
 	return GameDiscordEffects{Notify: d.notify, ApplyTeams: d.applyTeams, SelectMap: d.selectMap}
+}
+
+// closedVote is a map vote that is over: its message and the per-map scores it ended with.
+type closedVote struct {
+	msg  *discordgo.Message
+	rows []map[string]string
 }
 
 type gameDiscord struct {
 	session func() *discordgo.Session
 
 	mu     sync.Mutex
-	votes  map[uint]*mapVote
-	drafts map[uint]*draftUI
+	votes       map[uint]*mapVote
+	closedVotes map[uint]*closedVote // a vote's message once it closed, until the bot has picked the map
+	drafts      map[uint]*draftUI
 	live   map[uint]*embedState
 }
 
@@ -638,7 +645,10 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventHostStatus:
 		// Progress is shown by the configured embeds (EventEmbed); the status only matters to the logs.
 	case EventEmbed:
-		d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs})
+		if ev.Key == "mapSelected" && d.finishVote(s, g, ev) {
+			return
+		}
+		d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs})
 	case EventMatch:
 		d.matchEvent(s, g, ev.Match)
 	case EventMatchEnded:
@@ -663,6 +673,26 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
 		d.forget(g.ID)
 	}
+}
+
+// finishVote edits the closed map vote's own message with the map the bot picked, like the old bot did. It reports false
+// when there is no such message (a game with one map, say), so the caller posts the embed instead.
+func (d *gameDiscord) finishVote(s *discordgo.Session, g Game, ev GameEvent) bool {
+	d.mu.Lock()
+	cv := d.closedVotes[g.ID]
+	delete(d.closedVotes, g.ID)
+	d.mu.Unlock()
+	if cv == nil {
+		return false
+	}
+	emb, _, _ := d.build(g, "mapSelected", embedData{Vars: ev.Vars, MapRows: cv.rows})
+	if emb == nil { // the guild switched the embed off: leave the vote as it ended
+		return true
+	}
+	WithGuildFooterIconForGuild(s, g.GuildID, emb)
+	comps := []discordgo.MessageComponent{}
+	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: cv.msg.ChannelID, ID: cv.msg.ID, Embeds: &[]*discordgo.MessageEmbed{emb}, Components: &comps})
+	return true
 }
 
 // manualSetup tells the players of a game nobody hosts for them how to set it up: the party to form and the map to play.
@@ -944,9 +974,9 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	for _, p := range g.Players {
 		v.weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
 	}
-	embed := d.voteEmbed(v, "")
+	embed, _ := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
-	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(g.ID, false)})
+	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(g.ID, false, -1)})
 	if err != nil {
 		return "", err
 	}
@@ -969,11 +999,17 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	d.mu.Lock()
 	winner := v.winner()
 	d.mu.Unlock()
-	embed = d.voteEmbed(v, winner.Name)
+	embed, rows := d.voteEmbed(v, winner.Name)
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
+	winnerIdx := slices.IndexFunc(v.maps, func(m types.Map) bool { return m.Name == winner.Name })
+	comps := v.components(g.ID, true, winnerIdx)
 	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		Channel: msg.ChannelID, ID: msg.ID, Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &[]discordgo.MessageComponent{},
+		Channel: msg.ChannelID, ID: msg.ID, Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &comps,
 	})
+	// The bot's click on the map edits this same message ("The map selection has concluded!"), as the old bot did.
+	d.mu.Lock()
+	d.closedVotes[g.ID] = &closedVote{msg: msg, rows: rows}
+	d.mu.Unlock()
 	return winner.Name, nil
 }
 
@@ -1001,14 +1037,25 @@ func (v *mapVote) winner() types.Map {
 
 // voteEmbed is the map vote as the guild's "mapVoting" template draws it, or, once winner is set, the "mapVoteEnded" one.
 // The vote cannot be skipped, so a template the guild switched off is drawn anyway.
-func (d *gameDiscord) voteEmbed(v *mapVote, winner string) *discordgo.MessageEmbed {
+func (d *gameDiscord) voteEmbed(v *mapVote, winner string) (*discordgo.MessageEmbed, []map[string]string) {
 	d.mu.Lock()
 	totals := v.totals()
 	voted := len(v.votes)
 	d.mu.Unlock()
 	lines := make([]string, len(v.maps))
+	order := make([]int, len(v.maps))
 	for i, m := range v.maps {
 		lines[i] = fmt.Sprintf("**%s** · `%s`", m.Name, formatWeight(totals[i]))
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return totals[order[a]] > totals[order[b]] })
+	var mapRows []map[string]string
+	for _, i := range order {
+		icon, tag := "🗺️", ""
+		if winner != "" && v.maps[i].Name == winner {
+			icon, tag = "🏆", " [WINNER]"
+		}
+		mapRows = append(mapRows, map[string]string{"mapName": v.maps[i].Name, "mapIcon": icon, "mapScore": formatWeight(totals[i]), "winnerTag": tag})
 	}
 	vars := map[string]string{
 		"endsAt": strconv.FormatInt(v.endsAt, 10), "mapVotes": strings.Join(lines, "\n"),
@@ -1018,18 +1065,28 @@ func (d *gameDiscord) voteEmbed(v *mapVote, winner string) *discordgo.MessageEmb
 	if winner != "" {
 		key, vars["map"] = "mapVoteEnded", winner
 	}
-	emb, _, _ := d.build(v.game, key, embedData{Vars: vars, Force: true})
+	emb, _, _ := d.build(v.game, key, embedData{Vars: vars, MapRows: mapRows, Force: true})
 	if emb == nil { // no default for the key: cannot happen, but a vote must never be left without a message
 		emb = &discordgo.MessageEmbed{Title: "Map Voting", Description: strings.Join(lines, "\n")}
 	}
-	return emb
+	return emb, mapRows
 }
 
-func (v *mapVote) components(gameID uint, disabled bool) []discordgo.MessageComponent {
+// components are the vote's buttons, each showing its map's score. Once the vote is over (winner is its map's index, else -1)
+// only the maps that got votes stay, disabled, and the winner's is green.
+func (v *mapVote) components(gameID uint, disabled bool, winner int) []discordgo.MessageComponent {
 	var rows []discordgo.MessageComponent
 	var row []discordgo.MessageComponent
+	totals := v.totals()
 	for i, m := range v.maps {
-		row = append(row, &discordgo.Button{Label: truncateName(m.Name, 80), Style: discordgo.PrimaryButton, Disabled: disabled, CustomID: mapVoteIDPrefix + strconv.FormatUint(uint64(gameID), 10) + "|" + strconv.Itoa(i)})
+		if disabled && totals[i] <= 0 && i != winner {
+			continue
+		}
+		style := discordgo.SecondaryButton
+		if disabled && i == winner {
+			style = discordgo.SuccessButton
+		}
+		row = append(row, &discordgo.Button{Label: truncateName(fmt.Sprintf("%s (%s)", m.Name, formatWeight(totals[i])), 80), Style: style, Disabled: disabled, CustomID: mapVoteIDPrefix + strconv.FormatUint(uint64(gameID), 10) + "|" + strconv.Itoa(i)})
 		if len(row) == 5 {
 			rows = append(rows, &discordgo.ActionsRow{Components: row})
 			row = nil
@@ -1123,6 +1180,19 @@ func (d *gameDiscord) armDraftTimer(s *discordgo.Session, gameID uint, ui *draft
 	key := ui.turnKey
 	d.mu.Unlock()
 
+	// Halfway through, the captain is reminded.
+	if view, err := Games.Draft(gameID); err == nil && view.Turn >= 0 && view.Turn < len(view.Teams) && len(view.Teams[view.Turn]) > 0 {
+		captain := view.Teams[view.Turn][0]
+		time.AfterFunc(time.Duration(seconds)*time.Second/2, func() {
+			d.mu.Lock()
+			current := d.drafts[gameID] == ui && ui.turnKey == key
+			d.mu.Unlock()
+			if current {
+				d.say(s, ui.channelID, "<@"+captain+"> ⏰ **Half the time has passed!** Please make your selection soon.")
+			}
+		})
+	}
+
 	time.AfterFunc(time.Duration(seconds)*time.Second, func() {
 		d.mu.Lock()
 		current := d.drafts[gameID] == ui && ui.turnKey == key
@@ -1130,7 +1200,12 @@ func (d *gameDiscord) armDraftTimer(s *discordgo.Session, gameID uint, ui *draft
 		if !current {
 			return
 		}
-		if _, _, err := Games.DraftAutoPick(gameID); err == nil {
+		teamName := ""
+		if before, err := Games.Draft(gameID); err == nil && before.Turn >= 0 {
+			teamName = TeamName(before.Turn)
+		}
+		if captain, picked, err := Games.DraftAutoPick(gameID); err == nil {
+			d.say(s, ui.channelID, "<@"+captain+"> has picked <@"+picked+"> for **"+teamName+"** (auto-pick: timeout)")
 			d.refreshDraft(s, gameID, ui)
 		}
 	})
@@ -1184,7 +1259,7 @@ func draftPing(view DraftView) string {
 	if view.Turn < 0 || view.Turn >= len(view.Teams) || len(view.Teams[view.Turn]) == 0 {
 		return ""
 	}
-	return "<@" + view.Teams[view.Turn][0] + ">, it's your pick."
+	return "<@" + view.Teams[view.Turn][0] + ">"
 }
 
 // draftRows are the rosters of the captain draft for the "captainPicking" template's per-team fields. The draft has no
@@ -1243,6 +1318,18 @@ func (d *gameDiscord) draftEmbed(s *discordgo.Session, g Game, view DraftView, u
 			}
 		}
 	}
+	remaining := make([]string, 0, len(view.Pool))
+	for _, id := range view.Pool {
+		line := "- <@" + id + ">"
+		if p, ok := g.Player(id); ok {
+			line += fmt.Sprintf(" · ELO: `%d`", p.EloBefore)
+		}
+		remaining = append(remaining, line)
+	}
+	vars["remaining"] = "`None`"
+	if len(remaining) > 0 {
+		vars["remaining"] = strings.Join(remaining, "\n")
+	}
 	emb, _, _ := d.build(g, "captainPicking", embedData{Vars: vars, TeamRows: draftRows(g, view, t), Force: true})
 	if emb == nil {
 		emb = &discordgo.MessageEmbed{Title: "Captain Picking", Description: "Captains pick their teams in turn."}
@@ -1275,7 +1362,11 @@ func (d *gameDiscord) announceAutoAssigned(s *discordgo.Session, g Game, before,
 				names[i] = "`" + p.Username + "`"
 			}
 		}
+		// "to stay with" the player the pick pulled them along with (the pick itself), or the captain for the first assignment.
 		captain := members[0]
+		if picked && from > 0 && from < len(members) {
+			captain = members[from]
+		}
 		if p, ok := g.Player(captain); ok {
 			captain = p.Username
 		}
@@ -1305,7 +1396,11 @@ func draftComponents(g Game, view DraftView) []discordgo.MessageComponent {
 	for _, id := range view.Pool {
 		label, desc := id, ""
 		if p, ok := g.Player(id); ok {
-			label, desc = p.Username, fmt.Sprintf("%d ELO", p.EloBefore)
+			label, desc = p.Username, fmt.Sprintf("ELO: %d", p.EloBefore)
+			if g.inParty(id) {
+				label += " (Party)"
+				desc += " | In a party"
+			}
 		}
 		options = append(options, discordgo.SelectMenuOption{Label: truncateName(label, 100), Value: id, Description: desc})
 	}
@@ -1313,7 +1408,7 @@ func draftComponents(g Game, view DraftView) []discordgo.MessageComponent {
 		options = options[:25]
 	}
 	return []discordgo.MessageComponent{&discordgo.ActionsRow{Components: []discordgo.MessageComponent{
-		&discordgo.SelectMenu{CustomID: draftIDPrefix + strconv.FormatUint(uint64(g.ID), 10), Placeholder: "Pick a player", Options: options},
+		&discordgo.SelectMenu{CustomID: draftIDPrefix + strconv.FormatUint(uint64(g.ID), 10), Placeholder: "Select a player to pick...", Options: options},
 	}}}
 }
 
@@ -1363,12 +1458,12 @@ func (d *gameDiscord) handleMapVote(s *discordgo.Session, i *discordgo.Interacti
 	v.votes[user] = idx
 	all := len(v.votes) >= len(v.game.Players)
 	d.mu.Unlock()
-	embed := d.voteEmbed(v, "")
+	embed, _ := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, v.game.GuildID, embed)
 
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(uint(gameID), false)},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(uint(gameID), false, -1)},
 	})
 	if all {
 		v.closeOnce.Do(func() { close(v.done) })
@@ -1390,12 +1485,22 @@ func (d *gameDiscord) handleDraftPick(s *discordgo.Session, i *discordgo.Interac
 		ephemeral(s, i, "This draft is over.")
 		return
 	}
+	teamName := ""
+	if before, err := Games.Draft(uint(gameID)); err == nil && before.Turn >= 0 {
+		teamName = TeamName(before.Turn)
+	}
 	if err := Games.DraftPick(uint(gameID), user, values[0]); err != nil {
 		ephemeral(s, i, draftErrorText(err))
 		return
 	}
+	d.say(s, ui.channelID, "<@"+user+"> has picked <@"+values[0]+"> for **"+teamName+"**")
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 	d.refreshDraft(s, uint(gameID), ui)
+}
+
+// say posts a plain line in the game chat.
+func (d *gameDiscord) say(s *discordgo.Session, channelID, text string) {
+	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Content: text, AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}})
 }
 
 func draftErrorText(err error) string {
@@ -1433,7 +1538,7 @@ type embedField struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
 	Inline bool   `json:"inline,omitempty"`
-	Each   string `json:"each,omitempty"` // "team": repeat for every team
+	Each   string `json:"each,omitempty"` // "team": repeat for every team; "map": for every map of the vote
 }
 
 // embedTemplate is one embed as stored. In an override, a field that is absent keeps the default.
@@ -1473,6 +1578,7 @@ var embedKinds = map[string]embedKind{
 	"matchStarted":    {TeamLines: "locked"},
 	"liveTracker":     {Live: true, TeamLines: "alive"},
 	"captainPicking":  {Live: true, TeamLines: "draft"},
+	"matchJoined":     {TeamLines: "tbd"},
 	"partySetup":      {TeamLines: "plain"},
 }
 
@@ -1678,6 +1784,8 @@ type embedData struct {
 	BedLost    map[string]bool   // team name -> bed gone (live tracker)
 	Flow       guildFlow
 	TeamRows   []map[string]string // per-team values the caller supplies (the captain draft's rosters) instead of the game's teams
+	MapRows    []map[string]string // per-map values of the map vote ({mapName}, {mapIcon}, {mapScore}, {winnerTag})
+	Invited    []string            // ... invited to the party but not joined yet
 	Force      bool                // draw it even when the guild switched the embed off: the vote and the draft cannot be skipped
 }
 
@@ -1736,20 +1844,49 @@ func (d embedData) common() map[string]string {
 		vars["winnerMentions"], vars["loserMentions"] = resultMentions(g)
 	}
 	vars["statTable"] = statTable(g, d.Flow)
-	vars["joined"], vars["joinedCount"] = mentionList(d.Joined)
-	vars["waiting"], vars["waitingCount"] = mentionList(d.Waiting)
+	vars["joined"], vars["joinedCount"] = namesList(g, d.Joined)
+	vars["waiting"], vars["waitingCount"] = namesList(g, d.Waiting)
+	vars["invited"], vars["invitedCount"] = namesList(g, d.Invited)
+	vars["flow"], vars["teamClause"] = "Standard", "teams have been automatically assigned"
+	switch {
+	case g.Custom != nil:
+		vars["flow"], vars["teamClause"] = "Custom", "with teams chosen by staff"
+	case g.Captain:
+		vars["flow"], vars["teamClause"] = "Captain", "teams will be drafted by team captains"
+	case len(g.Parties) > 0:
+		vars["teamClause"] = "teams have been automatically assigned with party groups kept together"
+	}
 	for k, v := range d.Vars {
 		vars[k] = v
 	}
 	return vars
 }
 
-func mentionList(ids []string) (string, string) {
+// namesList is who is in the list as the old party embeds wrote it: a line with the Minecraft name each, "None" when empty.
+func namesList(g Game, ids []string) (string, string) {
+	if len(ids) == 0 {
+		return "None", "0"
+	}
 	lines := make([]string, len(ids))
 	for i, id := range ids {
-		lines[i] = "<@" + id + ">"
+		name := id
+		if p, ok := g.Player(id); ok && p.Username != "" {
+			name = p.Username
+		}
+		lines[i] = "- `" + name + "`"
 	}
 	return strings.Join(lines, "\n"), strconv.Itoa(len(ids))
+}
+
+// playersExcept lists the Discord ids of the game's players who are not in skip.
+func playersExcept(g Game, skip []string) []string {
+	var out []string
+	for _, p := range g.Players {
+		if !slices.Contains(skip, p.UserID) {
+			out = append(out, p.UserID)
+		}
+	}
+	return out
 }
 
 func resultLines(g Game) (winners, losers string) {
@@ -1827,8 +1964,9 @@ func statTable(g Game, f guildFlow) string {
 // empty team, unless the guild's template says otherwise.
 var defaultPlayerLines = map[string]struct{ line, out, empty string }{
 	"plain":  {"- {mention}", "- {mention}", "`Empty`"},
-	"status": {"{dot} `{name}`", "{dot} `{name}`", "No players"},
-	"locked": {"{dot} `{name}`", "{dot} `{name}`", "No players"},
+	"status": {"{dot} `{partyName}`", "{dot} `{partyName}`", "No players"},
+	"locked": {"{dot} `{partyName}`", "{dot} `{partyName}`", "No players"},
+	"tbd":    {"{dot} `{partyName}`", "{dot} `{partyName}`", ""},
 	"alive":  {"{dot} `{name}`", "{dot} ~~`{name}`~~", "No players"},
 	"draft":  {"{name} {captain}", "{name} {captain}", "No players"},
 }
@@ -1877,6 +2015,8 @@ func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 				} else if len(d.Joined) == 0 && len(d.Waiting) == 0 {
 					dot = DotGray
 				}
+			case "tbd": // the bot just joined: nobody is placed yet
+				dot = DotGray
 			case "locked": // the match began: every player is on their team
 				dot = DotGreen
 			case "alive":
@@ -1889,8 +2029,12 @@ func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 			if p.Captain {
 				captain = "👑"
 			}
+			partyName := p.Username
+			if d.Game.inParty(p.UserID) {
+				partyName += " 👥"
+			}
 			rows = append(rows, strings.TrimSpace(fill(tpl, map[string]string{
-				"mention": "<@" + p.UserID + ">", "name": p.Username, "id": p.UserID, "dot": dot, "captain": captain, "team": team,
+				"mention": "<@" + p.UserID + ">", "name": p.Username, "partyName": partyName, "id": p.UserID, "dot": dot, "captain": captain, "team": team,
 				"elo": strconv.Itoa(p.EloBefore), "kills": strconv.Itoa(p.Kills), "deaths": strconv.Itoa(p.Deaths),
 				"finalKills": strconv.Itoa(p.FinalKills), "beds": strconv.Itoa(p.BedsDestroyed), "assists": strconv.Itoa(p.Assists),
 			})))
@@ -1918,6 +2062,22 @@ func renderEmbed(key string, t embedTemplate, d embedData) *discordgo.MessageEmb
 	var fields []*discordgo.MessageEmbedField
 	for _, f := range deref2(t.Fields) {
 		rows := []map[string]string{vars}
+		if f.Each == "team" && key == "introduction" && d.Game.Captain {
+			continue // the teams are not drafted yet
+		}
+		if f.Each == "map" {
+			rows = nil
+			for _, mv := range d.MapRows {
+				merged := make(map[string]string, len(vars)+4)
+				for k, v := range vars {
+					merged[k] = v
+				}
+				for k, v := range mv {
+					merged[k] = v
+				}
+				rows = append(rows, merged)
+			}
+		}
 		if f.Each == "team" {
 			rows = nil
 			for _, tv := range d.teamRowsFor(embedKinds[key].TeamLines, t) {

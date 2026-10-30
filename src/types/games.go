@@ -294,6 +294,7 @@ type GameEvent struct {
 	Vars       map[string]string // EventEmbed: extra variables for it
 	JoinedIDs  []string          // EventEmbed: Discord ids that joined the party / their team
 	WaitingIDs []string          // EventEmbed: Discord ids still missing
+	InvitedIDs []string          // EventEmbed: Discord ids invited to the party who have not joined yet
 	Match      *MatchEvent       // EventMatch
 }
 
