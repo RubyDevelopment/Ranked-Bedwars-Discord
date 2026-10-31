@@ -20,7 +20,7 @@ concurrency:
 env:
   SFTP_HOST: v-par-11.apollopanel.com
   SFTP_PORT: "2022"
-  SFTP_USER: wiggels.048ab4e6
+  SFTP_USER: wiggels.9c3c30b9
 
 jobs:
   deploy:
