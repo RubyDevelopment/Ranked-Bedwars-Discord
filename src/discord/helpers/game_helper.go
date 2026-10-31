@@ -1849,6 +1849,22 @@ type statLabel struct {
 	Announce bool   `json:"announce"`
 }
 
+// flowStep is one block of the profile's pipeline as the Go side needs it. Groups and ifs hold more blocks.
+type flowStep struct {
+	Type      string          `json:"type"`
+	Embed     string          `json:"embed"`
+	Enabled   *bool           `json:"enabled"`
+	Phase     string          `json:"phase"`
+	ID        string          `json:"id"`
+	Message   string          `json:"message"`
+	Builtin   bool            `json:"builtin"`
+	Reply     json.RawMessage `json:"reply"`
+	Hosting   string          `json:"hosting"`
+	Ping      bool            `json:"ping"`
+	Children  []flowStep      `json:"children"`
+	Otherwise []flowStep      `json:"otherwise"`
+}
+
 type guildFlow struct {
 	Embeds       map[string]embedTemplate
 	Stats        []statLabel
@@ -1970,17 +1986,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				ID    string          `json:"id"`
 				Reply json.RawMessage `json:"reply"`
 			} `json:"messages"`
-			Pipeline []struct {
-				Type    string          `json:"type"`
-				Embed   string          `json:"embed"`
-				Enabled *bool           `json:"enabled"`
-				Phase   string          `json:"phase"`
-				ID      string          `json:"id"`
-				Message string          `json:"message"`
-				Builtin bool            `json:"builtin"`
-				Reply   json.RawMessage `json:"reply"`
-				Hosting string          `json:"hosting"`
-			} `json:"pipeline"`
+			Pipeline []flowStep `json:"pipeline"`
 		} `json:"profile"`
 	}
 	if json.Unmarshal(raw, &server) != nil {
@@ -2001,27 +2007,36 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 			f.Replies["custom:"+m.ID] = &rep // failure policies post custom messages without a step
 		}
 	}
-	for _, st := range server.Profile.Pipeline {
-		if st.Builtin { // the step posts its built-in embed: a custom embed kept on it is not used
-		} else if rep := saved[st.Message]; st.Message != "" && rep != nil {
-			f.Replies[st.ID] = rep
-		} else if len(st.Reply) > 0 {
-			var rep stepReply
-			if json.Unmarshal(st.Reply, &rep) == nil && st.ID != "" {
-				f.Replies[st.ID] = &rep
+	var walk func(steps []flowStep, phase, hosting string)
+	walk = func(steps []flowStep, phase, hosting string) {
+		for _, st := range steps {
+			// A block inside a group or an if belongs to the phase and hosting of the block holding it.
+			stPhase, stHosting := firstNonEmpty(st.Phase, phase), firstNonEmpty(st.Hosting, hosting)
+			walk(st.Children, stPhase, stHosting)
+			walk(st.Otherwise, stPhase, stHosting)
+			if st.Ping && st.ID != "" {
+				f.Pings[st.ID] = true
 			}
-		}
-		if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && st.Hosting == "manual" {
-			phase := firstNonEmpty(st.Phase, "pre")
-			f.Manual[phase] = append(f.Manual[phase], manualStep{Embed: st.Embed, StepID: st.ID})
-			continue
-		}
-		if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) {
-			if st.Embed != "" {
+			if st.Builtin { // the step posts its built-in embed: a custom embed kept on it is not used
+			} else if rep := saved[st.Message]; st.Message != "" && rep != nil {
+				f.Replies[st.ID] = rep
+			} else if len(st.Reply) > 0 {
+				var rep stepReply
+				if json.Unmarshal(st.Reply, &rep) == nil && st.ID != "" {
+					f.Replies[st.ID] = &rep
+				}
+			}
+			if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && stHosting == "manual" {
+				p := firstNonEmpty(stPhase, "pre")
+				f.Manual[p] = append(f.Manual[p], manualStep{Embed: st.Embed, StepID: st.ID})
+				continue
+			}
+			if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && st.Embed != "" {
 				f.Announced[st.Embed] = true
 			}
 		}
 	}
+	walk(server.Profile.Pipeline, "", "")
 	for key, body := range server.Profile.Embeds {
 		var t embedTemplate
 		if json.Unmarshal(body, &t) == nil { // one bad template doesn't take the others down
