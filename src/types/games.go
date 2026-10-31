@@ -67,7 +67,7 @@ type Mode struct {
 	IsAutoStrikingEnabled  bool    `json:"is_auto_striking_enabled"`
 	IsPartyQueueEnabled    bool    `json:"is_party_queue_enabled"`
 	IsQueueCategory        bool    `json:"is_queue_category"`
-	GUISlot                int     `json:"gui_slot"`
+	GUISlot                *int    `json:"gui_slot,omitempty"`
 	SettingsID             *uint   `json:"settings_id,omitempty"`
 	FormationID            string  `json:"formation_id,omitempty"` // the team formation it uses (guild flows.formations); empty = the default for its type
 
