@@ -6042,7 +6042,7 @@ var defaultEmbeds = map[string]embedTemplate{
 			{Name: "​", Value: "​", Inline: true},
 		}, statusFields...)...), ThumbTimer),
 	// The map vote and the captain draft: interactive, so they are always posted, but their wording is the guild's.
-	"mapVoting": thumb(tpl("pending", "Map Voting", "Vote for the map you want to play using the menu below.\n\n**Voting ends:** <t:{endsAt}:R>", mapScoreField), ThumbTimer),
+	"mapVoting":    thumb(tpl("pending", "Map Voting", "Vote for the map you want to play using the menu below.\n\n**Voting ends:** <t:{endsAt}:R>", mapScoreField), ThumbTimer),
 	"mapVoteEnded": thumb(tpl("success", "Map Voting Ended", "The majority of votes went to **{map}**! Please wait while the map is being selected...", mapScoreField), ThumbTada),
 	"noMaps":       thumb(tpl("caution", "Map Setup", "No maps are enabled for this server right now. Contact staff if you think this is a mistake."), ThumbFlag),
 	"captainPicking": func() embedTemplate {
@@ -6063,7 +6063,12 @@ var defaultEmbeds = map[string]embedTemplate{
 		append([]embedField{{Name: "Host", Value: "`{bot}`"}}, statusFields...)...), ThumbTada),
 	"partyTimeout": thumb(tpl("error", "Party Timeout", "The game was **voided** because not everyone joined the party in time.\n\nPlayers who did not join were penalized automatically.",
 		statusFields...), ThumbTrashCan),
-	"noBot": off(tpl("caution", "No Host Available", "No hosting bot is free right now.\n\n{reason}")),
+	"noBot":             off(tpl("caution", "No Host Available", "No hosting bot is free right now.\n\n{reason}")),
+	"botConnectFailed":  off(thumb(tpl("error", "Host Could Not Join", "`{bot}` could not join the server.\n\n> **What happened:** {reason}"), ThumbFlag)),
+	"privateGameFailed": off(thumb(tpl("error", "Private Game Failed", "The private game could not be opened.\n\n> **What happened:** {reason}"), ThumbFlag)),
+	"mapFailed":         off(thumb(tpl("error", "Map Selection Failed", "The map **{map}** could not be selected.\n\n> **What happened:** {reason}"), ThumbFlag)),
+	"settingsFailed":    off(thumb(tpl("error", "Game Settings Failed", "The game settings could not be applied.\n\n> **What happened:** {reason}"), ThumbFlag)),
+	"startFailed":       off(thumb(tpl("error", "Match Did Not Start", "The match could not be started.\n\n> **What happened:** {reason}"), ThumbFlag)),
 	// Not in the old bot, but only posted when a step is stuck: it tells whoever set the server up what to fix.
 	"hostProblem": thumb(tpl("error", "Hosting Problem", "The hosting bot got stuck on **{step}**.\n\n> **What happened:** {reason}\n\n{hint}",
 		embedField{Name: "What the bot last saw", Value: "```{diagnosis}```"},

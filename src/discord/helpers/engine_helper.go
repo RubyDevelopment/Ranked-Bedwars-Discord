@@ -125,8 +125,9 @@ type engineInbound struct {
 	Bot         string              `json:"bot"`
 	Reason      string              `json:"reason"`
 	Code        string              `json:"code"`
-	Then        string              `json:"then"`  // host.failed: the profile's failure policy, "manual" or "void" (empty: the old rule)
-	Embed       string              `json:"embed"` // host.failed: embed to post, a built-in key or "custom:<id>"
+	Then        string              `json:"then"`      // host.failed: the profile's failure policy, "manual" or "void" (empty: the old rule)
+	Embed       string              `json:"embed"`     // host.failed: embed to post, a built-in key or "custom:<id>"
+	StepType    string              `json:"step_type"` // host.failed: the type of the pipeline step that failed
 	Stage       string              `json:"stage"`
 	Detail      string              `json:"detail"`
 	Waiting     []string            `json:"waiting_for"`
@@ -932,24 +933,49 @@ func (b *EngineBridge) hostFailed(msg engineInbound) {
 		reason = "The hosting bot failed."
 	}
 	if g, ok := Games.Get(msg.GameID); ok {
+		manual := msg.Then == "manual"
 		if msg.Embed != "" {
-			b.failureNotice(msg, "")
+			b.failureNotice(msg, "") // the step's own failure embed
 		}
 		if msg.Diagnosis != "" || msg.Hint != "" || msg.Step != "" {
 			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "hostProblem", Vars: map[string]string{
 				"reason": reason, "step": msg.Step, "diagnosis": clip(msg.Diagnosis, 900), "hint": msg.Hint,
 			}})
 		}
-		switch msg.Code {
-		case "party":
-			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "partyTimeout", JoinedIDs: playersExcept(g, msg.Missing), WaitingIDs: msg.Missing})
-			b.strikeNoShows(g, msg.Missing)
-		case "teams":
-			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "teamTimeout", WaitingIDs: msg.Missing})
+		switch {
+		case msg.Code == "party":
+			if msg.Embed == "" {
+				Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "partyTimeout", JoinedIDs: playersExcept(g, msg.Missing), WaitingIDs: msg.Missing})
+			}
+			if !manual {
+				b.strikeNoShows(g, msg.Missing)
+			}
+		case msg.Code == "teams":
+			if msg.Embed == "" {
+				Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "teamTimeout", WaitingIDs: msg.Missing})
+			}
+		case msg.Embed == "":
+			if key := stepFailEmbeds[msg.StepType]; key != "" {
+				b.failureNotice(msg, key)
+			}
+		}
+		if manual {
+			// The profile says staff finish this game by hand: before the match, start it without the bot; during it, ask for the win.
+			switch g.State {
+			case GamePreGame:
+				_ = Games.SetBot(g.ID, "")
+				_ = Games.BeginMatch(g.ID)
+			case GameInGame:
+				Games.Notify(g.ID, GameEvent{Kind: EventTrackingLost, Reason: reason})
+			}
+			return
 		}
 		_ = Games.Void(actorSystem, g.GuildID, g.ID, reason, VoidOptions{})
 	}
 }
+
+// stepFailEmbeds is the built-in embed a failing pipeline step posts when the profile did not pick one (party and teams have their own, with player lists).
+var stepFailEmbeds = map[string]string{"connect": "botConnectFailed", "privateGame": "privateGameFailed", "map": "mapFailed", "settings": "settingsFailed", "start": "startFailed"}
 
 // failureNotice posts the embed the profile chose for a failure (a built-in key, or "custom:<id>" for a custom message),
 // or `fallback` when none was chosen and the failure has a default embed. An empty `fallback` posts nothing by default.
@@ -961,7 +987,7 @@ func (b *EngineBridge) failureNotice(msg engineInbound, fallback string) {
 	if _, ok := strings.CutPrefix(key, "custom:"); ok {
 		key = "step:" + key // postStepReply finds custom messages under "custom:<id>"
 	}
-	Games.Notify(msg.GameID, GameEvent{Kind: EventEmbed, Key: key, Vars: map[string]string{"reason": strings.TrimSpace(msg.Reason)}})
+	Games.Notify(msg.GameID, GameEvent{Kind: EventEmbed, Key: key, Vars: map[string]string{"reason": strings.TrimSpace(msg.Reason), "step": msg.Step, "bot": msg.Bot}})
 }
 
 // strikeNoShows gives a strike to every player who never joined the party, when the mode auto-strikes.
