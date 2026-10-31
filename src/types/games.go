@@ -281,6 +281,7 @@ type GameAPI interface {
 type GameChatLine struct {
 	At   int64  `json:"at"`
 	Text string `json:"text"`
+	Motd string `json:"motd,omitempty"`
 }
 
 // GameEvent is passed to GameEffects.Notify.
