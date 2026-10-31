@@ -295,7 +295,7 @@ func (d *Doc) Choose(command string, v Viewer, preferred string) *Banner {
 	if len(list) > 0 {
 		return list[0]
 	}
-	return nil
+	return DefaultBanner(command) // a server that designed none gets the built-in card
 }
 
 // The preset fonts are compiled into the binary: the Go font family, plus a few open-licence (SIL OFL)

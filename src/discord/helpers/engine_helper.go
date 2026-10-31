@@ -149,9 +149,15 @@ type engineInbound struct {
 	OK    bool            `json:"ok"`
 	Error string          `json:"error"`
 
-	// verify.result
+	// verify.result / host.action.result
 	RequestID string `json:"request_id"`
 	Status    string `json:"status"`
+	Teams     []struct {
+		Name string   `json:"name"`
+		IDs  []string `json:"ids"`
+	} `json:"teams"` // host.regroup: the teams as they stood
+	Command  string `json:"command"`  // host.action.result: what the bot said in chat
+	Cooldown int    `json:"cooldown"` // host.action.result: seconds until the buttons work again
 
 	// host.failed: where the bot got stuck, what it last saw, and what that probably means.
 	Step      string `json:"step"`
@@ -222,7 +228,8 @@ type EngineBridge struct {
 	replies      map[uint]chan hostReply // games waiting for host.accepted
 	hosted       map[uint]string         // games the engine runs -> guild
 	mapSelectors map[uint]func([]engineMapOption, bool) (*engineMapSelection, error)
-	verifies     map[string]chan verifyReply // registration code deliveries waiting for verify.result
+	verifies     map[string]chan verifyReply      // registration code deliveries waiting for verify.result
+	actions      map[string]chan HostActionResult // host buttons waiting for host.action.result
 	upgrader     websocket.Upgrader
 }
 
@@ -232,6 +239,7 @@ var Engine = &EngineBridge{
 	hosted:       map[uint]string{},
 	mapSelectors: map[uint]func([]engineMapOption, bool) (*engineMapSelection, error){},
 	verifies:     map[string]chan verifyReply{},
+	actions:      map[string]chan HostActionResult{},
 	upgrader:     websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}, // authenticated by the secret, not the origin
 }
 
@@ -378,6 +386,10 @@ func (b *EngineBridge) engineLost() {
 		ch <- verifyReply{err: ErrEngineOffline}
 		delete(b.verifies, id)
 	}
+	for id, ch := range b.actions {
+		ch <- HostActionResult{Error: "The engine disconnected."}
+		delete(b.actions, id)
+	}
 	b.mu.Unlock()
 	for id := range games {
 		Games.Notify(id, GameEvent{Kind: EventTrackingLost, Reason: "The engine disconnected."})
@@ -504,11 +516,7 @@ func buildHostJob(g Game) (*engineHostStart, error) {
 			if err != nil || view.Config == nil || strings.TrimSpace(view.Config.Username) == "" {
 				return nil, fmt.Errorf("%s has no registered Minecraft name", p.Username)
 			}
-			names := []string{}
-			if p.Username != "" && !strings.EqualFold(p.Username, view.Config.Username) {
-				names = append(names, p.Username)
-			}
-			t.Players = append(t.Players, engineHostPlayer{ID: p.UserID, MCName: view.Config.Username, Names: names})
+			t.Players = append(t.Players, hostPlayerOf(p, view.Config.Username))
 		}
 		job.Teams = append(job.Teams, t)
 	}
@@ -535,6 +543,75 @@ func buildHostJob(g Game) (*engineHostStart, error) {
 	}
 	job.Settings = modeSettings(g)
 	return job, nil
+}
+
+// hostPlayerOf is how the engine knows a player: the Minecraft name they registered, and the other names they show up as.
+func hostPlayerOf(p GamePlayer, mcName string) engineHostPlayer {
+	names := []string{}
+	if p.Username != "" && !strings.EqualFold(p.Username, mcName) {
+		names = append(names, p.Username)
+	}
+	return engineHostPlayer{ID: p.UserID, MCName: mcName, Names: names}
+}
+
+// syncPlayers answers the engine's players.sync: the roster's current Minecraft names. A player may have used /rename or
+// /register since the game was made, and the party invites and the team check go by the new name.
+func (b *EngineBridge) syncPlayers(gameID uint) {
+	g, ok := Games.Get(gameID)
+	if !ok {
+		return
+	}
+	players := []engineHostPlayer{}
+	for _, p := range g.Players {
+		view, err := database.Must().Player.Get(g.GuildID, p.UserID)
+		if err != nil || view.Config == nil || strings.TrimSpace(view.Config.Username) == "" {
+			continue // keep the name the engine has
+		}
+		players = append(players, hostPlayerOf(p, view.Config.Username))
+	}
+	if err := b.write(map[string]any{"type": "players.synced", "game_id": gameID, "players": players}); err != nil {
+		b.logf("send player names for game %d: %v", gameID, err)
+	}
+}
+
+// HostActionResult is the engine's answer to a host button.
+type HostActionResult struct {
+	OK       bool
+	Command  string
+	Error    string
+	Cooldown int
+}
+
+// HostAction runs a host button (party_warp, game_warp, party_invite, pg_kick) as the game's bot and waits for the answer.
+func (b *EngineBridge) HostAction(ctx context.Context, gameID uint, action, mcName, target string) (HostActionResult, error) {
+	if !b.Connected() {
+		return HostActionResult{}, ErrEngineOffline
+	}
+	raw := make([]byte, 8)
+	if _, err := rand.Read(raw); err != nil {
+		return HostActionResult{}, err
+	}
+	id := hex.EncodeToString(raw)
+	reply := make(chan HostActionResult, 1)
+	b.mu.Lock()
+	b.actions[id] = reply
+	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		delete(b.actions, id)
+		b.mu.Unlock()
+	}()
+	if err := b.write(map[string]any{"type": "host.action", "request_id": id, "game_id": gameID, "action": action, "mc_name": mcName, "target": target}); err != nil {
+		return HostActionResult{}, ErrEngineOffline
+	}
+	select {
+	case r := <-reply:
+		return r, nil
+	case <-ctx.Done():
+		return HostActionResult{}, ctx.Err()
+	case <-time.After(15 * time.Second):
+		return HostActionResult{}, errors.New("the engine did not answer in time")
+	}
 }
 
 func modeGUISlot(mode types.Mode) *int {
@@ -601,6 +678,9 @@ func (b *EngineBridge) handle(msg engineInbound) {
 	switch msg.Type {
 	case "hello":
 		b.logf("engine ready")
+		if !Blobs.Enabled() {
+			b.logf("WARNING: BLOB_READ_WRITE_TOKEN is not set, so the chat logs of hosted games cannot be saved and will not show on the dashboard")
+		}
 
 	case "host.accepted":
 		b.reply(msg.GameID, hostReply{handled: true, bot: msg.Bot})
@@ -652,6 +732,34 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		if ch != nil {
 			select {
 			case ch <- verifyReply{result: VerifyResult{Status: msg.Status, Reason: msg.Reason}}:
+			default:
+			}
+		}
+
+	case "host.regroup":
+		go func() {
+			teams := map[string][]string{}
+			for _, t := range msg.Teams {
+				teams[t.Name] = t.IDs
+			}
+			if g, ok := Games.Get(msg.GameID); ok {
+				if err := Games.Regroup(g.GuildID, g.ID, teams); err != nil {
+					b.logf("regroup game %d: %v", msg.GameID, err)
+					return
+				}
+			}
+		}()
+
+	case "players.sync":
+		go b.syncPlayers(msg.GameID)
+
+	case "host.action.result":
+		b.mu.Lock()
+		ch := b.actions[msg.RequestID]
+		b.mu.Unlock()
+		if ch != nil {
+			select {
+			case ch <- HostActionResult{OK: msg.OK, Command: msg.Command, Error: msg.Error, Cooldown: msg.Cooldown}:
 			default:
 			}
 		}
