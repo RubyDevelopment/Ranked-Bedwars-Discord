@@ -589,7 +589,7 @@ const (
 type GameDiscordEffects struct {
 	Notify     func(g Game, ev GameEvent)
 	ApplyTeams func(g Game) error
-	SelectMap  func(g Game) (string, error)
+	SelectMap  func(g Game, available []engineMapOption, mapMenuRead bool) (*engineMapSelection, error)
 }
 
 // NewGameDiscordEffects returns the effects for GameManager.SetEffects and
@@ -959,25 +959,37 @@ type mapVote struct {
 	endsAt    int64 // when the vote closes (Unix seconds)
 }
 
-// selectMap lets the players vote for the map. Each vote is worth the voter's
-// best perk map-vote multiplier. It returns the winner (ties go to chance), or
-// "" when no map is available.
-func (d *gameDiscord) selectMap(g Game) (string, error) {
+// selectMap votes only for configured maps that are present in the selected mode's live menu.
+// Each vote is worth the voter's best perk map-vote multiplier.
+func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead bool) (*engineMapSelection, error) {
 	s := d.session()
 	if s == nil || g.Channels.Text == "" {
-		return "", nil
+		return nil, nil
 	}
 	all, err := GuildMetaMaps(g.GuildID)
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	availableSlots := map[string]int{}
+	for _, option := range available {
+		if name := strings.ToLower(strings.TrimSpace(option.Name)); name != "" {
+			availableSlots[name] = option.GUISlot
+		}
 	}
 	var maps []types.Map
 	for _, m := range all {
 		if m.IsEnabled && m.IsMapAvailable && strings.TrimSpace(m.Name) != "" {
+			if mapMenuRead {
+				slot, found := availableSlots[strings.ToLower(strings.TrimSpace(m.Name))]
+				if !found {
+					continue
+				}
+				m.GUISlot = slot
+			}
 			maps = append(maps, m)
 		}
 	}
-	// A map that has fewer team colours for this mode than the game has teams can't be played; skip it unless none can.
+	// Prefer maps configured with enough team colours, but retain the legacy list if none meet that threshold.
 	teams, _ := TeamLayout(g.Mode)
 	var playable []types.Map
 	for _, m := range maps {
@@ -990,14 +1002,14 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	}
 	if len(maps) == 0 {
 		d.post(s, g, "noMaps", embedData{})
-		return "", nil
+		return nil, nil
 	}
 	if len(maps) > maxMapVoteOptions {
 		rand.Shuffle(len(maps), func(i, j int) { maps[i], maps[j] = maps[j], maps[i] })
 		maps = maps[:maxMapVoteOptions]
 	}
 	if len(maps) == 1 {
-		return maps[0].Name, nil
+		return mapSelection(maps[0], g.Mode.Name), nil
 	}
 
 	v := &mapVote{maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(mapVoteDuration).Unix()}
@@ -1008,7 +1020,7 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(g.ID, false, -1)})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	v.message = msg
 
@@ -1040,7 +1052,20 @@ func (d *gameDiscord) selectMap(g Game) (string, error) {
 	d.mu.Lock()
 	d.closedVotes[g.ID] = &closedVote{msg: msg, rows: rows}
 	d.mu.Unlock()
-	return winner.Name, nil
+	selected := slices.IndexFunc(maps, func(m types.Map) bool { return m.Name == winner.Name })
+	if selected < 0 {
+		return nil, errors.New("the winning map is no longer in the available map list")
+	}
+	return mapSelection(maps[selected], g.Mode.Name), nil
+}
+
+func mapSelection(m types.Map, mode string) *engineMapSelection {
+	return &engineMapSelection{
+		Name:      m.Name,
+		GUISlot:   m.GUISlot,
+		MapHeight: m.MapHeight,
+		Teams:     m.TeamsFor(mode),
+	}
 }
 
 // totals is the vote weight each map has.
@@ -2840,16 +2865,16 @@ type GameEffects struct {
 	ChannelsExist func(g Game) bool
 	// Released is called when a game ends so the queue can be re-swept.
 	Released func(guildID, queueChannelID string)
-	// SelectMap picks the map the match is played on (a vote, say) once teams are final; "" keeps it undecided.
-	SelectMap func(g Game) (string, error)
+	// SelectMap votes from configured maps, optionally limited to maps read from the mode's live server menu.
+	SelectMap func(g Game, available []engineMapOption, mapMenuRead bool) (*engineMapSelection, error)
 	// CollectChat reads the game's Discord chat (oldest first) so it can be archived before the channels go.
 	CollectChat func(ch GameChannels) []DiscordLogMessage
 	// Finished is called once a game reached an end (scored, finished or voided) and was released.
 	Finished func(g Game)
-	// Host hands the match to the Minecraft side (the engine) once teams are final. handled=true means the
-	// engine now runs the match and will start it (BeginMatch) itself; false (and no error) keeps hosting
+	// Host hands the match to the Minecraft side (the engine) once teams are final. The engine asks selectMap to vote after it
+	// opens the selected mode and reads that mode's map menu. handled=true means the engine now runs the match; false keeps hosting
 	// manual. A non-nil error voids the game, its text is the reason.
-	Host func(g Game) (handled bool, err error)
+	Host func(g Game, selectMap func([]engineMapOption, bool) (*engineMapSelection, error)) (handled bool, err error)
 }
 
 // StandardFlow is defined in package types (games.go).
@@ -3644,22 +3669,33 @@ func (m *GameManager) setTeams(lg *liveGame, teams [][]string, captains []string
 	}
 	m.notify(g, GameEvent{Kind: EventTeams})
 
-	if fn := m.fx().SelectMap; fn != nil {
-		if name, err := fn(g); err != nil {
-			m.logf("select map for game %d: %v", g.ID, err)
-		} else if name = strings.TrimSpace(name); name != "" {
-			_ = m.SetMap(g.ID, name)
-			g.Map = name
+	selectMap := m.fx().SelectMap
+	chooseMap := func(available []engineMapOption, mapMenuRead bool) (*engineMapSelection, error) {
+		if selectMap == nil {
+			return nil, nil
 		}
+		selection, err := selectMap(g, available, mapMenuRead)
+		if err == nil && selection != nil && strings.TrimSpace(selection.Name) != "" {
+			if setErr := m.SetMap(g.ID, selection.Name); setErr != nil {
+				return nil, setErr
+			}
+			g.Map = selection.Name
+		}
+		return selection, err
 	}
 	if fn := m.fx().Host; fn != nil {
-		handled, err := fn(g)
+		handled, err := fn(g, chooseMap)
 		if err != nil {
 			_ = m.Void(actorSystem, g.GuildID, g.ID, err.Error(), VoidOptions{})
 			return errGameGone
 		}
 		if handled {
 			return nil // the engine starts the match
+		}
+	}
+	if selectMap != nil {
+		if _, err := chooseMap(nil, false); err != nil {
+			m.logf("select map for game %d: %v", g.ID, err)
 		}
 	}
 	return m.BeginMatch(g.ID)
