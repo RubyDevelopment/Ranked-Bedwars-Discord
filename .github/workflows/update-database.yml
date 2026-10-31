@@ -1,11 +1,5 @@
 name: Update Database module
 
-# On every push or merge to main, move go.mod and go.sum to the newest Database release tag, check that the bot still
-# builds with it, and commit the change back to main when there is one.
-#
-# Needs one repository secret, DATABASE_REPO_TOKEN: a fine-grained GitHub token with read-only "Contents" access to the
-# Ranked-Bedwars-Database repository (the module is private). It is only used to read that repository.
-
 on:
   push:
     branches: [main]
@@ -14,7 +8,7 @@ on:
       - go.sum
 
 permissions:
-  contents: write # lets the built-in token push the go.mod and go.sum commit
+  contents: write
 
 concurrency:
   group: update-database
@@ -43,7 +37,6 @@ jobs:
             echo "::error::Add the DATABASE_REPO_TOKEN repository secret (read-only Contents access to the Database repo)."
             exit 1
           fi
-          # Scoped to the Database repository only, so the push of go.mod below keeps using the workflow's own token.
           git config --global \
             "url.https://x-access-token:${DATABASE_REPO_TOKEN}@github.com/RubyDevelopment/Ranked-Bedwars-Database.insteadOf" \
             "https://github.com/RubyDevelopment/Ranked-Bedwars-Database"
