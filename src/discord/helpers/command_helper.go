@@ -1052,6 +1052,7 @@ func SendCommandChannelMessage(s *discordgo.Session, guildID, cmdName, key strin
 	if channelID == "" {
 		return ErrRequirementNotConfigured
 	}
+	trimMessageSend(msg)
 	_, err = s.ChannelMessageSendComplex(channelID, msg)
 	return err
 }

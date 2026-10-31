@@ -978,7 +978,7 @@ func (r *runner) exec(st step) (string, bool) {
 		}
 	case "send_message":
 		if id := r.e.cfg.RequiredChannels[st.Name].ID; id != "" {
-			if _, err := r.s.ChannelMessageSendComplex(id, &discordgo.MessageSend{Content: r.fill(st.Value), AllowedMentions: &discordgo.MessageAllowedMentions{}}); err != nil {
+			if _, err := r.s.ChannelMessageSendComplex(id, &discordgo.MessageSend{Content: strings.TrimSpace(r.fill(st.Value)), AllowedMentions: &discordgo.MessageAllowedMentions{}}); err != nil {
 				logger.Warn(fmt.Sprintf("sending custom command message in %s: %v", id, err))
 				return stop("I could not send the message. Check the bot's channel permissions.")
 			}
@@ -1008,7 +1008,7 @@ func (r *runner) exec(st step) (string, bool) {
 		}
 		dm, err := r.s.UserChannelCreate(u.ID)
 		if err == nil {
-			_, err = r.s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{Content: r.fill(st.Value), AllowedMentions: &discordgo.MessageAllowedMentions{}})
+			_, err = r.s.ChannelMessageSendComplex(dm.ID, &discordgo.MessageSend{Content: strings.TrimSpace(r.fill(st.Value)), AllowedMentions: &discordgo.MessageAllowedMentions{}})
 		}
 		if err != nil {
 			logger.Warn(fmt.Sprintf("sending custom command DM to %s: %v", u.ID, err))
@@ -1234,6 +1234,7 @@ func (r *runner) send(rep reply) error {
 	if strings.TrimSpace(text) == "" {
 		text = "Done."
 	}
+	text = strings.TrimSpace(text)
 	edit := &discordgo.WebhookEdit{Content: &text, AllowedMentions: &discordgo.MessageAllowedMentions{}}
 	if row := r.buttonRow(rep); row != nil {
 		edit.Components = &row
