@@ -3,7 +3,7 @@ module ranked-bedwars
 go 1.26.4
 
 require (
-	github.com/RubyDevelopment/Ranked-Bedwars-Database v0.1.10
+	github.com/RubyDevelopment/Ranked-Bedwars-Database v0.1.12
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/fogleman/gg v1.3.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0

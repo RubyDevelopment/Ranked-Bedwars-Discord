@@ -1,7 +1,7 @@
 filippo.io/edwards25519 v1.1.0 h1:FNf4tywRC1HmFuKW5xopWpigGjJKiJSV0Cqo0cJWDaA=
 filippo.io/edwards25519 v1.1.0/go.mod h1:BxyFTGdWcka3PhytdK4V28tE5sGfRvvvRV7EaN4VDT4=
-github.com/RubyDevelopment/Ranked-Bedwars-Database v0.1.10 h1:PXgCU5Hxfr0Vctfdvnmzd4+A5TwgycH8RNDH8DMsBDc=
-github.com/RubyDevelopment/Ranked-Bedwars-Database v0.1.10/go.mod h1:gjS0GQoi3mmSVSbCj8zA9w9Kij39yCqtPOzSHqLORVw=
+github.com/RubyDevelopment/Ranked-Bedwars-Database v0.1.12 h1:HD+L8ASIbT9NQ5gHzJ5+Y17JB+B+MCzr65+xmjej5dk=
+github.com/RubyDevelopment/Ranked-Bedwars-Database v0.1.12/go.mod h1:gjS0GQoi3mmSVSbCj8zA9w9Kij39yCqtPOzSHqLORVw=
 github.com/bwmarrin/discordgo v0.29.0 h1:FmWeXFaKUwrcL3Cx65c20bTRW+vOb6k8AnaP+EgjDno=
 github.com/bwmarrin/discordgo v0.29.0/go.mod h1:NJZpH+1AfhIcyQsPeuBKsUtYrRnjkyu0kIVMCHkZtRY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
