@@ -38,9 +38,86 @@ var (
 // Discord Interaction Management
 // ============================================================================
 
+func trimMessageData(data *discordgo.InteractionResponseData) {
+	if data == nil {
+		return
+	}
+	data.Content = strings.TrimSpace(data.Content)
+	trimEmbeds(data.Embeds)
+}
+
+func trimWebhookEdit(edit *discordgo.WebhookEdit) {
+	if edit == nil {
+		return
+	}
+	if edit.Content != nil {
+		content := strings.TrimSpace(*edit.Content)
+		edit.Content = &content
+	}
+	if edit.Embeds != nil {
+		trimEmbeds(*edit.Embeds)
+	}
+}
+
+func trimEmbeds(embeds []*discordgo.MessageEmbed) {
+	for _, embed := range embeds {
+		if embed == nil {
+			continue
+		}
+		embed.Title = strings.TrimSpace(embed.Title)
+		embed.Description = strings.TrimSpace(embed.Description)
+		if embed.Author != nil {
+			embed.Author.Name = strings.TrimSpace(embed.Author.Name)
+		}
+		if embed.Footer != nil {
+			embed.Footer.Text = strings.TrimSpace(embed.Footer.Text)
+		}
+		for _, field := range embed.Fields {
+			if field != nil {
+				field.Name = strings.TrimSpace(field.Name)
+				field.Value = strings.TrimSpace(field.Value)
+			}
+		}
+	}
+}
+
+func trimMessageSend(message *discordgo.MessageSend) {
+	if message == nil {
+		return
+	}
+	message.Content = strings.TrimSpace(message.Content)
+	trimEmbeds(message.Embeds)
+}
+
+func trimPayloadStrings(value any) {
+	switch value := value.(type) {
+	case map[string]any:
+		for key, item := range value {
+			if text, ok := item.(string); ok {
+				value[key] = strings.TrimSpace(text)
+			} else {
+				trimPayloadStrings(item)
+			}
+		}
+	case []any:
+		for index, item := range value {
+			if text, ok := item.(string); ok {
+				value[index] = strings.TrimSpace(text)
+			} else {
+				trimPayloadStrings(item)
+			}
+		}
+	case []map[string]any:
+		for _, item := range value {
+			trimPayloadStrings(item)
+		}
+	}
+}
+
 // Respond handles both prefix and slash command responses.
 func Respond(s *discordgo.Session, i *discordgo.InteractionCreate, resp *discordgo.InteractionResponse) error {
 	if resp != nil && resp.Data != nil {
+		trimMessageData(resp.Data)
 		WithGuildFooterIcon(s, i, resp.Data.Embeds...)
 	}
 	if IsPrefixInteraction(i) {
@@ -81,6 +158,7 @@ func EditInteractionEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 // EditInteractionResponse edits an interaction response.
 func EditInteractionResponse(s *discordgo.Session, i *discordgo.InteractionCreate, edit *discordgo.WebhookEdit) error {
+	trimWebhookEdit(edit)
 	if edit != nil && edit.Embeds != nil {
 		WithGuildFooterIcon(s, i, *edit.Embeds...)
 	}
@@ -189,6 +267,8 @@ func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 	if messageID == "" {
 		return nil
 	}
+	content = strings.TrimSpace(content)
+	trimEmbeds(embeds)
 	_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
 		Content: content,
 		Embeds:  embeds,
@@ -203,6 +283,7 @@ func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 
 // EditInteractionFile answers with a PNG attachment (and optional text), for slash and prefix commands alike.
 func EditInteractionFile(s *discordgo.Session, i *discordgo.InteractionCreate, content, name string, data []byte) error {
+	content = strings.TrimSpace(content)
 	file := &discordgo.File{Name: name, ContentType: "image/png", Reader: bytes.NewReader(data)}
 	if IsPrefixInteraction(i) {
 		messageID := PrefixSourceMessageID(i)
@@ -1226,6 +1307,7 @@ func validMentionIDs(ids []string) []string {
 
 // SendPayload posts payload in channelID and returns the new message's id.
 func SendPayload(s *discordgo.Session, channelID string, payload map[string]any) (string, error) {
+	trimPayloadStrings(payload)
 	body, err := s.RequestWithBucketID("POST", discordgo.EndpointChannelMessages(channelID), payload, discordgo.EndpointChannelMessages(channelID))
 	if err != nil {
 		return "", err
@@ -1239,12 +1321,14 @@ func SendPayload(s *discordgo.Session, channelID string, payload map[string]any)
 
 // EditPayload replaces a message's content with payload.
 func EditPayload(s *discordgo.Session, channelID, messageID string, payload map[string]any) error {
+	trimPayloadStrings(payload)
 	_, err := s.RequestWithBucketID("PATCH", discordgo.EndpointChannelMessage(channelID, messageID), payload, discordgo.EndpointChannelMessage(channelID, ""))
 	return err
 }
 
 // EditOriginalPayload fills in the reply of an interaction that was deferred. Whether it is ephemeral was fixed when it was deferred.
 func EditOriginalPayload(s *discordgo.Session, i *discordgo.Interaction, payload map[string]any) error {
+	trimPayloadStrings(payload)
 	_, err := s.RequestWithBucketID("PATCH", discordgo.EndpointWebhookMessage(i.AppID, i.Token, "@original"), payload, discordgo.EndpointWebhookToken(i.AppID, ""))
 	return err
 }
@@ -1540,6 +1624,9 @@ func markAcked(id string, channelMessage bool) bool {
 
 // InteractionRespond answers an interaction, converting the response when the interaction was already acknowledged.
 func InteractionRespond(s *discordgo.Session, it *discordgo.Interaction, resp *discordgo.InteractionResponse) error {
+	if resp != nil && resp.Data != nil {
+		trimMessageData(resp.Data)
+	}
 	// Every answer to an interaction, commands and events alike, carries the server's icon in its footer.
 	if resp != nil && resp.Data != nil && it != nil {
 		WithGuildFooterIconForGuild(s, it.GuildID, resp.Data.Embeds...)
