@@ -708,7 +708,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 			return
 		}
 		// An embed the flow announces with a step of its own is posted even when the Embeds tab has it switched off.
-			d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs, Force: flowOf(g.GuildID).Announced[ev.Key]})
+		d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs, Force: flowOf(g.GuildID).Announced[ev.Key]})
 	case EventMatch:
 		d.matchEvent(s, g, ev.Match)
 	case EventMatchEnded:
@@ -1029,7 +1029,7 @@ type mapVote struct {
 	done      chan struct{}
 	closeOnce sync.Once
 	game      Game
-	weighted  bool // the winner is drawn by vote share instead of the most votes
+	weighted  bool  // the winner is drawn by vote share instead of the most votes
 	endsAt    int64 // when the vote closes (Unix seconds)
 }
 
@@ -1852,12 +1852,13 @@ type statLabel struct {
 type guildFlow struct {
 	Embeds       map[string]embedTemplate
 	Stats        []statLabel
-	Announced    map[string]bool   // embeds the pipeline posts itself with an Announce step
+	Announced    map[string]bool         // embeds the pipeline posts itself with an Announce step
 	Manual       map[string][]manualStep // phase -> what the manual-hosting Announce steps post, in order
+	Pings        map[string]bool         // step id -> mention every player with its message
 	Replies      map[string]*stepReply   // step id -> the message built in that Announce step
-	PartyInvite  string            // the profile's party invite command, with {players}
-	ButtonLabels map[string]string // host button id -> its text (hosting.buttons), blank = the default
-	MapVote      struct {      // hosting.mapVote; zero values mean the defaults
+	PartyInvite  string                  // the profile's party invite command, with {players}
+	ButtonLabels map[string]string       // host button id -> its text (hosting.buttons), blank = the default
+	MapVote      struct {                // hosting.mapVote; zero values mean the defaults
 		Seconds float64
 		Perks   *bool
 		Winner  string
@@ -1970,22 +1971,22 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				Reply json.RawMessage `json:"reply"`
 			} `json:"messages"`
 			Pipeline []struct {
-				Type    string `json:"type"`
-				Embed   string `json:"embed"`
-				Enabled *bool  `json:"enabled"`
-				Phase   string `json:"phase"`
-				ID      string `json:"id"`
-				Message string `json:"message"`
-				Builtin bool   `json:"builtin"`
+				Type    string          `json:"type"`
+				Embed   string          `json:"embed"`
+				Enabled *bool           `json:"enabled"`
+				Phase   string          `json:"phase"`
+				ID      string          `json:"id"`
+				Message string          `json:"message"`
+				Builtin bool            `json:"builtin"`
 				Reply   json.RawMessage `json:"reply"`
-				Hosting string `json:"hosting"`
+				Hosting string          `json:"hosting"`
 			} `json:"pipeline"`
 		} `json:"profile"`
 	}
 	if json.Unmarshal(raw, &server) != nil {
 		return guildFlow{}
 	}
-	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]manualStep{}, Replies: map[string]*stepReply{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
+	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]manualStep{}, Replies: map[string]*stepReply{}, Pings: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
 	b := server.Profile.Hosting.Buttons
 	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner, f.MapVote.Enabled = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner, server.Profile.Hosting.MapVote.Enabled
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}

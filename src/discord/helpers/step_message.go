@@ -105,7 +105,19 @@ func (d *gameDiscord) postStepReply(s *discordgo.Session, g Game, stepID string)
 	if rep == nil || g.Channels.Text == "" {
 		return false
 	}
-	_, err := SendPayload(s, g.Channels.Text, rep.doc().Payload(VarFiller(stepVars(g, channelNameOf(s, g.Channels.Text)))))
+	payload := rep.doc().Payload(VarFiller(stepVars(g, channelNameOf(s, g.Channels.Text))))
+	if flowOf(g.GuildID).Pings[stepID] {
+		// Mention every player. A Components V2 message cannot carry text, so its mentions go in a message of their own just before it.
+		mentions := map[string]any{"parse": []string{"users"}}
+		if rep.Type == "component" {
+			_, _ = SendPayload(s, g.Channels.Text, map[string]any{"content": pingsOf(g), "allowed_mentions": mentions})
+		} else {
+			text, _ := payload["content"].(string)
+			payload["content"] = strings.TrimSpace(pingsOf(g) + "\n" + text)
+			payload["allowed_mentions"] = mentions
+		}
+	}
+	_, err := SendPayload(s, g.Channels.Text, payload)
 	return err == nil
 }
 
