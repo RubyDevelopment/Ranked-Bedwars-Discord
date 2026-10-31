@@ -53,7 +53,7 @@ func TestPartyInvitationListsWaitingInvitedAndJoinedByName(t *testing.T) {
 			t.Errorf("field %q = %q, want %q (all: %v)", name, fields[name], value, fields)
 		}
 	}
-	if fields["Host"] != "`" + "`" && fields["Host"] != "" {
+	if fields["Host"] != "`"+"`" && fields["Host"] != "" {
 		// the host is the bot's name: empty here, so the field is dropped like the old bot would show nothing
 		t.Logf("host field: %q", fields["Host"])
 	}
@@ -136,5 +136,22 @@ func TestWelcomeNamesTheFlowAndHowTeamsWereMade(t *testing.T) {
 	captain.Captain = true
 	if emb := renderEmbed("introduction", defaultEmbeds["introduction"], embedData{Game: captain}); len(emb.Fields) != 0 {
 		t.Errorf("captain welcome fields = %+v", emb.Fields)
+	}
+}
+
+func TestDefaultPipelineAnnouncesIntroductionBeforeGameSetup(t *testing.T) {
+	flow := parseGuildFlow([]byte(`{"profile":{"pipeline":[]}}`))
+	if !flow.Announced["introduction"] {
+		t.Fatal("an omitted/default pipeline should announce the introduction")
+	}
+
+	custom := parseGuildFlow([]byte(`{"profile":{"pipeline":[{"type":"connect"},{"type":"announce","embed":"introduction"}]}}`))
+	if !custom.Announced["introduction"] {
+		t.Fatal("a configured introduction announce should be recognized")
+	}
+
+	disabled := parseGuildFlow([]byte(`{"profile":{"pipeline":[{"type":"announce","embed":"introduction","enabled":false}]}}`))
+	if disabled.Announced["introduction"] {
+		t.Fatal("a disabled introduction announce should not be pre-posted")
 	}
 }
