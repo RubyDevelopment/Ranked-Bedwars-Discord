@@ -597,6 +597,13 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		Games.Notify(msg.GameID, GameEvent{Kind: EventHostStatus, Stage: msg.Stage, Reason: msg.Detail, Waiting: msg.Waiting})
 
 	case "host.embed":
+		if msg.Key == "mapSelected" {
+			if name := strings.TrimSpace(msg.Vars["map"]); name != "" {
+				if err := Games.SetMap(msg.GameID, name); err != nil {
+					b.logf("record selected map for game %d: %v", msg.GameID, err)
+				}
+			}
+		}
 		Games.Notify(msg.GameID, GameEvent{Kind: EventEmbed, Key: msg.Key, Vars: msg.Vars, JoinedIDs: msg.JoinedIDs, WaitingIDs: msg.WaitingIDs, InvitedIDs: msg.InvitedIDs})
 
 	case "game.event":
