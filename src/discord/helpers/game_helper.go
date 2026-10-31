@@ -596,7 +596,7 @@ type GameDiscordEffects struct {
 // registers the component handlers their buttons and menus need. session
 // returns the live Discord session.
 func NewGameDiscordEffects(session func() *discordgo.Session) GameDiscordEffects {
-	d := &gameDiscord{session: session, votes: map[uint]*mapVote{}, closedVotes: map[uint]*closedVote{}, drafts: map[uint]*draftUI{}, live: map[uint]*embedState{}}
+	d := &gameDiscord{session: session, votes: map[uint]*mapVote{}, closedVotes: map[uint]*closedVote{}, drafts: map[uint]*draftUI{}, live: map[uint]*embedState{}, introductions: map[uint]bool{}}
 	RegisterComponentHandler(d.handleComponent)
 	return GameDiscordEffects{Notify: d.notify, ApplyTeams: d.applyTeams, SelectMap: d.selectMap}
 }
@@ -610,11 +610,12 @@ type closedVote struct {
 type gameDiscord struct {
 	session func() *discordgo.Session
 
-	mu     sync.Mutex
-	votes       map[uint]*mapVote
-	closedVotes map[uint]*closedVote // a vote's message once it closed, until the bot has picked the map
-	drafts      map[uint]*draftUI
-	live   map[uint]*embedState
+	mu            sync.Mutex
+	votes         map[uint]*mapVote
+	closedVotes   map[uint]*closedVote // a vote's message once it closed, until the bot has picked the map
+	drafts        map[uint]*draftUI
+	live          map[uint]*embedState
+	introductions map[uint]bool
 }
 
 // ============================================================================
@@ -630,6 +631,9 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventDraftNeeded:
 		d.startDraft(s, g)
 	case EventTeams:
+		if Engine.Connected() && GuildHasFeature(g.GuildID, "automated-hosting") && (g.Custom == nil || g.Custom.UseBot) {
+			d.postIntroduction(s, g)
+		}
 		// A pipeline with its own "Teams final" Announce step decides when this goes out.
 		if g.Bot != "" || !Engine.Connected() || !flowOf(g.GuildID).Announced["teams"] {
 			d.post(s, g, "teams", embedData{})
@@ -645,6 +649,14 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventHostStatus:
 		// Progress is shown by the configured embeds (EventEmbed); the status only matters to the logs.
 	case EventEmbed:
+		if ev.Key == "introduction" {
+			d.mu.Lock()
+			alreadyPosted := d.introductions[g.ID]
+			d.mu.Unlock()
+			if alreadyPosted {
+				return
+			}
+		}
 		if ev.Key == "mapSelected" && d.finishVote(s, g, ev) {
 			return
 		}
@@ -753,7 +765,21 @@ func (d *gameDiscord) state(id uint) *embedState {
 func (d *gameDiscord) forget(id uint) {
 	d.mu.Lock()
 	delete(d.live, id)
+	delete(d.introductions, id)
 	d.mu.Unlock()
+}
+
+// postIntroduction sends the pipeline's introduction once teams are known, but before the teams and map-vote
+// announcements. The engine's announce step still runs first in its own pipeline; its later echo is suppressed.
+func (d *gameDiscord) postIntroduction(s *discordgo.Session, g Game) {
+	if !flowOf(g.GuildID).Announced["introduction"] {
+		return
+	}
+	if d.post(s, g, "introduction", embedData{}) {
+		d.mu.Lock()
+		d.introductions[g.ID] = true
+		d.mu.Unlock()
+	}
 }
 
 // build renders the guild's template for key against the game as it is now. ok is false for a key without a default. The
@@ -783,10 +809,10 @@ func (d *gameDiscord) build(g Game, key string, data embedData) (emb *discordgo.
 }
 
 // post renders the guild's template for key and sends it, or edits the earlier message of a live embed.
-func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedData) {
+func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedData) bool {
 	emb, t, ok := d.build(g, key, data)
 	if !ok || emb == nil {
-		return
+		return false
 	}
 	st := d.state(g.ID)
 	d.mu.Lock()
@@ -797,7 +823,7 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	if live && msgID != "" {
 		embeds := []*discordgo.MessageEmbed{emb}
 		if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds}); err == nil {
-			return
+			return true
 		}
 	}
 	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}}
@@ -806,11 +832,15 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
 	}
 	m, err := s.ChannelMessageSendComplex(g.Channels.Text, send)
-	if err == nil && live {
+	if err != nil {
+		return false
+	}
+	if live {
 		d.mu.Lock()
 		st.msgs[key] = m.ID
 		d.mu.Unlock()
 	}
+	return true
 }
 
 // startTracker posts the live match tracker the moment the bot starts tracking.
@@ -1756,6 +1786,9 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 		return guildFlow{}
 	}
 	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
+	if len(server.Profile.Pipeline) == 0 {
+		f.Announced["introduction"] = true
+	}
 	for _, st := range server.Profile.Pipeline {
 		if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) {
 			f.Announced[st.Embed] = true
