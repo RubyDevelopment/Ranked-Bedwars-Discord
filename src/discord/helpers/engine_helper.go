@@ -92,6 +92,19 @@ type engineHostMap struct {
 	StableID string `json:"stable_id,omitempty"`
 }
 
+type engineMapOption struct {
+	Name    string `json:"name"`
+	GUISlot int    `json:"gui_slot"`
+	Item    string `json:"item,omitempty"`
+}
+
+type engineMapSelection struct {
+	Name      string   `json:"name"`
+	GUISlot   int      `json:"gui_slot"`
+	MapHeight int      `json:"map_height,omitempty"`
+	Teams     []string `json:"teams,omitempty"`
+}
+
 type engineHostStart struct {
 	Type       string           `json:"type"`
 	GameID     uint             `json:"game_id"`
@@ -106,19 +119,22 @@ type engineHostStart struct {
 }
 
 type engineInbound struct {
-	Type     string         `json:"type"`
-	GameID   uint           `json:"game_id"`
-	Bot      string         `json:"bot"`
-	Reason   string         `json:"reason"`
-	Code     string         `json:"code"`
-	Stage    string         `json:"stage"`
-	Detail   string         `json:"detail"`
-	Waiting  []string       `json:"waiting_for"`
-	Winner   string         `json:"winner"`
-	Inferred bool           `json:"inferred"`
-	Kind     string         `json:"kind"`
-	Lines    []GameChatLine `json:"lines"`
-	Missing  []string       `json:"missing"`
+	Type        string              `json:"type"`
+	GameID      uint                `json:"game_id"`
+	Bot         string              `json:"bot"`
+	Reason      string              `json:"reason"`
+	Code        string              `json:"code"`
+	Stage       string              `json:"stage"`
+	Detail      string              `json:"detail"`
+	Waiting     []string            `json:"waiting_for"`
+	Winner      string              `json:"winner"`
+	Inferred    bool                `json:"inferred"`
+	Kind        string              `json:"kind"`
+	Lines       []GameChatLine      `json:"lines"`
+	Missing     []string            `json:"missing"`
+	Maps        []engineMapOption   `json:"maps"`
+	MapMenuRead bool                `json:"map_menu_read"`
+	Map         *engineMapSelection `json:"map"`
 
 	// chat.line / chat.bots: live chat for the dashboard
 	GuildID string   `json:"guild_id"`
@@ -199,21 +215,23 @@ type hostReply struct {
 type EngineBridge struct {
 	secret string
 
-	mu       sync.Mutex
-	conn     *websocket.Conn
-	writeMu  sync.Mutex
-	replies  map[uint]chan hostReply     // games waiting for host.accepted
-	hosted   map[uint]string             // games the engine runs -> guild
-	verifies map[string]chan verifyReply // registration code deliveries waiting for verify.result
-	upgrader websocket.Upgrader
+	mu           sync.Mutex
+	conn         *websocket.Conn
+	writeMu      sync.Mutex
+	replies      map[uint]chan hostReply // games waiting for host.accepted
+	hosted       map[uint]string         // games the engine runs -> guild
+	mapSelectors map[uint]func([]engineMapOption, bool) (*engineMapSelection, error)
+	verifies     map[string]chan verifyReply // registration code deliveries waiting for verify.result
+	upgrader     websocket.Upgrader
 }
 
 // Engine is the process-wide bridge.
 var Engine = &EngineBridge{
-	replies:  map[uint]chan hostReply{},
-	hosted:   map[uint]string{},
-	verifies: map[string]chan verifyReply{},
-	upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}, // authenticated by the secret, not the origin
+	replies:      map[uint]chan hostReply{},
+	hosted:       map[uint]string{},
+	mapSelectors: map[uint]func([]engineMapOption, bool) (*engineMapSelection, error){},
+	verifies:     map[string]chan verifyReply{},
+	upgrader:     websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}, // authenticated by the secret, not the origin
 }
 
 func (b *EngineBridge) logf(format string, a ...any) {
@@ -350,6 +368,7 @@ func (b *EngineBridge) engineLost() {
 	b.mu.Lock()
 	games := b.hosted
 	b.hosted = map[uint]string{}
+	b.mapSelectors = map[uint]func([]engineMapOption, bool) (*engineMapSelection, error){}
 	for id, ch := range b.replies {
 		ch <- hostReply{err: errors.New("the engine disconnected")}
 		delete(b.replies, id)
@@ -370,7 +389,7 @@ func (b *EngineBridge) engineLost() {
 
 // Host is GameEffects.Host: it gives a game with final teams to the engine and
 // waits for it to take it (or say it can't).
-func (b *EngineBridge) Host(g Game) (bool, error) {
+func (b *EngineBridge) Host(g Game, selectMap func([]engineMapOption, bool) (*engineMapSelection, error)) (bool, error) {
 	if g.Custom != nil && !g.Custom.UseBot {
 		return false, nil // staff chose to host this one by hand
 	}
@@ -385,10 +404,17 @@ func (b *EngineBridge) Host(g Game) (bool, error) {
 	reply := make(chan hostReply, 1)
 	b.mu.Lock()
 	b.replies[g.ID] = reply
+	if selectMap != nil {
+		b.mapSelectors[g.ID] = selectMap
+	}
 	b.mu.Unlock()
+	accepted := false
 	defer func() {
 		b.mu.Lock()
 		delete(b.replies, g.ID)
+		if !accepted {
+			delete(b.mapSelectors, g.ID)
+		}
 		b.mu.Unlock()
 	}()
 
@@ -403,6 +429,7 @@ func (b *EngineBridge) Host(g Game) (bool, error) {
 		if !r.handled {
 			return false, nil
 		}
+		accepted = true
 		b.mu.Lock()
 		b.hosted[g.ID] = g.GuildID
 		b.mu.Unlock()
@@ -458,6 +485,7 @@ func (b *EngineBridge) Verify(ctx context.Context, guildID, mcName, code, messag
 func (b *EngineBridge) Cancel(gameID uint, reason string) {
 	b.mu.Lock()
 	delete(b.hosted, gameID)
+	delete(b.mapSelectors, gameID)
 	b.mu.Unlock()
 	// Sent even when this process doesn't remember hosting it (it may have restarted since): the engine ignores unknown games.
 	if b.Connected() {
@@ -579,6 +607,33 @@ func (b *EngineBridge) handle(msg engineInbound) {
 			_ = Games.SetBot(g.ID, msg.Bot)
 		}
 
+	case "host.maps":
+		b.mu.Lock()
+		selectMap := b.mapSelectors[msg.GameID]
+		delete(b.mapSelectors, msg.GameID)
+		b.mu.Unlock()
+		go func() {
+			var selection *engineMapSelection
+			var err error
+			if selectMap == nil {
+				err = errors.New("the game has no map-voting handler")
+			} else {
+				selection, err = selectMap(msg.Maps, msg.MapMenuRead)
+				if err == nil && selection == nil {
+					err = errors.New("no configured maps are available in the selected mode")
+				}
+			}
+			frame := map[string]any{"type": "host.map.selected", "game_id": msg.GameID}
+			if err != nil {
+				frame["error"] = err.Error()
+			} else {
+				frame["map"] = selection
+			}
+			if writeErr := b.write(frame); writeErr != nil {
+				b.logf("send map selection for game %d: %v", msg.GameID, writeErr)
+			}
+		}()
+
 	case "host.failed":
 		b.hostFailed(msg)
 
@@ -640,6 +695,7 @@ func (b *EngineBridge) handle(msg engineInbound) {
 	case "game.tracking_lost":
 		b.mu.Lock()
 		delete(b.hosted, msg.GameID)
+		delete(b.mapSelectors, msg.GameID)
 		b.mu.Unlock()
 		Games.Notify(msg.GameID, GameEvent{Kind: EventTrackingLost, Reason: msg.Reason})
 	}
@@ -726,6 +782,7 @@ func (b *EngineBridge) hostFailed(msg engineInbound) {
 	b.mu.Lock()
 	_, waiting := b.replies[msg.GameID]
 	delete(b.hosted, msg.GameID)
+	delete(b.mapSelectors, msg.GameID)
 	b.mu.Unlock()
 
 	if waiting && (msg.Code == "no_bot" || msg.Code == "no_server") {
@@ -790,6 +847,7 @@ func (b *EngineBridge) gameEnded(msg engineInbound) {
 
 	b.mu.Lock()
 	delete(b.hosted, msg.GameID)
+	delete(b.mapSelectors, msg.GameID)
 	b.mu.Unlock()
 	if !ok {
 		b.logf("game-ended frame for game %d: runtime game is unavailable", msg.GameID)
