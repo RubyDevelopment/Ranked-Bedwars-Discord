@@ -140,9 +140,12 @@ func TestWelcomeNamesTheFlowAndHowTeamsWereMade(t *testing.T) {
 }
 
 func TestDefaultPipelineAnnouncesIntroductionBeforeGameSetup(t *testing.T) {
-	flow := parseGuildFlow([]byte(`{"profile":{"pipeline":[]}}`))
+	flow := parseGuildFlow([]byte(`{"profile":{}}`))
 	if !flow.Announced["introduction"] {
 		t.Fatal("an omitted/default pipeline should announce the introduction")
+	}
+	if empty := parseGuildFlow([]byte(`{"profile":{"pipeline":[]}}`)); empty.Announced["introduction"] {
+		t.Fatal("an empty flow announces nothing by itself")
 	}
 
 	custom := parseGuildFlow([]byte(`{"profile":{"pipeline":[{"type":"connect"},{"type":"announce","embed":"introduction"}]}}`))

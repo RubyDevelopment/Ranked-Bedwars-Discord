@@ -677,6 +677,9 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if g.Bot != "" || !Engine.Connected() || !flowOf(g.GuildID).Announced["teams"] {
 			d.post(s, g, "teams", embedData{})
 		}
+		if g.Bot == "" {
+			d.manualSteps(s, g, "pre")
+		}
 	case EventStarted:
 		if g.Bot != "" {
 			d.post(s, g, "matchStarted", embedData{})
@@ -684,6 +687,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		} else {
 			d.manualSetup(s, g)
 			d.post(s, g, "matchStartedManual", embedData{})
+			d.manualSteps(s, g, "in")
 		}
 	case EventHostStatus:
 		// Progress is shown by the configured embeds (EventEmbed); the status only matters to the logs.
@@ -699,7 +703,8 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if ev.Key == "mapSelected" && d.finishVote(s, g, ev) {
 			return
 		}
-		d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs})
+		// An embed the flow announces with a step of its own is posted even when the Embeds tab has it switched off.
+			d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs, Force: flowOf(g.GuildID).Announced[ev.Key]})
 	case EventMatch:
 		d.matchEvent(s, g, ev.Match)
 	case EventMatchEnded:
@@ -709,9 +714,15 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventCasualDone:
 		d.post(s, g, "casualDone", embedData{})
+		if g.Bot == "" {
+			d.manualSteps(s, g, "post")
+		}
 		d.forget(g.ID)
 	case EventScored:
 		d.post(s, g, "scored", embedData{})
+		if g.Bot == "" {
+			d.manualSteps(s, g, "post")
+		}
 		go d.postResultsBanner(s, g)
 		d.forget(g.ID)
 	case EventTrackingLost:
@@ -807,6 +818,14 @@ func (d *gameDiscord) forget(id uint) {
 	delete(d.live, id)
 	delete(d.introductions, id)
 	d.mu.Unlock()
+}
+
+// manualSteps posts the embeds of the flow's manual-hosting Announce steps for one phase ("pre", "in" or "post"), in order. Nobody
+// hosts such a game with a bot, so these steps are all there is of a flow; each one is posted even when its embed is switched off.
+func (d *gameDiscord) manualSteps(s *discordgo.Session, g Game, phase string) {
+	for _, key := range flowOf(g.GuildID).Manual[phase] {
+		d.post(s, g, key, embedData{Force: true})
+	}
 }
 
 // postIntroduction sends the pipeline's introduction once teams are known, but before the teams and map-vote
@@ -1050,7 +1069,10 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 		return mapSelectionWithFallbacks(maps, maps[0], g.Mode.Name), nil
 	}
 
-	lasts, perks, weighted := flowOf(g.GuildID).mapVoteRules()
+	lasts, perks, weighted, voting := flowOf(g.GuildID).mapVoteRules()
+	if !voting {
+		return mapSelectionWithFallbacks(maps, maps[rand.IntN(len(maps))], g.Mode.Name), nil
+	}
 	v := &mapVote{weighted: weighted, maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(lasts).Unix()}
 	for _, p := range g.Players {
 		v.weights[p.UserID] = 1
@@ -1822,23 +1844,26 @@ type guildFlow struct {
 	Embeds       map[string]embedTemplate
 	Stats        []statLabel
 	Announced    map[string]bool   // embeds the pipeline posts itself with an Announce step
+	Manual       map[string][]string // phase -> embeds the manual-hosting Announce steps post, in order
 	PartyInvite  string            // the profile's party invite command, with {players}
 	ButtonLabels map[string]string // host button id -> its text (hosting.buttons), blank = the default
 	MapVote      struct {      // hosting.mapVote; zero values mean the defaults
 		Seconds float64
 		Perks   *bool
 		Winner  string
+		Enabled *bool
 	}
 }
 
-// mapVoteRules is how the guild's map vote runs: how long, whether perks weigh the votes, and whether the winner is drawn by vote share.
-func (f guildFlow) mapVoteRules() (lasts time.Duration, perks, weighted bool) {
+// mapVoteRules is how the guild's map vote runs: how long, whether perks weigh the votes, whether the winner is drawn by vote share, and
+// whether players vote at all (off: the map is picked by chance).
+func (f guildFlow) mapVoteRules() (lasts time.Duration, perks, weighted, enabled bool) {
 	lasts = mapVoteDuration
 	if f.MapVote.Seconds > 0 {
 		lasts = time.Duration(f.MapVote.Seconds * float64(time.Second))
 	}
 	perks = f.MapVote.Perks == nil || *f.MapVote.Perks
-	return lasts, perks, f.MapVote.Winner == "weighted"
+	return lasts, perks, f.MapVote.Winner == "weighted", f.MapVote.Enabled == nil || *f.MapVote.Enabled
 }
 
 func (f guildFlow) announces(id string) bool {
@@ -1921,6 +1946,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 					DurationSec float64 `json:"durationSec"`
 					UsePerks    *bool   `json:"usePerks"`
 					Winner      string  `json:"winner"`
+					Enabled     *bool   `json:"enabled"`
 				} `json:"mapVote"`
 				Buttons struct {
 					PartyWarpLabel   string `json:"partyWarpLabel"`
@@ -1933,20 +1959,27 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				Type    string `json:"type"`
 				Embed   string `json:"embed"`
 				Enabled *bool  `json:"enabled"`
+				Phase   string `json:"phase"`
+				Hosting string `json:"hosting"`
 			} `json:"pipeline"`
 		} `json:"profile"`
 	}
 	if json.Unmarshal(raw, &server) != nil {
 		return guildFlow{}
 	}
-	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
+	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]string{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
 	b := server.Profile.Hosting.Buttons
-	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner
+	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner, f.MapVote.Enabled = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner, server.Profile.Hosting.MapVote.Enabled
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
-	if len(server.Profile.Pipeline) == 0 {
+	if server.Profile.Pipeline == nil { // no flow saved at all: the default one posts the introduction; an empty flow posts nothing
 		f.Announced["introduction"] = true
 	}
 	for _, st := range server.Profile.Pipeline {
+		if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && st.Hosting == "manual" {
+			phase := firstNonEmpty(st.Phase, "pre")
+			f.Manual[phase] = append(f.Manual[phase], st.Embed)
+			continue
+		}
 		if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) {
 			f.Announced[st.Embed] = true
 		}
