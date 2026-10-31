@@ -1976,6 +1976,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				Phase   string `json:"phase"`
 				ID      string `json:"id"`
 				Message string `json:"message"`
+				Builtin bool   `json:"builtin"`
 				Reply   json.RawMessage `json:"reply"`
 				Hosting string `json:"hosting"`
 			} `json:"pipeline"`
@@ -1999,7 +2000,8 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 		}
 	}
 	for _, st := range server.Profile.Pipeline {
-		if rep := saved[st.Message]; st.Message != "" && rep != nil {
+		if st.Builtin { // the step posts its built-in embed: a custom embed kept on it is not used
+		} else if rep := saved[st.Message]; st.Message != "" && rep != nil {
 			f.Replies[st.ID] = rep
 		} else if len(st.Reply) > 0 {
 			var rep stepReply
