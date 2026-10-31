@@ -1001,6 +1001,7 @@ type mapVote struct {
 	done      chan struct{}
 	closeOnce sync.Once
 	game      Game
+	weighted  bool // the winner is drawn by vote share instead of the most votes
 	endsAt    int64 // when the vote closes (Unix seconds)
 }
 
@@ -1049,9 +1050,13 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 		return mapSelectionWithFallbacks(maps, maps[0], g.Mode.Name), nil
 	}
 
-	v := &mapVote{maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(mapVoteDuration).Unix()}
+	lasts, perks, weighted := flowOf(g.GuildID).mapVoteRules()
+	v := &mapVote{weighted: weighted, maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(lasts).Unix()}
 	for _, p := range g.Players {
-		v.weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
+		v.weights[p.UserID] = 1
+		if perks {
+			v.weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
+		}
 	}
 	embed, _ := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
@@ -1072,7 +1077,7 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 
 	select {
 	case <-v.done:
-	case <-time.After(mapVoteDuration):
+	case <-time.After(lasts):
 	}
 
 	d.mu.Lock()
@@ -1149,9 +1154,24 @@ func (v *mapVote) totals() []float64 {
 	return out
 }
 
-// winner is the heaviest map; ties and an empty ballot are settled by chance.
+// winner is the heaviest map; ties and an empty ballot are settled by chance. In weighted mode each map's chance is its share of the votes.
 func (v *mapVote) winner() types.Map {
 	totals := v.totals()
+	if v.weighted {
+		sum := 0.0
+		for _, t := range totals {
+			sum += t
+		}
+		if sum > 0 {
+			pick := rand.Float64() * sum
+			for i, t := range totals {
+				if pick < t {
+					return v.maps[i]
+				}
+				pick -= t
+			}
+		}
+	}
 	best := slices.Max(totals)
 	var leaders []int
 	for i, t := range totals {
@@ -1804,6 +1824,21 @@ type guildFlow struct {
 	Announced    map[string]bool   // embeds the pipeline posts itself with an Announce step
 	PartyInvite  string            // the profile's party invite command, with {players}
 	ButtonLabels map[string]string // host button id -> its text (hosting.buttons), blank = the default
+	MapVote      struct {      // hosting.mapVote; zero values mean the defaults
+		Seconds float64
+		Perks   *bool
+		Winner  string
+	}
+}
+
+// mapVoteRules is how the guild's map vote runs: how long, whether perks weigh the votes, and whether the winner is drawn by vote share.
+func (f guildFlow) mapVoteRules() (lasts time.Duration, perks, weighted bool) {
+	lasts = mapVoteDuration
+	if f.MapVote.Seconds > 0 {
+		lasts = time.Duration(f.MapVote.Seconds * float64(time.Second))
+	}
+	perks = f.MapVote.Perks == nil || *f.MapVote.Perks
+	return lasts, perks, f.MapVote.Winner == "weighted"
 }
 
 func (f guildFlow) announces(id string) bool {
@@ -1882,6 +1917,11 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				PartyInvite string `json:"partyInvite"`
 			} `json:"commands"`
 			Hosting struct {
+				MapVote struct {
+					DurationSec float64 `json:"durationSec"`
+					UsePerks    *bool   `json:"usePerks"`
+					Winner      string  `json:"winner"`
+				} `json:"mapVote"`
 				Buttons struct {
 					PartyWarpLabel   string `json:"partyWarpLabel"`
 					PartyInviteLabel string `json:"partyInviteLabel"`
@@ -1901,6 +1941,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	}
 	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
 	b := server.Profile.Hosting.Buttons
+	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
 	if len(server.Profile.Pipeline) == 0 {
 		f.Announced["introduction"] = true
