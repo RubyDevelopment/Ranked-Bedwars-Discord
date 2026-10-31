@@ -99,10 +99,11 @@ type engineMapOption struct {
 }
 
 type engineMapSelection struct {
-	Name      string   `json:"name"`
-	GUISlot   int      `json:"gui_slot"`
-	MapHeight int      `json:"map_height,omitempty"`
-	Teams     []string `json:"teams,omitempty"`
+	Name      string               `json:"name"`
+	GUISlot   int                  `json:"gui_slot"`
+	MapHeight int                  `json:"map_height,omitempty"`
+	Teams     []string             `json:"teams,omitempty"`
+	Fallbacks []engineMapSelection `json:"fallbacks,omitempty"`
 }
 
 type engineHostStart struct {
@@ -633,6 +634,13 @@ func (b *EngineBridge) handle(msg engineInbound) {
 				b.logf("send map selection for game %d: %v", msg.GameID, writeErr)
 			}
 		}()
+
+	case "host.map.hosted":
+		if msg.Map != nil {
+			if err := Games.SetMap(msg.GameID, msg.Map.Name); err != nil && !errors.Is(err, ErrGameNotFound) {
+				b.logf("record hosted map for game %d: %v", msg.GameID, err)
+			}
+		}
 
 	case "host.failed":
 		b.hostFailed(msg)
