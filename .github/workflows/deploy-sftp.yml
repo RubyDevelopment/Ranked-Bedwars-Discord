@@ -57,7 +57,7 @@ jobs:
           set net:max-retries 3
           set net:timeout 30
           set net:reconnect-interval-base 5
-          mirror --reverse --delete --allow-missing --no-perms --ignore-time $DRY --parallel=4 --verbose \
+          mirror --reverse --delete --no-perms --ignore-time $DRY --parallel=4 --verbose \
             --exclude-glob .git/ --exclude-glob .github/ --exclude-glob logs/ --exclude-glob backups/ \
             --exclude-glob .env --exclude-glob .env* \
             --exclude-glob .trash/ \
