@@ -6028,7 +6028,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	// Pre-game
 	"introduction": func() embedTemplate {
 		t := thumb(tpl("success", "Welcome to Game #{game}", "Welcome to **{flow} {mode}** {teamClause}. Defend your bed, destroy enemy beds, and fight until one team remains. Your team voice channel is ready, join it to coordinate with your team!", teamField), ThumbDoubleSwords)
-		t.Ping = yes(true)
+		t.Content = str("{mentions}")
 		return t
 	}(),
 	"teams":            thumb(tpl("success", "Drafting Complete", "Captain drafting is finished. Team voice channels are being prepared.", teamField), ThumbTada),

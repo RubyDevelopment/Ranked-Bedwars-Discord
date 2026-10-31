@@ -900,8 +900,13 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		}
 	}
 	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}, Components: buttons}
-	if t.Ping != nil && *t.Ping {
-		send.Content = pingsOf(g)
+	if t.Content != nil { // the template says what goes above the embed, even nothing
+		data.Game = g
+		send.Content = strings.TrimSpace(fill(*t.Content, data.common()))
+	} else if t.Ping != nil && *t.Ping {
+		send.Content = pingsOf(g) // an older template: the mention toggle
+	}
+	if send.Content != "" {
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
 	}
 	m, err := s.ChannelMessageSendComplex(g.Channels.Text, send)
@@ -1730,6 +1735,7 @@ type embedTemplate struct {
 	Image       *string       `json:"image,omitempty"`
 	Footer      *string       `json:"footer,omitempty"`
 	Ping        *bool         `json:"ping,omitempty"`
+	Content     *string       `json:"content,omitempty"` // text above the embed: variables work, {mentions} pings the players
 	Fields      *[]embedField `json:"fields,omitempty"`
 	Buttons     *bool         `json:"buttons,omitempty"`
 	Banner      *bool         `json:"banner,omitempty"` // the "scored" embed: also post the match results card (see results_banner.go); on unless false // the host buttons under the party and team embeds (see host_buttons.go); on unless false
@@ -1805,6 +1811,9 @@ func (t embedTemplate) merge(o embedTemplate) embedTemplate {
 	}
 	if o.Ping != nil {
 		t.Ping = o.Ping
+	}
+	if o.Content != nil {
+		t.Content = o.Content
 	}
 	if o.Buttons != nil {
 		t.Buttons = o.Buttons
@@ -2119,6 +2128,7 @@ func (d embedData) common() map[string]string {
 		vars["winners"], vars["losers"] = resultLines(g)
 		vars["winnerMentions"], vars["loserMentions"] = resultMentions(g)
 	}
+	vars["mentions"] = pingsOf(g)
 	vars["statTable"] = statTable(g, d.Flow)
 	vars["joined"], vars["joinedCount"] = namesList(g, d.Joined)
 	vars["waiting"], vars["waitingCount"] = namesList(g, d.Waiting)

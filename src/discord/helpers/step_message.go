@@ -117,6 +117,10 @@ func (d *gameDiscord) postStepReply(s *discordgo.Session, g Game, stepID string)
 			payload["allowed_mentions"] = mentions
 		}
 	}
+	// A message that mentions the players (text with {match.players}) has to be allowed to ping them.
+	if text, _ := payload["content"].(string); strings.Contains(text, "<@") && payload["allowed_mentions"] == nil {
+		payload["allowed_mentions"] = map[string]any{"parse": []string{"users"}}
+	}
 	_, err := SendPayload(s, g.Channels.Text, payload)
 	return err == nil
 }
