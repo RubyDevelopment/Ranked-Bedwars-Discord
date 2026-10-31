@@ -477,6 +477,45 @@ func (m *GameManager) MovePlayer(guildID string, id uint, userID string, team in
 	return nil
 }
 
+// Regroup moves players to the teams they actually stood on when a bot-hosted match started without the drafted teams
+// (teams maps a team name to its players' Discord ids). Scoring goes by these teams.
+func (m *GameManager) Regroup(guildID string, id uint, teams map[string][]string) error {
+	lg := m.live(id)
+	if lg == nil {
+		return ErrGameNotFound
+	}
+	type move struct {
+		playerID uint
+		team     string
+	}
+	var moves []move
+	lg.mu.Lock()
+	for team, ids := range teams {
+		for _, userID := range ids {
+			if i := slices.IndexFunc(lg.g.Players, func(p GamePlayer) bool { return p.UserID == userID }); i >= 0 && lg.g.Players[i].Team != team {
+				lg.g.Players[i].Team = team
+				moves = append(moves, move{lg.g.Players[i].PlayerID, team})
+			}
+		}
+	}
+	lg.mu.Unlock()
+	for _, mv := range moves {
+		if err := m.api().UpdateParticipant(actorSystem, guildID, id, mv.playerID, map[string]any{"team": mv.team}); err != nil {
+			return err
+		}
+	}
+	m.sync(lg)
+	if fn := m.fx().ApplyTeams; fn != nil && len(moves) > 0 {
+		lg.mu.Lock()
+		snap := lg.g.clone()
+		lg.mu.Unlock()
+		if err := fn(snap); err != nil { // the team voice channels and permissions follow the new teams
+			m.logf("regroup game %d: moving players to their team voice channels: %v", id, err)
+		}
+	}
+	return nil
+}
+
 // ReplacePlayer swaps a player for another on the same team. Not for bot-hosted games.
 func (m *GameManager) ReplacePlayer(guildID string, id uint, out, in, inName string) error {
 	lg, err := m.customLive(guildID, id)
@@ -673,6 +712,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventScored:
 		d.post(s, g, "scored", embedData{})
+		go d.postResultsBanner(s, g)
 		d.forget(g.ID)
 	case EventTrackingLost:
 		reason := ev.Reason
@@ -820,13 +860,18 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	d.mu.Unlock()
 	WithGuildFooterIconForGuild(s, g.GuildID, emb)
 	live := embedKinds[key].Live
+	buttons := hostButtons(g, key, t)
 	if live && msgID != "" {
 		embeds := []*discordgo.MessageEmbed{emb}
-		if _, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds}); err == nil {
+		edit := &discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds}
+		if buttons != nil {
+			edit.Components = &buttons
+		}
+		if _, err := s.ChannelMessageEditComplex(edit); err == nil {
 			return true
 		}
 	}
-	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}}
+	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}, Components: buttons}
 	if t.Ping != nil && *t.Ping {
 		send.Content = pingsOf(g)
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
@@ -1635,6 +1680,8 @@ type embedTemplate struct {
 	Footer      *string       `json:"footer,omitempty"`
 	Ping        *bool         `json:"ping,omitempty"`
 	Fields      *[]embedField `json:"fields,omitempty"`
+	Buttons     *bool         `json:"buttons,omitempty"`
+	Banner      *bool         `json:"banner,omitempty"` // the "scored" embed: also post the match results card (see results_banner.go); on unless false // the host buttons under the party and team embeds (see host_buttons.go); on unless false
 
 	// How the {teamPlayers} list of a team is written. PlayerLine is one player, PlayerLineOut one who is out of the match
 	// (live tracker), TeamEmpty a team with nobody, PlayerSeparator what goes between the lines. A line can use {mention},
@@ -1708,6 +1755,12 @@ func (t embedTemplate) merge(o embedTemplate) embedTemplate {
 	if o.Ping != nil {
 		t.Ping = o.Ping
 	}
+	if o.Buttons != nil {
+		t.Buttons = o.Buttons
+	}
+	if o.Banner != nil {
+		t.Banner = o.Banner
+	}
 	if o.Fields != nil {
 		t.Fields = o.Fields
 	}
@@ -1746,10 +1799,11 @@ type statLabel struct {
 }
 
 type guildFlow struct {
-	Embeds      map[string]embedTemplate
-	Stats       []statLabel
-	Announced   map[string]bool // embeds the pipeline posts itself with an Announce step
-	PartyInvite string          // the profile's party invite command, with {players}
+	Embeds       map[string]embedTemplate
+	Stats        []statLabel
+	Announced    map[string]bool   // embeds the pipeline posts itself with an Announce step
+	PartyInvite  string            // the profile's party invite command, with {players}
+	ButtonLabels map[string]string // host button id -> its text (hosting.buttons), blank = the default
 }
 
 func (f guildFlow) announces(id string) bool {
@@ -1827,6 +1881,14 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 			Commands struct {
 				PartyInvite string `json:"partyInvite"`
 			} `json:"commands"`
+			Hosting struct {
+				Buttons struct {
+					PartyWarpLabel   string `json:"partyWarpLabel"`
+					PartyInviteLabel string `json:"partyInviteLabel"`
+					GameWarpLabel    string `json:"gameWarpLabel"`
+					PGKickLabel      string `json:"pgKickLabel"`
+				} `json:"buttons"`
+			} `json:"hosting"`
 			Pipeline []struct {
 				Type    string `json:"type"`
 				Embed   string `json:"embed"`
@@ -1838,6 +1900,8 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 		return guildFlow{}
 	}
 	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
+	b := server.Profile.Hosting.Buttons
+	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
 	if len(server.Profile.Pipeline) == 0 {
 		f.Announced["introduction"] = true
 	}
@@ -2316,6 +2380,8 @@ func (m *GameManager) takeChat(id uint) []GameChatLine {
 func (m *GameManager) archiveLogs(g Game) {
 	chat := m.takeChat(g.ID)
 	if !Blobs.Enabled() {
+		// Game logs are part of a finished game's record on the dashboard: say loudly that this one is lost.
+		m.logf("game %d: its chat logs were NOT saved. Game logs need blob storage: set BLOB_READ_WRITE_TOKEN", g.ID)
 		return
 	}
 	var discord []DiscordLogMessage
