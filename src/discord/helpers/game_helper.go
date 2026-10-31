@@ -1997,6 +1997,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 		var rep stepReply
 		if json.Unmarshal(m.Reply, &rep) == nil && m.ID != "" {
 			saved[m.ID] = &rep
+			f.Replies["custom:"+m.ID] = &rep // failure policies post custom messages without a step
 		}
 	}
 	for _, st := range server.Profile.Pipeline {

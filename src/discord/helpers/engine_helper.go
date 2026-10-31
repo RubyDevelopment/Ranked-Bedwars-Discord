@@ -125,6 +125,8 @@ type engineInbound struct {
 	Bot         string              `json:"bot"`
 	Reason      string              `json:"reason"`
 	Code        string              `json:"code"`
+	Then        string              `json:"then"`  // host.failed: the profile's failure policy, "manual" or "void" (empty: the old rule)
+	Embed       string              `json:"embed"` // host.failed: embed to post, a built-in key or "custom:<id>"
 	Stage       string              `json:"stage"`
 	Detail      string              `json:"detail"`
 	Waiting     []string            `json:"waiting_for"`
@@ -216,6 +218,7 @@ type hostReply struct {
 	handled bool
 	bot     string
 	err     error
+	void    bool // err voids the game instead of falling back to hosting by hand
 }
 
 // EngineBridge owns the engine connection and the games it is hosting.
@@ -437,6 +440,9 @@ func (b *EngineBridge) Host(g Game, selectMap func([]engineMapOption, bool) (*en
 	select {
 	case r := <-reply:
 		if r.err != nil {
+			if r.void {
+				return false, r.err // the caller voids the game
+			}
 			return false, nil
 		}
 		if !r.handled {
@@ -901,13 +907,21 @@ func (b *EngineBridge) hostFailed(msg engineInbound) {
 	delete(b.mapSelectors, msg.GameID)
 	b.mu.Unlock()
 
-	if waiting && (msg.Code == "no_bot" || msg.Code == "no_server") {
-		b.reply(msg.GameID, hostReply{handled: false})
-		return
-	}
 	if waiting {
-		// Not accepted yet: Host falls back to manual hosting. Voiding too would race with staff hosting it.
-		b.reply(msg.GameID, hostReply{err: errors.New(msg.Reason)})
+		if msg.Code == "no_bot" || msg.Code == "no_server" {
+			b.failureNotice(msg, "noBot")
+		} else {
+			b.failureNotice(msg, "")
+		}
+		switch {
+		case msg.Then == "void": // the profile says to void a game nobody can host
+			b.reply(msg.GameID, hostReply{err: errors.New(msg.Reason), void: true})
+		case msg.Then == "manual" || msg.Code == "no_bot" || msg.Code == "no_server":
+			b.reply(msg.GameID, hostReply{handled: false})
+		default:
+			// Not accepted yet: Host falls back to manual hosting. Voiding too would race with staff hosting it.
+			b.reply(msg.GameID, hostReply{err: errors.New(msg.Reason)})
+		}
 		return
 	}
 	if msg.Code == "cancelled" {
@@ -918,6 +932,9 @@ func (b *EngineBridge) hostFailed(msg engineInbound) {
 		reason = "The hosting bot failed."
 	}
 	if g, ok := Games.Get(msg.GameID); ok {
+		if msg.Embed != "" {
+			b.failureNotice(msg, "")
+		}
 		if msg.Diagnosis != "" || msg.Hint != "" || msg.Step != "" {
 			Games.Notify(g.ID, GameEvent{Kind: EventEmbed, Key: "hostProblem", Vars: map[string]string{
 				"reason": reason, "step": msg.Step, "diagnosis": clip(msg.Diagnosis, 900), "hint": msg.Hint,
@@ -932,6 +949,19 @@ func (b *EngineBridge) hostFailed(msg engineInbound) {
 		}
 		_ = Games.Void(actorSystem, g.GuildID, g.ID, reason, VoidOptions{})
 	}
+}
+
+// failureNotice posts the embed the profile chose for a failure (a built-in key, or "custom:<id>" for a custom message),
+// or `fallback` when none was chosen and the failure has a default embed. An empty `fallback` posts nothing by default.
+func (b *EngineBridge) failureNotice(msg engineInbound, fallback string) {
+	key := firstNonEmpty(msg.Embed, fallback)
+	if key == "" {
+		return
+	}
+	if _, ok := strings.CutPrefix(key, "custom:"); ok {
+		key = "step:" + key // postStepReply finds custom messages under "custom:<id>"
+	}
+	Games.Notify(msg.GameID, GameEvent{Kind: EventEmbed, Key: key, Vars: map[string]string{"reason": strings.TrimSpace(msg.Reason)}})
 }
 
 // strikeNoShows gives a strike to every player who never joined the party, when the mode auto-strikes.

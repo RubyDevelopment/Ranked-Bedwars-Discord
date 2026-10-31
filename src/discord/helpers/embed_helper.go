@@ -6063,6 +6063,7 @@ var defaultEmbeds = map[string]embedTemplate{
 		append([]embedField{{Name: "Host", Value: "`{bot}`"}}, statusFields...)...), ThumbTada),
 	"partyTimeout": thumb(tpl("error", "Party Timeout", "The game was **voided** because not everyone joined the party in time.\n\nPlayers who did not join were penalized automatically.",
 		statusFields...), ThumbTrashCan),
+	"noBot": off(tpl("caution", "No Host Available", "No hosting bot is free right now.\n\n{reason}")),
 	// Not in the old bot, but only posted when a step is stuck: it tells whoever set the server up what to fix.
 	"hostProblem": thumb(tpl("error", "Hosting Problem", "The hosting bot got stuck on **{step}**.\n\n> **What happened:** {reason}\n\n{hint}",
 		embedField{Name: "What the bot last saw", Value: "```{diagnosis}```"},
