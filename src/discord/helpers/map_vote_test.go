@@ -36,7 +36,35 @@ func TestManualHostingStepsAreKeptApartFromTheBotsOwn(t *testing.T) {
 	if !f.Announced["introduction"] || f.Announced["teams"] {
 		t.Errorf("only the bot's own announce steps keep the default posting away: %v", f.Announced)
 	}
-	if len(f.Manual["pre"]) != 1 || f.Manual["pre"][0] != "teams" || len(f.Manual["post"]) != 1 || f.Manual["post"][0] != "scored" {
+	if len(f.Manual["pre"]) != 1 || f.Manual["pre"][0].Embed != "teams" || len(f.Manual["post"]) != 1 || f.Manual["post"][0].Embed != "scored" {
 		t.Errorf("manual steps by phase, switched-off ones left out: %v", f.Manual)
+	}
+}
+
+func TestAnnounceStepWithItsOwnMessageIsPostedFromTheStep(t *testing.T) {
+	f := parseGuildFlow([]byte(`{"profile":{"pipeline":[
+		{"id":"hello","type":"announce","reply":{"type":"embed","embeds":[{"title":"Game {match.number}","description":"On {game.map} with {match.teams}"}]}},
+		{"id":"after","type":"announce","hosting":"manual","phase":"post","reply":{"type":"message","content":"gg {game.mode}"}}]}}`))
+	rep := f.Replies["hello"]
+	if rep == nil || len(f.Announced) != 0 {
+		t.Fatalf("a step's own message is kept by its id and is no built-in embed: %v %v", f.Replies, f.Announced)
+	}
+	g := Game{Number: 7, Map: "Lighthouse", Teams: []string{"Red"}, Players: []GamePlayer{{UserID: "1", Team: "Red"}, {UserID: "2", Team: "Red"}}}
+	payload := rep.doc().Payload(VarFiller(stepVars(g, "queue-chat")))
+	embeds, _ := payload["embeds"].([]map[string]any)
+	if len(embeds) != 1 || embeds[0]["title"] != "Game 7" || embeds[0]["description"] != "On Lighthouse with **Red**: <@1> <@2>" {
+		t.Errorf("variables are filled in: %v", payload["embeds"])
+	}
+	if m := f.Manual["post"]; len(m) != 1 || m[0].StepID != "after" || f.Replies["after"] == nil {
+		t.Errorf("a manual step carries its message too: %v", f.Manual)
+	}
+}
+
+func TestAStepUsesACustomEmbedOfTheProfile(t *testing.T) {
+	f := parseGuildFlow([]byte(`{"profile":{
+		"messages":[{"id":"embed-1","name":"Welcome","reply":{"type":"message","content":"Welcome to game {game.number}"}}],
+		"pipeline":[{"id":"a","type":"announce","message":"embed-1"},{"id":"b","type":"announce","message":"gone"}]}}`))
+	if f.Replies["a"] == nil || f.Replies["b"] != nil {
+		t.Errorf("a step gets the custom embed it names, and nothing when it is gone: %v", f.Replies)
 	}
 }
