@@ -991,15 +991,7 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 	}
 	// Prefer maps configured with enough team colours, but retain the legacy list if none meet that threshold.
 	teams, _ := TeamLayout(g.Mode)
-	var playable []types.Map
-	for _, m := range maps {
-		if len(m.TeamsFor(g.Mode.Name)) >= teams {
-			playable = append(playable, m)
-		}
-	}
-	if len(playable) > 0 {
-		maps = playable
-	}
+	maps = mapsWithEnoughTeams(maps, g.Mode.Name, teams)
 	if len(maps) == 0 {
 		d.post(s, g, "noMaps", embedData{})
 		return nil, nil
@@ -1009,7 +1001,7 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 		maps = maps[:maxMapVoteOptions]
 	}
 	if len(maps) == 1 {
-		return mapSelection(maps[0], g.Mode.Name), nil
+		return mapSelectionWithFallbacks(maps, maps[0], g.Mode.Name), nil
 	}
 
 	v := &mapVote{maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(mapVoteDuration).Unix()}
@@ -1056,7 +1048,42 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 	if selected < 0 {
 		return nil, errors.New("the winning map is no longer in the available map list")
 	}
-	return mapSelection(maps[selected], g.Mode.Name), nil
+	return mapSelectionWithFallbacks(maps, maps[selected], g.Mode.Name), nil
+}
+
+func mapsWithEnoughTeams(maps []types.Map, mode string, teamCount int) []types.Map {
+	playable := make([]types.Map, 0, len(maps))
+	for _, m := range maps {
+		if len(m.TeamsFor(mode)) >= teamCount {
+			playable = append(playable, m)
+		}
+	}
+	if len(playable) > 0 {
+		return playable
+	}
+	return maps
+}
+
+func mapSelectionWithFallbacks(maps []types.Map, selected types.Map, mode string) *engineMapSelection {
+	selection := mapSelection(selected, mode)
+	seenNames := map[string]struct{}{strings.ToLower(strings.TrimSpace(selected.Name)): {}}
+	seenSlots := map[int]struct{}{selected.GUISlot: {}}
+	for _, candidate := range maps {
+		name := strings.ToLower(strings.TrimSpace(candidate.Name))
+		if name == "" {
+			continue
+		}
+		if _, seen := seenNames[name]; seen {
+			continue
+		}
+		if _, seen := seenSlots[candidate.GUISlot]; seen {
+			continue
+		}
+		seenNames[name] = struct{}{}
+		seenSlots[candidate.GUISlot] = struct{}{}
+		selection.Fallbacks = append(selection.Fallbacks, *mapSelection(candidate, mode))
+	}
+	return selection
 }
 
 func mapSelection(m types.Map, mode string) *engineMapSelection {
