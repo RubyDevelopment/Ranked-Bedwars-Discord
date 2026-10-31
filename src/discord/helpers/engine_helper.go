@@ -484,10 +484,7 @@ func buildHostJob(g Game) (*engineHostStart, error) {
 		job.Teams = append(job.Teams, t)
 	}
 
-	if g.Mode.GUISlot > 0 { // the mode's slot in the server's mode menu
-		slot := g.Mode.GUISlot
-		job.ModeSlot = &slot
-	}
+	job.ModeSlot = modeGUISlot(g.Mode)
 
 	if name := strings.TrimSpace(g.Map); name != "" && name != MapUndecided {
 		m := &engineHostMap{Name: name}
@@ -509,6 +506,14 @@ func buildHostJob(g Game) (*engineHostStart, error) {
 	}
 	job.Settings = modeSettings(g)
 	return job, nil
+}
+
+func modeGUISlot(mode types.Mode) *int {
+	if mode.GUISlot == nil || *mode.GUISlot < 0 {
+		return nil
+	}
+	slot := *mode.GUISlot
+	return &slot
 }
 
 // applyTeamColors gives each team the colour its map is configured with for the game's mode (Team A the first, and so on).
