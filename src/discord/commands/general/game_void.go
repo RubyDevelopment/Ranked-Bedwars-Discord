@@ -25,7 +25,7 @@ func init() {
 // GameVoidCommand Requests a match void due to disconnects, bugs, or rule infractions.
 var GameVoidCommand = &types.Command{
 	Name:          "void",
-	Description:   "Requests a match void due to disconnects, bugs, or rule infractions.",
+	Description:   "Vote to void your game (bugs, disconnects, rule breaks). 3/4 of the players must vote.",
 	PrefixAliases: []string{"v"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
@@ -64,16 +64,19 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotInMatchEmbed(i))
 	}
 
-	// 2. Validate Staff Permissions
-	if !helpers.MemberIsAdministrator(s, i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchStaffOnlyEmbed(i))
+	// 2. Vote: any player of the game may, and three quarters of the players (rounded down) void it
+	reasonInput := helpers.OptionString(i, "reason")
+	votes, needed, already := helpers.CastVoidVote(game.ID, actor, len(game.Players))
+	if votes < needed {
+		embed := helpers.VoidVoteEmbed(actor, votes, needed, already, reasonInput)
+		if !already && game.Channels.Text != "" && game.Channels.Text != i.ChannelID {
+			_, _ = s.ChannelMessageSendEmbed(game.Channels.Text, embed)
+		}
+		return helpers.EditInteractionEmbed(s, i, embed)
 	}
 
-	// 3. Resolve Reason from Option
-	reasonInput := helpers.OptionString(i, "reason")
-	reason := fmt.Sprintf("Voided by <@%s> via /void: %s", actor, reasonInput)
-
-	// 4. Void the Game
+	// 3. Enough votes: void the game
+	reason := fmt.Sprintf("Voted void by %d of %d players (last vote <@%s>): %s", votes, len(game.Players), actor, reasonInput)
 	if err := helpers.Games.Void(actor, i.GuildID, game.ID, reason, helpers.VoidOptions{}); err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
 	}

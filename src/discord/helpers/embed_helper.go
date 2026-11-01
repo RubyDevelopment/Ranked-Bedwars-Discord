@@ -1924,11 +1924,19 @@ func VoidMatchNotInMatchEmbed(i *discordgo.InteractionCreate) *discordgo.Message
 	})
 }
 
-func VoidMatchStaffOnlyEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
-	return Preset("error", types.PresetOptions{
-		Title:       "Staff Only",
-		Description: "Only staff can void matches. Please contact a staff member for assistance.",
-		Thumbnail:   ThumbFlag,
+// VoidVoteEmbed is the progress of a game's void vote: who just voted, and how many more votes void it.
+func VoidVoteEmbed(userID string, votes, needed int, already bool, reason string) *discordgo.MessageEmbed {
+	title, text := "Void Vote", fmt.Sprintf("<@%s> voted to void this game: **%d/%d** votes.", userID, votes, needed)
+	if already {
+		text = fmt.Sprintf("<@%s>, you already voted to void this game: **%d/%d** votes.", userID, votes, needed)
+	}
+	if reason != "" {
+		text += "\n> " + reason
+	}
+	return Preset("info", types.PresetOptions{
+		Title:       title,
+		Description: text + fmt.Sprintf("\n\nThe game is voided at **%d** votes (three quarters of the players). Use `/void` to vote.", needed),
+		Thumbnail:   ThumbTrashCan,
 	})
 }
 
