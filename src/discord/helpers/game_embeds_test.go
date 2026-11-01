@@ -158,3 +158,15 @@ func TestDefaultPipelineAnnouncesIntroductionBeforeGameSetup(t *testing.T) {
 		t.Fatal("a disabled introduction announce should not be pre-posted")
 	}
 }
+
+func TestMatchJoinedTeamSelectionAndTeamsVerifiedShareOneMessage(t *testing.T) {
+	for _, key := range []string{"matchJoined", "teamSelection", "teamsVerified"} {
+		k := embedKinds[key]
+		if !k.Live || k.messageOf(key) != "matchJoined" {
+			t.Errorf("%s must edit the Match Joined message, got live=%v message=%q", key, k.Live, k.messageOf(key))
+		}
+	}
+	if embedKinds["matchStarted"].Live {
+		t.Error("Match Started is its own message")
+	}
+}

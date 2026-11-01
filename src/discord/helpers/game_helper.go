@@ -1926,7 +1926,7 @@ type embedTemplate struct {
 // embedKind says how an embed behaves; the text lives in the template.
 type embedKind struct {
 	Live      bool   // edited in place instead of posting again
-	Message   string // the key whose message this one edits (Party Ready edits the Party Invitation message)
+	Message   string // the key whose message this one edits (Party Ready edits the Party Invitation message; Team Selection and Teams Verified edit Match Joined)
 	Plain     bool   // only the text above the embed is sent, as a new message each time (the party reminder)
 	TeamLines string // "plain" (a mention each), "status" (joined / waiting), "alive" (alive / eliminated) or "locked" (all on their team)
 }
@@ -1945,12 +1945,13 @@ var embedKinds = map[string]embedKind{
 	"partyInvitation": {Live: true},
 	"partyReady":      {Live: true, Message: "partyInvitation"},
 	"partyReminder":   {Plain: true},
-	"teamSelection":   {Live: true, TeamLines: "status"},
-	"teamsVerified":   {TeamLines: "status"},
+	// Match Joined, Team Selection and Teams Verified are one message that moves through the three states.
+	"matchJoined":     {Live: true, TeamLines: "tbd"},
+	"teamSelection":   {Live: true, Message: "matchJoined", TeamLines: "status"},
+	"teamsVerified":   {Live: true, Message: "matchJoined", TeamLines: "status"},
 	"matchStarted":    {TeamLines: "locked"},
 	"liveTracker":     {Live: true, TeamLines: "alive"},
 	"captainPicking":  {Live: true, TeamLines: "draft"},
-	"matchJoined":     {TeamLines: "tbd"},
 	"partySetup":      {TeamLines: "plain"},
 	"teamSetup":       {TeamLines: "plain"},
 }
