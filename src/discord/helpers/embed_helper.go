@@ -6101,6 +6101,5 @@ var defaultEmbeds = map[string]embedTemplate{
 	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied · no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), ThumbTada),
 	"staffPending": thumb(colored(tpl("pending", "Win Submitted • Game #{game}",
 		"**Status:** Pending staff scoring\n**Claimed winner:** {winner}\n\nThe match was moved to the review category. Staff will score it shortly."), "#fee75c"), ThumbTimer),
-	"trackingLost": submitYourWin,
-	"voided":       thumb(tpl("error", "Game Voided", "This game was voided and will not count towards your stats.\n\n**Reason:** {reason}"), ThumbFlag),
+	"voided": thumb(tpl("error", "Game Voided", "This game was voided and will not count towards your stats.\n\n**Reason:** {reason}"), ThumbFlag),
 }

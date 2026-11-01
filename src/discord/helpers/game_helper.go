@@ -744,7 +744,8 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if reason == "" {
 			reason = "The hosting bot stopped tracking the match."
 		}
-		d.post(s, g, "trackingLost", embedData{Vars: map[string]string{"reason": reason}})
+		// The same "Submit your win" message hosting by hand posts: players send their win to staff.
+		d.post(s, g, "matchStartedManual", embedData{Vars: map[string]string{"reason": reason}})
 		d.forget(g.ID)
 	case EventVoided:
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
