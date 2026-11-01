@@ -1894,6 +1894,11 @@ func SeedEventConfigs(guildID string) error {
 		return err
 	}
 
+	commands := map[string]types.CommandConfig{}
+	if config, err := database.Must().GuildConfig.GetFresh(guildID); err == nil {
+		commands = decodeCommandsMap(config.Commands)
+	}
+
 	changed := false
 	for _, ev := range EventRegistry {
 		if ev == nil || ev.Name == "" {
@@ -1918,6 +1923,9 @@ func SeedEventConfigs(guildID string) error {
 		if reconcileEventRequirements(&cfg, ev.Requirements) {
 			changed = true
 		}
+		if inheritCommandAssignments(&cfg, commands) {
+			changed = true
+		}
 		existing[ev.Name] = cfg
 	}
 	if !changed {
@@ -1935,6 +1943,31 @@ func reconcileEventRequirements(cfg *types.EventConfig, requirements []types.Req
 	cc := types.CommandConfig{RequiredRoles: cfg.RequiredRoles, RequiredChannels: cfg.RequiredChannels, RequiredCategories: cfg.RequiredCategories}
 	changed := reconcileRequirements(&cc, requirements)
 	cfg.RequiredRoles, cfg.RequiredChannels, cfg.RequiredCategories = cc.RequiredRoles, cc.RequiredChannels, cc.RequiredCategories
+	return changed
+}
+
+// inheritCommandAssignments fills the event's empty requirement slots with what the commands already have for the same key (type and
+// key are one setting), so an assignment made before the event declared the key is not lost. A slot the event already has is left alone.
+func inheritCommandAssignments(cfg *types.EventConfig, commands map[string]types.CommandConfig) bool {
+	changed := false
+	fill := func(slots map[string]types.RequirementSlot, of func(types.CommandConfig) map[string]types.RequirementSlot) {
+		for key, slot := range slots {
+			if slot.ID != "" {
+				continue
+			}
+			for _, command := range commands {
+				if id := of(command)[key].ID; id != "" {
+					slot.ID = id
+					slots[key] = slot
+					changed = true
+					break
+				}
+			}
+		}
+	}
+	fill(cfg.RequiredRoles, func(c types.CommandConfig) map[string]types.RequirementSlot { return c.RequiredRoles })
+	fill(cfg.RequiredChannels, func(c types.CommandConfig) map[string]types.RequirementSlot { return c.RequiredChannels })
+	fill(cfg.RequiredCategories, func(c types.CommandConfig) map[string]types.RequirementSlot { return c.RequiredCategories })
 	return changed
 }
 
