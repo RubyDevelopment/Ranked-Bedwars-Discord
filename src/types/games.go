@@ -65,6 +65,7 @@ type Mode struct {
 	IsEloGainEnabled       bool    `json:"is_elo_gain_enabled"`
 	IsStatsTrackingEnabled bool    `json:"is_stats_tracking_enabled"`
 	IsAutoStrikingEnabled  bool    `json:"is_auto_striking_enabled"`
+	SendResults            *bool   `json:"is_results_sending_enabled,omitempty"` // the results banner is posted for this mode; nil (older modes) = yes
 	IsPartyQueueEnabled    bool    `json:"is_party_queue_enabled"`
 	IsQueueCategory        bool    `json:"is_queue_category"`
 	GUISlot                *int    `json:"gui_slot,omitempty"`

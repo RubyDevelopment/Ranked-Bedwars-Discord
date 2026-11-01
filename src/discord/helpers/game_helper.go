@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"math/rand/v2"
 	"net/http"
@@ -716,7 +717,21 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 			return
 		}
 		// An embed the flow announces with a step of its own is posted even when the Embeds tab has it switched off.
-		d.post(s, g, ev.Key, embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs, Force: flowOf(g.GuildID).Announced[ev.Key]})
+		data := embedData{Vars: ev.Vars, Joined: ev.JoinedIDs, Waiting: ev.WaitingIDs, Invited: ev.InvitedIDs, Force: flowOf(g.GuildID).Announced[ev.Key]}
+		st := d.state(g.ID)
+		switch ev.Key {
+		case "partyInvitation":
+			d.mu.Lock()
+			st.invite, st.hasInvite = data, true
+			d.mu.Unlock()
+		case "partyReady":
+			d.mu.Lock()
+			st.hasInvite = false // the invitation is done; a late reminder must not bring it back
+			d.mu.Unlock()
+		}
+		if posted := d.post(s, g, ev.Key, data); posted && ev.Key == "partyReminder" {
+			d.resendPartyInvitation(s, g, st)
+		}
 	case EventMatch:
 		d.matchEvent(s, g, ev.Match)
 	case EventMatchEnded:
@@ -832,6 +847,26 @@ type embedState struct {
 	startedAt  time.Time
 	pending    bool            // a tracker refresh is already scheduled
 	posted     map[string]bool // embeds already posted in this game, so a shared block never posts the welcome or the teams twice
+	invite     embedData       // the last Party Invitation, posted again under each reminder
+	hasInvite  bool
+}
+
+// resendPartyInvitation moves the Party Invitation to the bottom of the chat after a reminder: the old message is deleted and the
+// embed is posted again (with the latest joined/waiting/invited lists the reminder carried, when it had any).
+func (d *gameDiscord) resendPartyInvitation(s *discordgo.Session, g Game, st *embedState) {
+	d.mu.Lock()
+	data, ok, old := st.invite, st.hasInvite, st.msgs["partyInvitation"]
+	delete(st.msgs, "partyInvitation")
+	d.mu.Unlock()
+	if !ok {
+		return
+	}
+	if old != "" {
+		if err := s.ChannelMessageDelete(g.Channels.Text, old); err != nil {
+			log.Printf("delete party invitation for game %d: %v", g.ID, err)
+		}
+	}
+	d.post(s, g, "partyInvitation", data)
 }
 
 func (d *gameDiscord) state(id uint) *embedState {
@@ -2220,7 +2255,6 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				Results struct {
 					ChannelID string `json:"channel_id"`
 					Mode      string `json:"mode"`
-					Send      *bool  `json:"send"`
 				} `json:"results"`
 				Alerts struct {
 					ChannelID string          `json:"channel_id"`
@@ -2244,7 +2278,6 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	f.MapVote.Manual = server.Profile.Hosting.MapVote.Manual
 	f.Delivery = delivery{
 		ResultsChannel: server.Profile.Delivery.Results.ChannelID, ResultsMode: server.Profile.Delivery.Results.Mode,
-		ResultsOff: server.Profile.Delivery.Results.Send != nil && !*server.Profile.Delivery.Results.Send,
 		AlertsChannel: server.Profile.Delivery.Alerts.ChannelID, AlertRole: server.Profile.Delivery.Alerts.RoleID, Alerts: server.Profile.Delivery.Alerts.Events,
 	}
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}

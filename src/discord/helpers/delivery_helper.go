@@ -23,7 +23,6 @@ import (
 type delivery struct {
 	ResultsChannel string
 	ResultsMode    string
-	ResultsOff     bool // the "Send results" toggle is off: the results banner is not posted, in any mode
 	AlertsChannel  string
 	AlertRole      string
 	Alerts         map[string]bool

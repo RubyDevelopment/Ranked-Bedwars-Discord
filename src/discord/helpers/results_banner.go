@@ -40,7 +40,7 @@ func resultsTeams(g Game) []ResultsTeam {
 // when it has one and can be drawn, the built-in card otherwise.
 func (d *gameDiscord) resultsPNG(g Game) []byte {
 	flow := flowOf(g.GuildID)
-	if flow.Delivery.ResultsOff || flow.Delivery.ResultsMode == "off" {
+	if (g.Mode.SendResults != nil && !*g.Mode.SendResults) || flow.Delivery.ResultsMode == "off" {
 		return nil
 	}
 	if t, ok := flow.embedFor("scored"); ok && t.Banner != nil && !*t.Banner {
