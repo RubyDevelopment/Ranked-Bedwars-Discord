@@ -306,6 +306,7 @@ type GameEventKind int
 type GameLogRefs struct {
 	Discord string `json:"discord,omitempty"`
 	Game    string `json:"game,omitempty"`
+	Bot     string `json:"bot,omitempty"` // what the game's bot(s) did, kept by the engine (staff only)
 }
 
 // GamePlayer is one participant. Stats are filled in by whatever tracks the

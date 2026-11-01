@@ -2648,6 +2648,7 @@ func pingsOf(g Game) string {
 //	discord: the messages of the game's text channel or thread (read just
 //	         before the channels are deleted)
 //	game:    the Minecraft chat the engine's bot saw (sent as a "game.chat" frame)
+//	bot:     the engine's own record of the bot(s) of the game (chat, events, notes, reports), asked for with logs.read
 
 const (
 	gameLogVersion     = 1
@@ -2676,7 +2677,7 @@ type GameLogRefs = types.GameLogRefs
 // gameLogFile is the JSON document written to the blob store.
 type gameLogFile struct {
 	Version    int    `json:"version"`
-	Kind       string `json:"kind"` // "discord" | "game"
+	Kind       string `json:"kind"` // "discord" | "game" | "bot"
 	GameID     uint   `json:"game_id"`
 	GameNumber int    `json:"game_number"`
 	GuildID    string `json:"guild_id"`
@@ -2722,7 +2723,8 @@ func (m *GameManager) archiveLogs(g Game) {
 	if collect := m.fx().CollectChat; collect != nil && g.Channels.Text != "" {
 		discord = collect(g.Channels)
 	}
-	if len(discord) == 0 && len(chat) == 0 {
+	botLog := m.collectBotLog(g)
+	if len(discord) == 0 && len(chat) == 0 && len(botLog) == 0 {
 		return
 	}
 
@@ -2743,10 +2745,29 @@ func (m *GameManager) archiveLogs(g Game) {
 	if len(chat) > 0 {
 		refs.Game = put("game", chat)
 	}
+	if len(botLog) > 0 {
+		refs.Bot = put("bot", botLog)
+	}
 	if refs == (GameLogRefs{}) {
 		return
 	}
 	m.recordLogs(g, refs)
+}
+
+// collectBotLog asks the engine for everything its bot(s) did in this game. Nothing when the engine is away or kept nothing.
+func (m *GameManager) collectBotLog(g Game) []json.RawMessage {
+	params, _ := json.Marshal(map[string]any{"game": g.ID, "span": true, "limit": 20000})
+	result := LiveChat.Control(g.GuildID, "", "logs.read", params)
+	if !result.OK {
+		return nil
+	}
+	var data struct {
+		Entries []json.RawMessage `json:"entries"`
+	}
+	if json.Unmarshal(result.Data, &data) != nil {
+		return nil
+	}
+	return data.Entries
 }
 
 // recordLogs merges the log URLs into the stored game's runtime metadata.
