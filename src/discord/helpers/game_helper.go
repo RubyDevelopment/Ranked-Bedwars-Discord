@@ -970,10 +970,11 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	}
 	st := d.state(g.ID)
 	d.mu.Lock()
-	msgID := st.msgs[key]
+	kind := embedKinds[key]
+	msgID := st.msgs[kind.messageOf(key)]
 	d.mu.Unlock()
 	WithGuildFooterIconForGuild(s, g.GuildID, emb)
-	live := embedKinds[key].Live
+	live := kind.Live
 	buttons := hostButtons(g, key, t)
 	// The text above the embed, when the template has one (variables work, {mentions} pings the players).
 	data.Game = g
@@ -982,7 +983,19 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		text := strings.TrimSpace(fill(*t.Content, data.common()))
 		content = &text
 	}
+	if kind.Plain {
+		// A reminder is a plain message sent anew every time, so it pings again; the embed itself is not sent.
+		if content == nil || *content == "" {
+			return false
+		}
+		_, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Content: *content, AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}})
+		return err == nil
+	}
 	if live && msgID != "" {
+		if content == nil && kind.Message != "" {
+			none := "" // the message it edits may carry text of an earlier state
+			content = &none
+		}
 		embeds := []*discordgo.MessageEmbed{emb}
 		edit := &discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds, Content: content}
 		if buttons != nil {
@@ -1006,7 +1019,7 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	d.mu.Lock()
 	st.posted[key] = true
 	if live {
-		st.msgs[key] = m.ID
+		st.msgs[kind.messageOf(key)] = m.ID
 	}
 	d.mu.Unlock()
 	return true
@@ -1913,13 +1926,25 @@ type embedTemplate struct {
 // embedKind says how an embed behaves; the text lives in the template.
 type embedKind struct {
 	Live      bool   // edited in place instead of posting again
+	Message   string // the key whose message this one edits (Party Ready edits the Party Invitation message)
+	Plain     bool   // only the text above the embed is sent, as a new message each time (the party reminder)
 	TeamLines string // "plain" (a mention each), "status" (joined / waiting), "alive" (alive / eliminated) or "locked" (all on their team)
+}
+
+// messageOf is the key the message of this embed is remembered under.
+func (k embedKind) messageOf(key string) string {
+	if k.Message != "" {
+		return k.Message
+	}
+	return key
 }
 
 var embedKinds = map[string]embedKind{
 	"introduction":    {TeamLines: "plain"},
 	"teams":           {TeamLines: "plain"},
 	"partyInvitation": {Live: true},
+	"partyReady":      {Live: true, Message: "partyInvitation"},
+	"partyReminder":   {Plain: true},
 	"teamSelection":   {Live: true, TeamLines: "status"},
 	"teamsVerified":   {TeamLines: "status"},
 	"matchStarted":    {TeamLines: "locked"},

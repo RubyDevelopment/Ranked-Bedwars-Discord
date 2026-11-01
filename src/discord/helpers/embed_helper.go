@@ -6061,6 +6061,11 @@ var defaultEmbeds = map[string]embedTemplate{
 		embedField{Name: "{mapName}", Value: "**Max height:** {mapHeight}\n**Teams:** {mapTeams}", Inline: true, Each: "map"}), ThumbSprout),
 	"teamSetup": thumb(tpl("pending", "Team Setup", "Open the **Team Selector** item in the lobby and join your team's colour. **Stay with your team mates**, and do not start the countdown until every player is on their team.",
 		embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}), ThumbPlayers),
+	"partyReminder": func() embedTemplate {
+		t := tpl("default", "Party reminder", "Said again each time the players who have not joined are invited.")
+		t.Content = str("{waitingMentions}\nMake sure you're **/online**, party invites are **on**, you are in the **hub or Bedwars lobby**, and you are on the right **account**!")
+		return t
+	}(),
 	"partyReady": thumb(tpl("success", "Party Ready", "Everyone has joined the party. The match is about to begin, and the party will be warped to **{mode}** shortly.\n\nDo not leave the party.",
 		append([]embedField{{Name: "Host", Value: "`{bot}`"}}, statusFields...)...), ThumbTada),
 	"partyTimeout": thumb(tpl("error", "Party Timeout", "The game was **voided** because not everyone joined the party in time.\n\nPlayers who did not join were penalized automatically.",

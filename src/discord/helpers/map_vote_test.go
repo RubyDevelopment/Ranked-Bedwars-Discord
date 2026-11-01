@@ -122,3 +122,12 @@ func TestHandHostedFlowKeepsSharedBlocksGroupsAndWaits(t *testing.T) {
 		t.Errorf("the shared welcome is the bot's too; a hand-only block is not: %v", f.Announced)
 	}
 }
+
+func TestPartyReadyEditsTheInvitationMessage(t *testing.T) {
+	if got := embedKinds["partyReady"].messageOf("partyReady"); got != "partyInvitation" {
+		t.Fatalf("Party Ready must edit the Party Invitation message, not post its own: %q", got)
+	}
+	if !embedKinds["partyReminder"].Plain || embedKinds["partyReminder"].Live {
+		t.Fatal("the party reminder is a plain message sent anew every time")
+	}
+}
