@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"ranked-bedwars/src/database"
+
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -56,9 +58,15 @@ func resultsTeams(g Game, outcome string) []ResultsTeam {
 				continue
 			}
 			team.Win = r.Win
+			if unrated {
+				// Nothing was scored: show where the player stands now (rank and ELO on both sides, no change).
+				if st, err := database.Must().Stats.Get(g.GuildID, p.UserID, 0); err == nil {
+					r.RankBefore, r.RankAfter, r.Before, r.After = st.Rank, st.Rank, st.Elo, st.Elo
+				}
+			}
 			team.Players = append(team.Players, ResultsPlayer{
 				Name: p.Username, Head: HeadURL(p.Username), RankBefore: r.RankBefore, RankAfter: r.RankAfter,
-				Before: r.Before, After: r.After, Change: r.Change, MVP: r.MVP,
+				Before: r.Before, After: r.After, Change: r.Change, MVP: r.MVP, Unrated: unrated,
 			})
 		}
 		if len(team.Players) > 0 {

@@ -148,6 +148,7 @@ type ResultsPlayer struct {
 	Name, Head, RankBefore, RankAfter string
 	Before, After, Change             int
 	MVP                               bool
+	Unrated                           bool // a void or casual game: Before and After are the current ELO and there is no change
 }
 
 // ResultsVars are the {match.*} and {tN.pM.*} values of the results card.
@@ -165,6 +166,9 @@ func ResultsVars(number int, season, mode, mapName string, teams []ResultsTeam) 
 			v[q+"name"], v[q+"head"] = pl.Name, pl.Head
 			v[q+"rank"], v[q+"rank_before"], v[q+"rank_after"] = pl.RankAfter, pl.RankBefore, pl.RankAfter
 			v[q+"before"], v[q+"after"], v[q+"change"] = fmt.Sprint(pl.Before), fmt.Sprint(pl.After), fmt.Sprintf("%+d", pl.Change)
+			if pl.Unrated {
+				v[q+"change"] = "" // nothing was scored: no change to draw
+			}
 			v[q+"mvp"] = "" // set for every player, so an unset one draws nothing instead of its placeholder
 			if pl.MVP {
 				v[q+"mvp"] = "MVP"
