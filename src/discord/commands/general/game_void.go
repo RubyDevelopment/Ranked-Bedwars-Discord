@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -25,7 +26,7 @@ func init() {
 var GameVoidCommand = &types.Command{
 	Name:          "void",
 	Description:   "Requests a match void due to disconnects, bugs, or rule infractions.",
-	PrefixAliases: []string{"vg", "v"},
+	PrefixAliases: []string{"v"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
@@ -70,7 +71,7 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	// 3. Resolve Reason from Option
 	reasonInput := helpers.OptionString(i, "reason")
-	reason := fmt.Sprintf("Voided by <@%s> via /game_void: %s", actor, reasonInput)
+	reason := fmt.Sprintf("Voided by <@%s> via /void: %s", actor, reasonInput)
 
 	// 4. Void the Game
 	if err := helpers.Games.Void(actor, i.GuildID, game.ID, reason, helpers.VoidOptions{}); err != nil {

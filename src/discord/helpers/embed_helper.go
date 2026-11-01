@@ -2116,7 +2116,7 @@ func NicknameAPIOutageEmbed(i *discordgo.InteractionCreate, label string) *disco
 func NicknameRemovedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title:       "Nickname Removed",
-		Description: "Your in-game nickname has been cleared. Use `/player_refresh` to refresh your displayed name.",
+		Description: "Your in-game nickname has been cleared. Use `/sync` to refresh your displayed name.",
 		Thumbnail:   ThumbLoad,
 	})
 }
@@ -2494,7 +2494,7 @@ func PlayerRenameRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *disc
 func PlayerRenameProfileNotFoundEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
 	return Preset("error", types.PresetOptions{
 		Title:       "Profile Not Found",
-		Description: "Your guild player profile could not be found. Try running `/player_refresh` or contact staff if the issue persists.",
+		Description: "Your guild player profile could not be found. Try running `/sync` or contact staff if the issue persists.",
 		Thumbnail:   ThumbFlag,
 	})
 }
