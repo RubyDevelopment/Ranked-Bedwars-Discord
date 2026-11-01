@@ -6057,8 +6057,10 @@ var defaultEmbeds = map[string]embedTemplate{
 	// Hosted by hand: nobody joins the server for the players, so they are told how to set the game up.
 	"partySetup": thumb(tpl("pending", "Party Setup", "It is time to get everyone into a Minecraft party. **Decide who will host**, then invite the rest of the lobby.\n\nBefore inviting, make sure that:\n1. You are **on the server**.\n2. **Party invites** are set to **On**.\n3. Your status is set to **Online**.",
 		embedField{Name: "Party Command", Value: "```{inviteCommand}```"}, teamField), ThumbPlayers),
-	"mapSetup": thumb(tpl("pending", "Map Setup", "**{mapCount}** map(s) are in rotation for **{mode}**; the vote picked **{map}**.\n\n**Create a private game on that map**, then use the map name, max height and teams below to set up your match.",
-		embedField{Name: "Map", Value: "{map}", Inline: true}, embedField{Name: "Max height", Value: "{mapHeight}", Inline: true}, embedField{Name: "Teams", Value: "{mapTeams}", Inline: true}), ThumbSprout),
+	"mapSetup": thumb(tpl("pending", "Map Setup", "**{mapCount}** map(s) are in rotation for **{mode}**.\n\n**Agree on one map**, create a private game on it, then use its max height and team colours below to set up your match.",
+		embedField{Name: "{mapName}", Value: "**Max height:** {mapHeight}\n**Teams:** {mapTeams}", Inline: true, Each: "map"}), ThumbSprout),
+	"teamSetup": thumb(tpl("pending", "Team Setup", "Open the **Team Selector** item in the lobby and join your team's colour. **Stay with your team mates**, and do not start the countdown until every player is on their team.",
+		embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}), ThumbPlayers),
 	"partyReady": thumb(tpl("success", "Party Ready", "Everyone has joined the party. The match is about to begin, and the party will be warped to **{mode}** shortly.\n\nDo not leave the party.",
 		append([]embedField{{Name: "Host", Value: "`{bot}`"}}, statusFields...)...), ThumbTada),
 	"partyTimeout": thumb(tpl("error", "Party Timeout", "The game was **voided** because not everyone joined the party in time.\n\nPlayers who did not join were penalized automatically.",

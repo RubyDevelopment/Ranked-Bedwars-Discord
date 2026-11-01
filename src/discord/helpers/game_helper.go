@@ -670,12 +670,15 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventDraftNeeded:
 		d.startDraft(s, g)
 	case EventTeams:
+		flow := flowOf(g.GuildID)
 		if Engine.Connected() && GuildHasFeature(g.GuildID, "automated-hosting") && (g.Custom == nil || g.Custom.UseBot) {
 			d.postIntroduction(s, g)
-		}
-		// A pipeline with its own "Teams final" Announce step decides when this goes out.
-		if g.Bot != "" || !Engine.Connected() || !flowOf(g.GuildID).Announced["teams"] {
-			d.post(s, g, "teams", embedData{})
+			// A pipeline with its own "Teams final" Announce step decides when this goes out.
+			if !flow.Announced["teams"] {
+				d.post(s, g, "teams", embedData{})
+			}
+		} else if flow.ManualDefaults {
+			d.post(s, g, "teams", embedData{}) // hosted by hand with no flow saved: the fixed set. With a flow, its blocks decide.
 		}
 	case EventStarted:
 		if g.Bot != "" {
@@ -684,12 +687,14 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		} else {
 			// Hosted by hand: the flow's manual blocks, once the map is chosen (the party and map instructions need it). A game with no flow saved
 			// at all gets the old fixed set.
-			d.manualSteps(s, g, "pre")
-			if flowOf(g.GuildID).ManualDefaults {
-				d.manualSetup(s, g)
-				d.post(s, g, "matchStartedManual", embedData{})
-			}
-			d.manualSteps(s, g, "in")
+			go func() { // the blocks can wait, so they run beside the rest of the bot
+				d.runManual(s, g, flowOf(g.GuildID).Manual["pre"])
+				if flowOf(g.GuildID).ManualDefaults {
+					d.manualSetup(s, g)
+					d.post(s, g, "matchStartedManual", embedData{})
+				}
+				d.runManual(s, g, flowOf(g.GuildID).Manual["in"])
+			}()
 		}
 	case EventHostStatus:
 		// Progress is shown by the configured embeds (EventEmbed); the status only matters to the logs.
@@ -721,13 +726,13 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventCasualDone:
 		d.post(s, g, "casualDone", embedData{})
 		if g.Bot == "" {
-			d.manualSteps(s, g, "post")
+			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
 		}
 		d.forget(g.ID)
 	case EventScored:
 		d.post(s, g, "scored", embedData{})
 		if g.Bot == "" {
-			d.manualSteps(s, g, "post")
+			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
 		}
 		go d.postResultsBanner(s, g)
 		d.forget(g.ID)
@@ -814,7 +819,8 @@ type embedState struct {
 	eliminated map[string]bool   // user id -> out of the match
 	bedLost    map[string]bool   // team -> bed gone
 	startedAt  time.Time
-	pending    bool // a tracker refresh is already scheduled
+	pending    bool            // a tracker refresh is already scheduled
+	posted     map[string]bool // embeds already posted in this game, so a shared block never posts the welcome or the teams twice
 }
 
 func (d *gameDiscord) state(id uint) *embedState {
@@ -822,7 +828,7 @@ func (d *gameDiscord) state(id uint) *embedState {
 	defer d.mu.Unlock()
 	st := d.live[id]
 	if st == nil {
-		st = &embedState{msgs: map[string]string{}, eliminated: map[string]bool{}, bedLost: map[string]bool{}}
+		st = &embedState{msgs: map[string]string{}, eliminated: map[string]bool{}, bedLost: map[string]bool{}, posted: map[string]bool{}}
 		d.live[id] = st
 	}
 	return st
@@ -835,17 +841,85 @@ func (d *gameDiscord) forget(id uint) {
 	d.mu.Unlock()
 }
 
-// manualSteps posts the embeds of the flow's manual-hosting Announce steps for one phase ("pre", "in" or "post"), in order. Nobody
-// hosts such a game with a bot, so these steps are all there is of a flow; each one is posted even when its embed is switched off.
-func (d *gameDiscord) manualSteps(s *discordgo.Session, g Game, phase string) {
-	flow := flowOf(g.GuildID)
-	for _, st := range flow.Manual[phase] {
-		if flow.Replies[st.StepID] != nil {
-			d.postStepReply(s, g, st.StepID)
-		} else if st.Embed != "" {
-			d.post(s, g, st.Embed, embedData{Force: true, Vars: d.manualVars(g)})
+// runManual runs the blocks of a hand-hosted game, in order: the same flow blocks as a bot-hosted game, minus everything that needs the bot.
+// An Announce posts its message (a custom one, or a built-in embed even when it is switched off), a Wait pauses, and a Group runs its blocks
+// one by one or all at once. Anything else is the bot's business and is skipped.
+func (d *gameDiscord) runManual(s *discordgo.Session, g Game, steps []flowStep) {
+	for _, st := range steps {
+		if st.Enabled != nil && !*st.Enabled {
+			continue
+		}
+		if cur, ok := Games.Get(g.ID); ok {
+			g = cur // the map or the teams may have changed while an earlier block waited
+		}
+		switch st.Type {
+		case "announce":
+			d.manualAnnounce(s, g, st)
+		case "wait":
+			time.Sleep(time.Duration(st.WaitSec * float64(time.Second)))
+		case "group":
+			if st.Mode != "parallel" {
+				d.runManual(s, g, st.Children)
+				continue
+			}
+			var wg sync.WaitGroup
+			for _, child := range st.Children {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					d.runManual(s, g, []flowStep{child})
+				}()
+			}
+			wg.Wait()
 		}
 	}
+}
+
+// manualAnnounce posts one Announce block of a hand-hosted game. The welcome and the teams are posted once per game, however many blocks
+// (or the bot path before a fallback) ask for them.
+func (d *gameDiscord) manualAnnounce(s *discordgo.Session, g Game, st flowStep) {
+	flow := flowOf(g.GuildID)
+	if flow.Replies[st.ID] != nil {
+		d.postStepReply(s, g, st.ID)
+		return
+	}
+	if st.Embed == "" {
+		return
+	}
+	state := d.state(g.ID)
+	d.mu.Lock()
+	already := state.posted[st.Embed]
+	d.mu.Unlock()
+	if already && (st.Embed == "introduction" || st.Embed == "teams") {
+		return
+	}
+	data := embedData{Force: true, Vars: d.manualVars(g)}
+	if st.Embed == "mapSetup" {
+		data.MapRows = d.manualMapRows(g)
+	}
+	d.post(s, g, st.Embed, data)
+}
+
+// manualMapRows lists every map of the rotation with its max height and team colours, as the old bot's self-hosted map setup did: nobody
+// votes, the players pick from this list.
+func (d *gameDiscord) manualMapRows(g Game) []map[string]string {
+	maps, _ := GuildMetaMaps(g.GuildID)
+	rows := make([]map[string]string, 0, len(maps))
+	for _, m := range maps {
+		if !m.IsEnabled || !m.IsMapAvailable || strings.TrimSpace(m.Name) == "" {
+			continue
+		}
+		height, teams := "N/A", "None"
+		if m.MapHeight > 0 {
+			height = strconv.Itoa(m.MapHeight)
+		}
+		if t := m.TeamsFor(g.Mode.Name); len(t) > 0 {
+			teams = strings.Join(t, ", ")
+		}
+		rows = append(rows, map[string]string{"mapName": m.Name, "mapHeight": height, "mapTeams": teams})
+	}
+	sort.Slice(rows, func(i, j int) bool { return strings.ToLower(rows[i]["mapName"]) < strings.ToLower(rows[j]["mapName"]) })
+	return rows
 }
 
 // postIntroduction sends the pipeline's introduction once teams are known, but before the teams and map-vote
@@ -928,11 +1002,12 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	if err != nil {
 		return false
 	}
+	d.mu.Lock()
+	st.posted[key] = true
 	if live {
-		d.mu.Lock()
 		st.msgs[key] = m.ID
-		d.mu.Unlock()
 	}
+	d.mu.Unlock()
 	return true
 }
 
@@ -1851,6 +1926,7 @@ var embedKinds = map[string]embedKind{
 	"captainPicking":  {Live: true, TeamLines: "draft"},
 	"matchJoined":     {TeamLines: "tbd"},
 	"partySetup":      {TeamLines: "plain"},
+	"teamSetup":       {TeamLines: "plain"},
 }
 
 func str(s string) *string { return &s }
@@ -1950,6 +2026,8 @@ type flowStep struct {
 	Message   string     `json:"message"`
 	Builtin   bool       `json:"builtin"`
 	Hosting   string     `json:"hosting"`
+	WaitSec   float64    `json:"waitSec"`
+	Mode      string     `json:"mode"`
 	Children  []flowStep `json:"children"`
 	Otherwise []flowStep `json:"otherwise"`
 }
@@ -1957,8 +2035,8 @@ type flowStep struct {
 type guildFlow struct {
 	Embeds    map[string]embedTemplate
 	Stats     []statLabel
-	Announced map[string]bool         // embeds the pipeline posts itself with an Announce step
-	Manual    map[string][]manualStep // phase -> what the manual-hosting Announce steps post, in order
+	Announced map[string]bool       // embeds the pipeline posts itself with an Announce step
+	Manual    map[string][]flowStep // phase -> the blocks of a hand-hosted game, in order (everything that is not the bot's alone)
 	// ManualDefaults: no flow was saved at all, so a hand-hosted game gets the fixed party, map and submit-your-win messages.
 	ManualDefaults bool
 	Replies        map[string]*stepReply // step id -> the message built in that Announce step
@@ -1969,6 +2047,7 @@ type guildFlow struct {
 		Perks   *bool
 		Winner  string
 		Enabled *bool
+		Manual  *bool // hosted by hand: vote for the map too (default: list the maps, nobody votes)
 	}
 }
 
@@ -2064,6 +2143,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 					UsePerks    *bool   `json:"usePerks"`
 					Winner      string  `json:"winner"`
 					Enabled     *bool   `json:"enabled"`
+					Manual      *bool   `json:"manual"`
 				} `json:"mapVote"`
 				Buttons struct {
 					PartyWarpLabel   string `json:"partyWarpLabel"`
@@ -2082,9 +2162,10 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	if json.Unmarshal(raw, &server) != nil {
 		return guildFlow{}
 	}
-	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]manualStep{}, Replies: map[string]*stepReply{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
+	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]flowStep{}, Replies: map[string]*stepReply{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
 	b := server.Profile.Hosting.Buttons
 	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner, f.MapVote.Enabled = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner, server.Profile.Hosting.MapVote.Enabled
+	f.MapVote.Manual = server.Profile.Hosting.MapVote.Manual
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
 	if server.Profile.Pipeline == nil { // no flow saved at all: the default one posts the introduction; an empty flow posts nothing
 		f.Announced["introduction"] = true
@@ -2110,9 +2191,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				f.Replies[st.ID] = rep
 			}
 			if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && stHosting == "manual" {
-				p := firstNonEmpty(stPhase, "pre")
-				f.Manual[p] = append(f.Manual[p], manualStep{Embed: st.Embed, StepID: st.ID})
-				continue
+				continue // posted by the hand-hosting flow only, so it never keeps the bot's default posting away
 			}
 			if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && st.Embed != "" {
 				f.Announced[st.Embed] = true
@@ -2120,6 +2199,13 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 		}
 	}
 	walk(server.Profile.Pipeline, "", "")
+	// The hand-hosted flow: every top-level block that is not the bot's alone, by phase. The blocks inside a group travel with it.
+	for _, st := range server.Profile.Pipeline {
+		if st.Hosting != "automatic" && (st.Enabled == nil || *st.Enabled) {
+			p := firstNonEmpty(st.Phase, "pre")
+			f.Manual[p] = append(f.Manual[p], st)
+		}
+	}
 	for key, body := range server.Profile.Embeds {
 		var t embedTemplate
 		if json.Unmarshal(body, &t) == nil { // one bad template doesn't take the others down
@@ -4003,7 +4089,8 @@ func (m *GameManager) setTeams(lg *liveGame, teams [][]string, captains []string
 			return nil // the engine starts the match
 		}
 	}
-	if selectMap != nil {
+	// Hosted by hand the old bot did not vote: it listed every map with its height and teams and the players chose. A guild can switch the vote on.
+	if flow := flowOf(g.GuildID); selectMap != nil && flow.MapVote.Manual != nil && *flow.MapVote.Manual {
 		if _, err := chooseMap(nil, false); err != nil {
 			m.logf("select map for game %d: %v", g.ID, err)
 		}

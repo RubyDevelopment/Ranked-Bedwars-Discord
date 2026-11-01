@@ -333,6 +333,21 @@ func (b *EngineBridge) serveWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Frames about a game (its events, its scoring, the Discord posts they cause) are handled one after another, in order, on a worker. Live
+	// console traffic is answered on the spot: a game event that waits for the database must never hold back the chat lines behind it.
+	queue := make(chan engineInbound, engineQueueSize)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		for msg := range queue {
+			b.handle(msg)
+		}
+	}()
+	defer func() {
+		close(queue)
+		<-workerDone
+	}()
+
 	_ = conn.SetReadDeadline(time.Now().Add(3 * enginePingEvery))
 	conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(3 * enginePingEvery)) })
 	for {
@@ -345,8 +360,21 @@ func (b *EngineBridge) serveWS(w http.ResponseWriter, r *http.Request) {
 		if json.Unmarshal(data, &msg) != nil {
 			continue
 		}
-		b.handle(msg)
+		if liveFrame(msg.Type) {
+			b.handle(msg)
+			continue
+		}
+		queue <- msg
 	}
+}
+
+// liveFrame says whether an engine frame is live console traffic: cheap, independent of any game, and wanted at once.
+func liveFrame(kind string) bool {
+	switch kind {
+	case "chat.line", "chat.bots", "bot.event", "bot.result":
+		return true
+	}
+	return false
 }
 
 func (b *EngineBridge) ping(conn *websocket.Conn, stop <-chan struct{}) {
@@ -1066,8 +1094,10 @@ func (b *EngineBridge) gameEnded(msg engineInbound) {
 // shrinks, and the engine stops sending it.
 
 const (
-	chatViewerBuffer = 256
-	chatHeartbeat    = 15 * time.Second
+	chatViewerBuffer = 1024
+	// engineQueueSize is how many game frames may wait for the worker before the read loop waits for it.
+	engineQueueSize = 1024
+	chatHeartbeat   = 15 * time.Second
 	// chatMaxStream ends one stream so a forgotten tab can't hold it for ever; a page still open simply reconnects.
 	chatMaxStream = 5 * time.Minute
 )
@@ -1280,7 +1310,7 @@ func (c *ChatStream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 const (
 	controlTimeout   = 35 * time.Second
 	controlBodyLimit = 8 << 10
-	// experimentBodyLimit is the most an experiment.run request may carry: the server profile it runs.
+	// experimentBodyLimit is the most an experiment.start or experiment.run request may carry: the server profile it runs.
 	experimentBodyLimit = 1 << 20
 )
 
@@ -1291,7 +1321,7 @@ var controlActions = map[string]bool{
 	"respawn": true, "connect": true, "disconnect": true, "keepalive": true,
 	"scoreboard": true, "tab": true, "entities": true, "entity.use": true, "entity.attack": true, "bossbars": true,
 	// Trying a server profile on a live bot (Game phases › Run): the run carries the profile, so it may be large.
-	"experiment.run": true, "experiment.pause": true, "experiment.resume": true, "experiment.step": true, "experiment.stop": true, "experiment.status": true,
+	"experiment.start": true, "experiment.run": true, "experiment.end": true, "experiment.pause": true, "experiment.resume": true, "experiment.step": true, "experiment.stop": true, "experiment.status": true,
 }
 
 type controlResult struct {
@@ -1368,7 +1398,7 @@ func (c *ChatStream) ServeControl(w http.ResponseWriter, r *http.Request) {
 		Params json.RawMessage `json:"params"`
 	}
 	raw, err := io.ReadAll(io.LimitReader(r.Body, experimentBodyLimit+1))
-	if err != nil || len(raw) > experimentBodyLimit || json.Unmarshal(raw, &body) != nil || !chatGuildID.MatchString(body.Guild) || len(strings.TrimSpace(body.Bot)) > 32 || !controlActions[body.Action] || (len(raw) > controlBodyLimit && body.Action != "experiment.run") {
+	if err != nil || len(raw) > experimentBodyLimit || json.Unmarshal(raw, &body) != nil || !chatGuildID.MatchString(body.Guild) || len(strings.TrimSpace(body.Bot)) > 32 || !controlActions[body.Action] || (len(raw) > controlBodyLimit && body.Action != "experiment.run" && body.Action != "experiment.start") {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}

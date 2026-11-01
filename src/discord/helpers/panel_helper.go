@@ -1,10 +1,10 @@
 package helpers
 
 import (
-	"errors"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"regexp"

@@ -26,12 +26,6 @@ type stepReply struct {
 	Components            []V2Item         `json:"components"`
 }
 
-// manualStep is a step of the flow that posts for a game nobody hosts with a bot: one of the built-in embeds, or the step's own message.
-type manualStep struct {
-	Embed  string
-	StepID string
-}
-
 // doc is the message the reply describes.
 func (r *stepReply) doc() *MessageDoc {
 	doc := &MessageDoc{AllowMentions: r.AllowMentions, AllowedMentions: r.AllowedMentions, SuppressEmbeds: r.SuppressEmbeds, SuppressNotifications: r.SuppressNotifications}

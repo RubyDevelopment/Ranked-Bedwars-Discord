@@ -36,8 +36,9 @@ func TestManualHostingStepsAreKeptApartFromTheBotsOwn(t *testing.T) {
 	if !f.Announced["introduction"] || f.Announced["teams"] {
 		t.Errorf("only the bot's own announce steps keep the default posting away: %v", f.Announced)
 	}
-	if len(f.Manual["pre"]) != 1 || f.Manual["pre"][0].Embed != "teams" || len(f.Manual["post"]) != 1 || f.Manual["post"][0].Embed != "scored" {
-		t.Errorf("manual steps by phase, switched-off ones left out: %v", f.Manual)
+	// A hand-hosted game runs the shared blocks (no hosting set) and its own, by phase; a switched-off block is left out.
+	if len(f.Manual["pre"]) != 2 || f.Manual["pre"][0].Embed != "introduction" || f.Manual["pre"][1].Embed != "teams" || len(f.Manual["post"]) != 1 || f.Manual["post"][0].Embed != "scored" {
+		t.Errorf("manual blocks by phase, switched-off ones left out: %v", f.Manual)
 	}
 }
 
@@ -57,7 +58,7 @@ func TestAnnounceStepWithItsOwnMessageIsPostedFromTheStep(t *testing.T) {
 	if len(embeds) != 1 || embeds[0]["title"] != "Game 7" || embeds[0]["description"] != "On Lighthouse with **Red**: <@1> <@2>" {
 		t.Errorf("variables are filled in: %v", payload["embeds"])
 	}
-	if m := f.Manual["post"]; len(m) != 1 || m[0].StepID != "after" || f.Replies["after"] == nil {
+	if m := f.Manual["post"]; len(m) != 1 || m[0].ID != "after" || f.Replies["after"] == nil {
 		t.Errorf("a manual step carries its message too: %v", f.Manual)
 	}
 }
@@ -85,5 +86,39 @@ func TestVoteEndsWhenTheLeaderCannotBeCaught(t *testing.T) {
 	w := &mapVote{weighted: true, maps: make([]types.Map, 2), votes: map[string]int{"1": 0, "2": 0, "3": 0}, weights: v.weights, game: Game{Players: players}}
 	if w.settled() {
 		t.Fatal("a weighted vote is a lottery by share: it only ends when everybody voted")
+	}
+}
+
+func TestLiveConsoleFramesAreNotQueuedBehindGameFrames(t *testing.T) {
+	for _, kind := range []string{"chat.line", "chat.bots", "bot.event", "bot.result"} {
+		if !liveFrame(kind) {
+			t.Errorf("%s is live console traffic and must be handled at once", kind)
+		}
+	}
+	for _, kind := range []string{"game.event", "game.started", "game.ended", "host.maps", "host.failed", "host.map.vote", "players.sync"} {
+		if liveFrame(kind) {
+			t.Errorf("%s is about a game and keeps its order on the worker", kind)
+		}
+	}
+}
+
+func TestHandHostedFlowKeepsSharedBlocksGroupsAndWaits(t *testing.T) {
+	f := parseGuildFlow([]byte(`{"profile":{"pipeline":[
+		{"id":"intro","type":"announce","embed":"introduction"},
+		{"id":"bot","type":"group","hosting":"automatic","children":[{"id":"p","type":"party"}]},
+		{"id":"shared","type":"group","mode":"parallel","children":[{"id":"w","type":"wait","waitSec":2},{"id":"a","type":"announce","embed":"teamSetup","hosting":"manual"}]},
+		{"id":"after","type":"announce","embed":"matchStartedManual","hosting":"manual","phase":"in"}]}}`))
+	pre := f.Manual["pre"]
+	if len(pre) != 2 || pre[0].ID != "intro" || pre[1].ID != "shared" {
+		t.Fatalf("shared blocks run by hand, the bot's own do not: %v", pre)
+	}
+	if pre[1].Mode != "parallel" || len(pre[1].Children) != 2 || pre[1].Children[0].WaitSec != 2 {
+		t.Errorf("a group keeps its mode and its blocks, a wait its seconds: %+v", pre[1])
+	}
+	if in := f.Manual["in"]; len(in) != 1 || in[0].ID != "after" {
+		t.Errorf("blocks by phase: %v", f.Manual)
+	}
+	if !f.Announced["introduction"] || f.Announced["teamSetup"] {
+		t.Errorf("the shared welcome is the bot's too; a hand-only block is not: %v", f.Announced)
 	}
 }
