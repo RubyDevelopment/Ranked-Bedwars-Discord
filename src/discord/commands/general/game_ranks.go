@@ -30,7 +30,6 @@ func init() {
 var GameRanksCommand = &types.Command{
 	Name:        "ranks",
 	Description: "Outlines the competitive tier system, ELO brackets, and rank requirements.",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executeGameRanksCommand,

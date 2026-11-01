@@ -25,7 +25,6 @@ func init() {
 var QueueCallCommand = &types.Command{
 	Name:        "call",
 	Description: "Adds a player to your team voice channel.",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

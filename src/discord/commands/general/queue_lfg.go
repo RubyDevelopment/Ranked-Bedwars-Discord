@@ -28,7 +28,6 @@ func init() {
 var QueueLfgCommand = &types.Command{
 	Name:        "lfg",
 	Description: "Posts that you are looking for a ranked game.",
-	Ephemeral:   false,
 	Cooldown:    60 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executeQueueLfgCommand,

@@ -25,7 +25,6 @@ func init() {
 var QueuePugsCommand = &types.Command{
 	Name:        "pugs",
 	Description: "Manages active pickup games (PUGs), lobby rotations, and queue statuses.",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

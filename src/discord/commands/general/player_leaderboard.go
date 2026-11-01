@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
@@ -21,6 +22,35 @@ const leaderboardPerPage = 10
 
 func ptrToFloat64(v float64) *float64 { return &v }
 
+// leaderboardStats are the stats a leaderboard can be ordered by; key is the database's sort value.
+type leaderboardStat struct {
+	key, label string
+	value      func(*models.PlayerStatsModel) int
+}
+
+var leaderboardStats = []leaderboardStat{
+	{"elo", "ELO", func(m *models.PlayerStatsModel) int { return m.Elo }},
+	{"highest_elo", "Peak ELO", func(m *models.PlayerStatsModel) int { return m.HighestElo }},
+	{"wins", "Wins", func(m *models.PlayerStatsModel) int { return m.Wins }},
+	{"losses", "Losses", func(m *models.PlayerStatsModel) int { return m.Losses }},
+	{"games_played", "Games Played", func(m *models.PlayerStatsModel) int { return m.GamesPlayed }},
+	{"kills", "Kills", func(m *models.PlayerStatsModel) int { return m.Kills }},
+	{"final_kills", "Final Kills", func(m *models.PlayerStatsModel) int { return m.FinalKills }},
+	{"first_bloods", "First Bloods", func(m *models.PlayerStatsModel) int { return m.FirstBloods }},
+	{"assists", "Assists", func(m *models.PlayerStatsModel) int { return m.Assists }},
+	{"beds_destroyed", "Beds Destroyed", func(m *models.PlayerStatsModel) int { return m.BedsDestroyed }},
+	{"mvp_count", "MVPs", func(m *models.PlayerStatsModel) int { return m.MvpCount }},
+	{"highest_win_streak", "Best Win Streak", func(m *models.PlayerStatsModel) int { return m.HighestWinStreak }},
+}
+
+func leaderboardStatChoices() []*discordgo.ApplicationCommandOptionChoice {
+	out := make([]*discordgo.ApplicationCommandOptionChoice, len(leaderboardStats))
+	for n, st := range leaderboardStats {
+		out[n] = &discordgo.ApplicationCommandOptionChoice{Name: st.label, Value: st.key}
+	}
+	return out
+}
+
 func init() {
 	helpers.Register(PlayerLeaderboardCommand)
 }
@@ -34,7 +64,6 @@ var PlayerLeaderboardCommand = &types.Command{
 	Name:          "leaderboard",
 	Description:   "Displays the top-ranked players and seasonal ELO leaderboards.",
 	PrefixAliases: []string{"lb"},
-	Ephemeral:     true,
 	Cooldown:      5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
@@ -56,6 +85,13 @@ var PlayerLeaderboardCommand = &types.Command{
 				Description: "Filter by game mode",
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    false,
+			},
+			{
+				Name:        "stat",
+				Description: "The stat to rank by (default: ELO)",
+				Type:        discordgo.ApplicationCommandOptionString,
+				Required:    false,
+				Choices:     leaderboardStatChoices(),
 			},
 			helpers.StyleOption(),
 		},
@@ -87,8 +123,15 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardNoActiveSeasonEmbed(i))
 	}
 
+	stat := leaderboardStats[0]
+	for _, st := range leaderboardStats {
+		if st.key == helpers.OptionString(i, "stat") {
+			stat = st
+		}
+	}
+
 	offset := (page - 1) * leaderboardPerPage
-	rows, err := database.Must().Stats.Leaderboard(i.GuildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: offset})
+	rows, err := database.Must().Stats.Leaderboard(i.GuildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: offset, Sort: stat.key})
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
 	}
@@ -104,7 +147,7 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 		totalPages = int((*rows.Total + leaderboardPerPage - 1) / leaderboardPerPage)
 	}
 
-	sent, err := sendLeaderboardBanner(s, i, rows.Data, seasonKey, seasonID, page, totalPages)
+	sent, err := sendLeaderboardBanner(s, i, rows.Data, seasonKey, seasonID, stat, page, totalPages)
 	if sent {
 		return nil
 	}
@@ -112,7 +155,11 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 		log.Printf("leaderboard banner for guild %s: %v", i.GuildID, err)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardOverviewEmbed(i, rows.Data, seasonKey, page, totalPages))
+	title := seasonKey
+	if stat.key != "elo" {
+		title += " · " + stat.label
+	}
+	return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardOverviewEmbed(i, rows.Data, title, page, totalPages))
 }
 
 // ============================================================================
@@ -128,7 +175,7 @@ func invokingUser(i *discordgo.InteractionCreate) *discordgo.User {
 
 // sendLeaderboardBanner answers with the banner. sent is false when the guild has
 // no style the invoker may use or drawing failed: the caller then sends the embed.
-func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate, rows []sdk.LeaderboardEntry, season string, seasonID uint, page, totalPages int) (sent bool, err error) {
+func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate, rows []sdk.LeaderboardEntry, season string, seasonID uint, stat leaderboardStat, page, totalPages int) (sent bool, err error) {
 	invoker := invokingUser(i)
 	if invoker == nil {
 		return false, nil
@@ -160,8 +207,12 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 	vars := helpers.GuildVars(s, i.GuildID, invoker)
 	vars["lb.title"] = fmt.Sprintf("%s Leaderboard", season)
+	vars["lb.stat"] = stat.label
 	vars["season.name"] = season
 	helpers.LeaderboardRowVars(s, i.GuildID, rows, vars)
+	for n := range rows {
+		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(stat.value(&rows[n].PlayerStatsModel))
+	}
 	vars["page.number"], vars["page.total"] = fmt.Sprint(page), fmt.Sprint(totalPages)
 	if verr == nil {
 		you(s, i.GuildID, invoker, view, seasonID, vars)

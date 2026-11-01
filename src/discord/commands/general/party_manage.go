@@ -29,7 +29,6 @@ func init() {
 var PartyManageCommand = &types.Command{
 	Name:        "party",
 	Description: "Manages party matching, custom party groups, and team formations.",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

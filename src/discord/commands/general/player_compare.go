@@ -27,7 +27,6 @@ func init() {
 var PlayerCompareCommand = &types.Command{
 	Name:        "compare",
 	Description: "Compares competitive stats, match history, and performance metrics between players.",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

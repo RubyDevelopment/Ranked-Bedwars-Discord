@@ -30,7 +30,6 @@ func init() {
 var GameSubmitCommand = &types.Command{
 	Name:        "submit",
 	Description: "Submits match results or proof for verification and ELO calculation (game channel only).",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

@@ -25,7 +25,6 @@ func init() {
 var GameMapsCommand = &types.Command{
 	Name:        "maps",
 	Description: "Lists active competitive map pools and map rotation info.",
-	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executeGameMapsCommand,
