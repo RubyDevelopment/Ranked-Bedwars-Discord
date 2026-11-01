@@ -150,6 +150,11 @@ var GameChannelRequirements = []Requirement{
 	{Type: ReqChannel, Key: GameAlertsKey, Optional: true},
 }
 
+// DecayChannelRequirements is the optional decay alerts channel the /decays command and the Decay Sweeper event share.
+var DecayChannelRequirements = []Requirement{
+	{Type: ReqChannel, Key: DecayAlertsKey, Optional: true},
+}
+
 // GameRequirements is StaffRequirements plus the shared game channels.
 func GameRequirements() []Requirement {
 	return append(append([]Requirement{}, StaffRequirements...), GameChannelRequirements...)

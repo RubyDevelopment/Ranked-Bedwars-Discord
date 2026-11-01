@@ -25,9 +25,10 @@ func init() {
 
 // PlayerDecaysCommand Checks ELO decay warnings and inactivity timers for ranked profiles.
 var PlayerDecaysCommand = &types.Command{
-	Name:        "decays",
-	Description: "Checks ELO decay warnings and inactivity timers for ranked profiles.",
-	Cooldown:    3 * time.Second,
+	Name:         "decays",
+	Requirements: types.DecayChannelRequirements,
+	Description:  "Checks ELO decay warnings and inactivity timers for ranked profiles.",
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{
