@@ -139,6 +139,7 @@ func defaultLeaderboardBanner() *Banner {
 type ResultsTeam struct {
 	Name    string
 	Win     bool
+	Label   string // replaces VICTORY/DEFEAT when the game has no winner (a casual game)
 	Players []ResultsPlayer
 }
 
@@ -156,6 +157,9 @@ func ResultsVars(number int, season, mode, mapName string, teams []ResultsTeam) 
 		pre := fmt.Sprintf("t%d.", t+1)
 		v[pre+"name"] = team.Name
 		v[pre+"result"] = map[bool]string{true: "VICTORY", false: "DEFEAT"}[team.Win]
+		if team.Label != "" {
+			v[pre+"result"] = team.Label
+		}
 		for p, pl := range team.Players {
 			q := fmt.Sprintf("%sp%d.", pre, p+1)
 			v[q+"name"], v[q+"head"] = pl.Name, pl.Head

@@ -14,12 +14,16 @@ func resultsTeams(g Game) []ResultsTeam {
 	for _, r := range g.Results {
 		byUser[r.UserID] = r
 	}
+	casual := len(g.Results) == 0 // no ELO or winner was scored (casual mode): every player is listed with no rating change
 	var out []ResultsTeam
 	for _, name := range g.Teams {
 		team := ResultsTeam{Name: name}
+		if casual {
+			team.Label = "COMPLETED"
+		}
 		for _, p := range g.TeamPlayers(name) {
 			r, ok := byUser[p.UserID]
-			if !ok {
+			if !ok && !casual {
 				continue
 			}
 			team.Win = r.Win

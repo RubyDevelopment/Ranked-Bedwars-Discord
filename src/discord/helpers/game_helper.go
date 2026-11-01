@@ -741,6 +741,11 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventCasualDone:
 		d.post(s, g, "casualDone", embedData{})
+		go func() { // a casual game is a game entry too: its results banner goes out when the mode's "Send results" is on
+			if png := d.resultsPNG(g); len(png) > 0 {
+				d.sendResultsPNG(s, g, png)
+			}
+		}()
 		if g.Bot == "" {
 			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
 		}
