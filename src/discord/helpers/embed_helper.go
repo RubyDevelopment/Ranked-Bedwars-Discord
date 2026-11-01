@@ -1925,13 +1925,10 @@ func VoidMatchNotInMatchEmbed(i *discordgo.InteractionCreate) *discordgo.Message
 }
 
 // VoidVoteEmbed is the progress of a game's void vote: who just voted, and how many more votes void it.
-func VoidVoteEmbed(userID string, votes, needed int, already bool, reason string) *discordgo.MessageEmbed {
+func VoidVoteEmbed(userID string, votes, needed int, already bool) *discordgo.MessageEmbed {
 	title, text := "Void Vote", fmt.Sprintf("<@%s> voted to void this game: **%d/%d** votes.", userID, votes, needed)
 	if already {
 		text = fmt.Sprintf("<@%s>, you already voted to void this game: **%d/%d** votes.", userID, votes, needed)
-	}
-	if reason != "" {
-		text += "\n> " + reason
 	}
 	return Preset("info", types.PresetOptions{
 		Title:       title,
@@ -1942,8 +1939,8 @@ func VoidVoteEmbed(userID string, votes, needed int, already bool, reason string
 
 func VoidMatchSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
-		Title:       "Game Voided",
-		Description: fmt.Sprintf("Game **#%d** has been voided. No ELO or stats were recorded.", gameNumber),
+		Title:       "Void Vote Passed",
+		Description: fmt.Sprintf("The void vote passed: game **#%d** has been voided. No ELO or stats were recorded.", gameNumber),
 		Thumbnail:   ThumbTrashCan,
 	})
 }
