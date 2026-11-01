@@ -63,9 +63,9 @@ var TicketManageCommand = &types.Command{
 				},
 			},
 			{
-				Name: "transfer", Description: "Forward the ticket you are in to the right section", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Name: "transfer", Description: "Forward the ticket you are in to the right category", Type: discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
-					{Name: "section", Description: "The section to forward it to", Type: discordgo.ApplicationCommandOptionString, Required: true, Autocomplete: true},
+					{Name: "category", Description: "The ticket panel category to forward it to", Type: discordgo.ApplicationCommandOptionString, Required: true, Autocomplete: true},
 					{Name: "reason", Description: "Why it belongs there (shown to the new team)", Type: discordgo.ApplicationCommandOptionString, Required: false, MaxLength: 300},
 				},
 			},
@@ -88,7 +88,7 @@ var TicketManageCommand = &types.Command{
 		},
 	},
 	Execute:      executeTicketManageCommand,
-	Autocomplete: autocompleteTicketSection,
+	Autocomplete: autocompleteTicketCategory,
 }
 
 // ============================================================================
@@ -254,7 +254,7 @@ func executeTicketRename(s *discordgo.Session, i *discordgo.InteractionCreate) e
 	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Renamed", "This ticket is now called **"+applied+"**."))
 }
 
-// executeTicketTransfer forwards the ticket the command is run in to another section of its panel.
+// executeTicketTransfer forwards the ticket the command is run in to another category of its panel.
 func executeTicketTransfer(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
@@ -264,35 +264,35 @@ func executeTicketTransfer(s *discordgo.Session, i *discordgo.InteractionCreate)
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can transfer tickets."))
 	}
 	_, options := types.SelectedSubcommand(i)
-	section := helpers.SubOptionString(options, "section")
+	category := helpers.SubOptionString(options, "category")
 	reason := strings.TrimSpace(helpers.SubOptionString(options, "reason"))
-	if section == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Choose the section to forward this ticket to."))
+	if category == "" {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Choose the category to forward this ticket to."))
 	}
-	// The option's value is the section's id (from the suggestions); typing its name works too.
+	// The option's value is the category's id (from the suggestions); typing its name works too.
 	for _, c := range helpers.TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
-		if strings.EqualFold(c.Label, section) {
-			section = c.ID
+		if strings.EqualFold(c.Label, category) {
+			category = c.ID
 		}
 	}
-	ticket, _, err := helpers.TransferTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), section, reason)
+	ticket, _, err := helpers.TransferTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), category, reason)
 	switch {
 	case errors.Is(err, helpers.ErrTicketSameCategory):
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "This ticket is already in that section."))
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "This ticket is already in that category."))
 	case errors.Is(err, helpers.ErrTicketCategoryNotFound):
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "That section does not exist on this ticket's panel. Pick one from the suggestions."))
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "That category does not exist on this ticket's panel. Pick one from the suggestions."))
 	case err != nil:
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
 	}
 	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Transferred", "This ticket now belongs to **"+ticket.CategoryLabel+"**."))
 }
 
-// autocompleteTicketSection suggests the sections the ticket of the channel can be forwarded to.
-func autocompleteTicketSection(s *discordgo.Session, i *discordgo.InteractionCreate) {
+// autocompleteTicketCategory suggests the panel categories the ticket of the channel can be forwarded to.
+func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_, opts := types.SelectedSubcommand(i)
 	typed := ""
 	for _, o := range opts {
-		if o.Focused && o.Name == "section" {
+		if o.Focused && o.Name == "category" {
 			typed = strings.ToLower(fmt.Sprint(o.Value))
 		}
 	}

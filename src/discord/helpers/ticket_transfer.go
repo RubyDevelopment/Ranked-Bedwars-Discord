@@ -11,14 +11,14 @@ import (
 	"ranked-bedwars/src/types"
 )
 
-// /ticket transfer: a ticket opened in the wrong section is forwarded to the right one. The ticket keeps its number, owner, history and
-// channel; it takes the new section's staff, welcome message and name, and its claim is cleared because the new team has not taken it.
+// /ticket transfer: a ticket opened in the wrong category is forwarded to the right one. The ticket keeps its number, owner, history and
+// channel; it takes the new category's staff, welcome message and name, and its claim is cleared because the new team has not taken it.
 
-var ErrTicketSameCategory = errors.New("the ticket is already in that section")
+var ErrTicketSameCategory = errors.New("the ticket is already in that category")
 
 const ticketStaffAllow = int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionReadMessageHistory | discordgo.PermissionAttachFiles | discordgo.PermissionEmbedLinks | discordgo.PermissionManageMessages)
 
-// TicketTransferTargets are the sections a ticket can be forwarded to: the other categories of its panel.
+// TicketTransferTargets are the categories a ticket can be forwarded to: the other categories of its panel.
 func TicketTransferTargets(panel *types.InteractivePanel, current string) []*types.TicketCategory {
 	var out []*types.TicketCategory
 	if panel == nil || panel.Ticket == nil {
@@ -32,7 +32,7 @@ func TicketTransferTargets(panel *types.InteractivePanel, current string) []*typ
 	return out
 }
 
-// TransferTicket forwards the ticket in threadID to the category categoryID of the same panel and returns it with the section it left.
+// TransferTicket forwards the ticket in threadID to the category categoryID of the same panel and returns it with the category it left.
 func TransferTicket(s *discordgo.Session, guildID, threadID, staffID, categoryID, reason string) (*types.Ticket, *types.TicketCategory, error) {
 	var ticket *types.Ticket
 	var panel *types.InteractivePanel
@@ -64,7 +64,7 @@ func TransferTicket(s *discordgo.Session, guildID, threadID, staffID, categoryID
 		return nil, nil, err
 	}
 
-	// The name follows the new section ("{username} - Ticket: {category}"), as a freshly opened ticket's would.
+	// The name follows the new category ("{username} - Ticket: {category}"), as a freshly opened ticket's would.
 	moved := *ticket
 	moved.CategoryID, moved.CategoryLabel = to.ID, to.Label
 	format := to.ThreadNameFormat
@@ -94,7 +94,7 @@ func TransferTicket(s *discordgo.Session, guildID, threadID, staffID, categoryID
 		return nil, nil, err
 	}
 	if ticket.Mode == types.TicketModeChannel {
-		// The old section's own staff lose the channel (unless they are staff of the new one or of the whole panel); the new section's get it.
+		// The old category's own staff lose the channel (unless they are staff of the new one or of the whole panel); the new category's get it.
 		keep := staffRoleIDs(panel, to)
 		for _, roleID := range staffRoleIDs(panel, from) {
 			if !slices.Contains(keep, roleID) {

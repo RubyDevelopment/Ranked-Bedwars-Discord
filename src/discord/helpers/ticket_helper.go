@@ -891,6 +891,36 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 	return ticket, nil
 }
 
+// isUnknownChannel reports whether Discord says the channel (or thread) no longer exists.
+func isUnknownChannel(err error) bool {
+	var rest *discordgo.RESTError
+	return errors.As(err, &rest) && rest.Message != nil && rest.Message.Code == discordgo.ErrCodeUnknownChannel
+}
+
+// closeMissingTicket closes a ticket whose channel was deleted: it moves to the history as closed (by "system", with the reason),
+// and stops being tracked. There is no conversation left to build a transcript from or to tell anybody in, so that is all it does.
+func closeMissingTicket(guildID, threadID string) {
+	err := Tickets.Update(sdk.SystemActor, guildID, func(ip *types.InteractivePanels) error {
+		found := ip.Tickets.Open[threadID]
+		if found == nil {
+			return nil
+		}
+		found.Status = types.TicketStatusClosed
+		found.ClosedAt = time.Now().Unix()
+		found.ClosedBy = "system"
+		found.CloseReason = "The ticket channel no longer exists."
+		appendTicketLog(found, "closed", "system", found.CloseReason, found.ClosedAt)
+		ArchiveTicket(ip, found)
+		return nil
+	})
+	removeTicketActivityChannel(guildID, threadID)
+	if err != nil {
+		log.Printf("[Tickets] could not close ticket %s in guild %s whose channel is gone: %v", threadID, guildID, err)
+		return
+	}
+	log.Printf("[Tickets] closed ticket %s in guild %s: its channel no longer exists", threadID, guildID)
+}
+
 func ticketLastActivity(ticket *types.Ticket) int64 {
 	if ticket.LastActivityAt > 0 {
 		return ticket.LastActivityAt
@@ -988,11 +1018,11 @@ func autoClaimTicketOnStaffResponse(s *discordgo.Session, m *discordgo.MessageCr
 
 var ticketInactivitySweepOnce sync.Once
 
-// StartTicketInactivitySweeper checks configured open tickets once a minute.
+// StartTicketInactivitySweeper checks configured open tickets once a minute. The first check is a minute after the bot starts, not
+// at once: the guild state is still loading then, and reminders go out when they fall due.
 func StartTicketInactivitySweeper(s *discordgo.Session) {
 	ticketInactivitySweepOnce.Do(func() {
 		go func() {
-			sweepTicketInactivity(s)
 			ticker := time.NewTicker(time.Minute)
 			defer ticker.Stop()
 			for range ticker.C {
@@ -1022,7 +1052,7 @@ func sweepTicketInactivity(s *discordgo.Session) {
 		setGuildTicketActivityChannels(guild.ID, activeChannels)
 		now := time.Now()
 		for _, candidate := range ip.Tickets.Open {
-			if candidate == nil {
+			if candidate == nil || (candidate.Status != types.TicketStatusOpen && candidate.Status != types.TicketStatusClaimed) {
 				continue
 			}
 			panel := ip.Panels[candidate.PanelID]
@@ -1061,6 +1091,11 @@ func sweepTicketInactivity(s *discordgo.Session) {
 			}
 			action := ticketInactivityActionFor(settings, candidate, now)
 			if action == ticketInactivityNone {
+				continue
+			}
+
+			if _, err := s.Channel(candidate.ThreadID); isUnknownChannel(err) {
+				closeMissingTicket(guild.ID, candidate.ThreadID)
 				continue
 			}
 
@@ -1116,7 +1151,9 @@ func sweepTicketInactivity(s *discordgo.Session) {
 				vars["hours_until_close"] = vars["close_hours"]
 			}
 			message, err := sendInactivityReminder(s, guild.ID, candidate.ThreadID, candidate.OwnerID, settings, vars)
-			if err != nil {
+			if isUnknownChannel(err) {
+				closeMissingTicket(guild.ID, candidate.ThreadID)
+			} else if err != nil {
 				log.Printf("[Tickets] could not send inactivity reminder for ticket %s in guild %s: %v", candidate.ThreadID, guild.ID, err)
 			} else if err := Tickets.UpdateOpen(sdk.SystemActor, guild.ID, func(current *types.InteractivePanels) error {
 				if ticket := current.Tickets.Open[candidate.ThreadID]; ticket != nil {
