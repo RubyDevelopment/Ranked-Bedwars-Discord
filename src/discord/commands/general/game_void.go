@@ -25,7 +25,7 @@ func init() {
 // GameVoidCommand Requests a match void due to disconnects, bugs, or rule infractions.
 var GameVoidCommand = &types.Command{
 	Name:          "void",
-	Description:   "Vote to void your game (disconnects, bugs, rule infractions). Three quarters of the players must vote.",
+	Description:   "Vote to void your game (bugs, disconnects, rule breaks). 3/4 of the players must vote.",
 	PrefixAliases: []string{"v"},
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
