@@ -40,7 +40,7 @@ var ServerConfigCommand = &types.Command{
 }
 
 func buildServerConfigData() *discordgo.ApplicationCommand {
-	textChannelTypes := []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews}
+	textChannelTypes := []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews, discordgo.ChannelTypeGuildPublicThread, discordgo.ChannelTypeGuildPrivateThread, discordgo.ChannelTypeGuildNewsThread}
 	categoryTypes := []discordgo.ChannelType{discordgo.ChannelTypeGuildCategory}
 
 	return &discordgo.ApplicationCommand{

@@ -139,14 +139,14 @@ const ModerationAlertsKey = "moderation_alerts"
 // Channel requirements shared by game commands and game events: one assignment on either side applies to both (the dashboard's
 // Commands and Events pages, /config).
 const (
-	GameLogsKey    = "game_logs"    // every game event is recorded here
-	GameAlertsKey  = "game_alerts"  // staff are told here when a game needs eyes
+	GameResultsKey = "game_results" // the results of every scored game are posted here
+	GameAlertsKey  = "game_alerts"  // alerts: a player must register, is refused a queue or is queue banned, a game needs eyes
 	DecayAlertsKey = "decay_alerts" // ELO decay notices go here when a queue sets no alert channel of its own
 )
 
-// GameChannelRequirements are the optional log and alert channels every game command and game event shares.
+// GameChannelRequirements are the optional results and alert channels every game command and game event shares.
 var GameChannelRequirements = []Requirement{
-	{Type: ReqChannel, Key: GameLogsKey, Optional: true},
+	{Type: ReqChannel, Key: GameResultsKey, Optional: true},
 	{Type: ReqChannel, Key: GameAlertsKey, Optional: true},
 }
 

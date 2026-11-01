@@ -2220,6 +2220,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 				Results struct {
 					ChannelID string `json:"channel_id"`
 					Mode      string `json:"mode"`
+					Send      *bool  `json:"send"`
 				} `json:"results"`
 				Alerts struct {
 					ChannelID string          `json:"channel_id"`
@@ -2243,6 +2244,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	f.MapVote.Manual = server.Profile.Hosting.MapVote.Manual
 	f.Delivery = delivery{
 		ResultsChannel: server.Profile.Delivery.Results.ChannelID, ResultsMode: server.Profile.Delivery.Results.Mode,
+		ResultsOff: server.Profile.Delivery.Results.Send != nil && !*server.Profile.Delivery.Results.Send,
 		AlertsChannel: server.Profile.Delivery.Alerts.ChannelID, AlertRole: server.Profile.Delivery.Alerts.RoleID, Alerts: server.Profile.Delivery.Alerts.Events,
 	}
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}

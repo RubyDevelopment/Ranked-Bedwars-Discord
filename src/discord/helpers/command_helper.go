@@ -1456,7 +1456,7 @@ func buildRequirementSelectComponents(phase, cmdName string, items []types.Requi
 		menu.MenuType = discordgo.RoleSelectMenu
 	case types.ReqChannel:
 		menu.MenuType = discordgo.ChannelSelectMenu
-		menu.ChannelTypes = []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews}
+		menu.ChannelTypes = []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews, discordgo.ChannelTypeGuildPublicThread, discordgo.ChannelTypeGuildPrivateThread, discordgo.ChannelTypeGuildNewsThread}
 	case types.ReqCategory:
 		menu.MenuType = discordgo.ChannelSelectMenu
 		menu.ChannelTypes = []discordgo.ChannelType{discordgo.ChannelTypeGuildCategory}
@@ -2211,7 +2211,7 @@ func reconcileRequirements(cfg *types.CommandConfig, requirements []types.Requir
 }
 
 // renamedRequirements maps the old key of a requirement to its current one, so an admin's assignment survives the rename.
-var renamedRequirements = map[string]string{"chat_mute": "chat_muted_role", "queue_ban": "queue_banned_role", "chat_vc": "vc_muted_role"}
+var renamedRequirements = map[string]string{"chat_mute": "chat_muted_role", "queue_ban": "queue_banned_role", "chat_vc": "vc_muted_role", "game_logs": "game_results"}
 
 func reconcileRequirementMap(m *map[string]types.RequirementSlot, requirements []types.Requirement, reqType types.RequirementType) bool {
 	declared := map[string]bool{} // key -> Required

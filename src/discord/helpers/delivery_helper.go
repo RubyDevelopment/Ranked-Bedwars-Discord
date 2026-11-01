@@ -23,6 +23,7 @@ import (
 type delivery struct {
 	ResultsChannel string
 	ResultsMode    string
+	ResultsOff     bool // the "Send results" toggle is off: the results banner is not posted, in any mode
 	AlertsChannel  string
 	AlertRole      string
 	Alerts         map[string]bool
@@ -47,10 +48,10 @@ func (f guildFlow) resultsChannel(gameChat string) string {
 	return gameChat
 }
 
-// ResultsChannelFor is where a game's results go: the channel the profile names, else the guild's game_logs channel (Events > host game,
-// the same channel every game event is recorded in), else the game's own chat, which is cleaned up when the game ends.
+// ResultsChannelFor is where a game's results go: the channel the profile names, else the guild's game_results channel (Events > host game),
+// else the game's own chat, which is cleaned up when the game ends.
 func ResultsChannelFor(guildID, gameChat string) string {
-	logs := EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameLogsKey)
+	logs := EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameResultsKey)
 	if strings.TrimSpace(logs) == "" {
 		logs = gameChat
 	}
@@ -78,12 +79,6 @@ func StaffAlert(s *discordgo.Session, guildID, key, description string, fields .
 		return
 	}
 	embed := &discordgo.MessageEmbed{Title: kind.Title, Description: description, Color: kind.Color, Fields: fields}
-	// Every game event is recorded in the shared game_logs channel; only the alerts the profile leaves on reach staff.
-	if logs := EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameLogsKey); logs != "" {
-		if _, err := s.ChannelMessageSendEmbed(logs, embed); err != nil {
-			log.Printf("game log %s for guild %s: %v", key, guildID, err)
-		}
-	}
 	if strings.TrimSpace(flow.Delivery.AlertsChannel) == "" { // the profile names none: the shared game_alerts channel
 		flow.Delivery.AlertsChannel = EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameAlertsKey)
 	}
