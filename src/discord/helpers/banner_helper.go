@@ -536,6 +536,7 @@ const maxSide = 2400
 // RenderBanner draws banner b with vars filled in and returns it as a PNG. A layer that cannot be drawn (an
 // image that will not load) is skipped or shown as a placeholder: one bad link never loses the banner.
 func RenderBanner(b *Banner, vars Vars) ([]byte, error) {
+	vars = withRankStyles(b.guildID, vars) // {rank_color}, {rank_bg}, {rank_border} next to every rank variable
 	if b.Mode == "html" {
 		return renderRemote(b, vars)
 	}

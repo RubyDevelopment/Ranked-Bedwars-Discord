@@ -24,4 +24,5 @@ type Rank struct {
 	RoleID      string `json:"role_id"`
 	MVPBonus    int    `json:"mvp_bonus"`
 	Decay       int    `json:"decay"` // ELO lost per inactivity-decay tick while at this rank
+	Color       string `json:"color"` // the rank's colour (#rrggbb), for banners
 }
