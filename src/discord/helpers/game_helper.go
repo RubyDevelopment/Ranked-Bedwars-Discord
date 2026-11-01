@@ -783,7 +783,8 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 				d.sendResultsPNG(s, g, png)
 			}
 		}()
-		StaffAlert(s, g.GuildID, "game_voided", fmt.Sprintf("Game #%d was voided.", g.Number), &discordgo.MessageEmbedField{Name: "Reason", Value: firstNonEmpty(ev.Reason, "No reason given")})
+		desc, fields := voidAlert(g, ev.Reason)
+		StaffAlert(s, g.GuildID, "game_voided", desc, fields...)
 		d.forget(g.ID)
 	}
 }

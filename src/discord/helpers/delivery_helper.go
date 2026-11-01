@@ -3,7 +3,9 @@ package helpers
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -92,6 +94,61 @@ func StaffAlert(s *discordgo.Session, guildID, key, description string, fields .
 	if _, err := s.ChannelMessageSendComplex(flow.Delivery.AlertsChannel, send); err != nil {
 		log.Printf("staff alert %s for guild %s: %v", key, guildID, err)
 	}
+}
+
+// voidAlert is the staff alert of a voided game: what the game was, who voided it, why, who was in it and what it means for ratings.
+func voidAlert(g Game, reason string) (string, []*discordgo.MessageEmbedField) {
+	who := "the system"
+	if by := strings.TrimSpace(g.VoidedBy); by != "" {
+		who = by
+		if _, err := strconv.ParseUint(by, 10, 64); err == nil {
+			who = "<@" + by + ">"
+		}
+	}
+	title := fmt.Sprintf("Game #%d", g.Number)
+	if g.Mode.Name != "" {
+		title += " (" + g.Mode.Name + ")"
+	}
+	desc := fmt.Sprintf("%s was voided by %s.", title, who)
+
+	progress := "Voided before the match started."
+	if !g.StartedAt.IsZero() {
+		progress = fmt.Sprintf("Voided %s into the match.", time.Since(g.StartedAt).Round(time.Second))
+	}
+	effect := "No wins, losses or stats were recorded for this game."
+	if g.Mode.IsEloGainEnabled {
+		effect = "No ELO, wins, losses or stats were recorded, and any already scored are reversed."
+	}
+
+	lines := func(players []GamePlayer) string {
+		out := make([]string, 0, len(players))
+		for _, p := range players {
+			out = append(out, "<@"+p.UserID+"> (`"+p.Username+"`)")
+		}
+		return strings.Join(out, "\n")
+	}
+	fields := []*discordgo.MessageEmbedField{
+		{Name: "Reason", Value: firstNonEmpty(reason, "No reason given")},
+		{Name: "Mode", Value: firstNonEmpty(g.Mode.Name, "Unknown"), Inline: true},
+		{Name: "Map", Value: firstNonEmpty(g.Map, "Not picked"), Inline: true},
+		{Name: "Host", Value: firstNonEmpty(g.Host, "Automatic"), Inline: true},
+		{Name: "Progress", Value: progress},
+		{Name: "Effect", Value: effect},
+	}
+	teamed := false
+	for _, name := range g.Teams {
+		if players := g.TeamPlayers(name); len(players) > 0 {
+			fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: lines(players), Inline: true})
+			teamed = true
+		}
+	}
+	if !teamed && len(g.Players) > 0 {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: fmt.Sprintf("Players (%d)", len(g.Players)), Value: lines(g.Players)})
+	}
+	if g.Channels.Text != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "Game channel", Value: "<#" + g.Channels.Text + ">", Inline: true})
+	}
+	return desc, fields
 }
 
 // scoreSummary is one line of who won and what the MVP got, for the "game scored" alert.
