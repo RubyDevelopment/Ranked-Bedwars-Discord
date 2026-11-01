@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -61,6 +62,13 @@ var TicketManageCommand = &types.Command{
 					{Name: "name", Description: "The new name", Type: discordgo.ApplicationCommandOptionString, Required: true, MaxLength: 100},
 				},
 			},
+			{
+				Name: "transfer", Description: "Forward the ticket you are in to the right section", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{Name: "section", Description: "The section to forward it to", Type: discordgo.ApplicationCommandOptionString, Required: true, Autocomplete: true},
+					{Name: "reason", Description: "Why it belongs there (shown to the new team)", Type: discordgo.ApplicationCommandOptionString, Required: false, MaxLength: 300},
+				},
+			},
 			{Name: "lock", Description: "Lock the ticket you are in so the owner can no longer write", Type: discordgo.ApplicationCommandOptionSubCommand},
 			{Name: "unlock", Description: "Unlock the ticket you are in", Type: discordgo.ApplicationCommandOptionSubCommand},
 			{
@@ -79,7 +87,8 @@ var TicketManageCommand = &types.Command{
 			},
 		},
 	},
-	Execute: executeTicketManageCommand,
+	Execute:      executeTicketManageCommand,
+	Autocomplete: autocompleteTicketSection,
 }
 
 // ============================================================================
@@ -104,6 +113,8 @@ func executeTicketManageCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		return executeTicketClose(s, i)
 	case "rename":
 		return executeTicketRename(s, i)
+	case "transfer":
+		return executeTicketTransfer(s, i)
 	case "lock":
 		return executeTicketLock(s, i, true)
 	case "unlock":
@@ -241,6 +252,62 @@ func executeTicketRename(s *discordgo.Session, i *discordgo.InteractionCreate) e
 		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
 	}
 	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Renamed", "This ticket is now called **"+applied+"**."))
+}
+
+// executeTicketTransfer forwards the ticket the command is run in to another section of its panel.
+func executeTicketTransfer(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+	}
+	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can transfer tickets."))
+	}
+	_, options := types.SelectedSubcommand(i)
+	section := helpers.SubOptionString(options, "section")
+	reason := strings.TrimSpace(helpers.SubOptionString(options, "reason"))
+	if section == "" {
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Choose the section to forward this ticket to."))
+	}
+	// The option's value is the section's id (from the suggestions); typing its name works too.
+	for _, c := range helpers.TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
+		if strings.EqualFold(c.Label, section) {
+			section = c.ID
+		}
+	}
+	ticket, _, err := helpers.TransferTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), section, reason)
+	switch {
+	case errors.Is(err, helpers.ErrTicketSameCategory):
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "This ticket is already in that section."))
+	case errors.Is(err, helpers.ErrTicketCategoryNotFound):
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "That section does not exist on this ticket's panel. Pick one from the suggestions."))
+	case err != nil:
+		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+	}
+	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Transferred", "This ticket now belongs to **"+ticket.CategoryLabel+"**."))
+}
+
+// autocompleteTicketSection suggests the sections the ticket of the channel can be forwarded to.
+func autocompleteTicketSection(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	_, opts := types.SelectedSubcommand(i)
+	typed := ""
+	for _, o := range opts {
+		if o.Focused && o.Name == "section" {
+			typed = strings.ToLower(fmt.Sprint(o.Value))
+		}
+	}
+	var choices []*discordgo.ApplicationCommandOptionChoice
+	if ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID); err == nil && helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		for _, c := range helpers.TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
+			if strings.Contains(strings.ToLower(c.Label), typed) && len(choices) < 25 {
+				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: c.Label, Value: c.ID})
+			}
+		}
+	}
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{Choices: choices},
+	})
 }
 
 // executeTicketLock locks or unlocks the ticket the command is run in.
