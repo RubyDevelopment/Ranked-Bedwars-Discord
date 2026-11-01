@@ -850,6 +850,7 @@ func (d *gameDiscord) forget(id uint) {
 	delete(d.live, id)
 	delete(d.introductions, id)
 	d.mu.Unlock()
+	ClearVoidVotes(id)
 }
 
 // runManual runs the blocks of a hand-hosted game, in order: the same flow blocks as a bot-hosted game, minus everything that needs the bot.
