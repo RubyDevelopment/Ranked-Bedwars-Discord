@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -26,7 +27,7 @@ func init() {
 var QueuePickCommand = &types.Command{
 	Name:        "pick",
 	Description: "Picks a player during the captain draft phase (captains only).",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

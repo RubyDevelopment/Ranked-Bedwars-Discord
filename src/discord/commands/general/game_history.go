@@ -27,7 +27,7 @@ func init() {
 var GameHistoryCommand = &types.Command{
 	Name:        "games",
 	Description: "Retrieves the detailed match history and past game outcomes for a player.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

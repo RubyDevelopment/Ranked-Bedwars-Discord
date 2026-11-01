@@ -3,9 +3,10 @@ package general
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -24,7 +25,7 @@ func init() {
 var GameMapsCommand = &types.Command{
 	Name:        "maps",
 	Description: "Lists active competitive map pools and map rotation info.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executeGameMapsCommand,

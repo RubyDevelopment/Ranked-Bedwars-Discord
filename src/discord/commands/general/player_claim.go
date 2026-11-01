@@ -30,7 +30,7 @@ func init() {
 var PlayerClaimCommand = &types.Command{
 	Name:        "claim",
 	Description: "Claims starting ELO or seasonal reward bonuses based on verified player status.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executePlayerClaimCommand,

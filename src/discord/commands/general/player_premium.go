@@ -25,7 +25,7 @@ func init() {
 var PlayerPremiumCommand = &types.Command{
 	Name:        "premium",
 	Description: "Manages premium status perks, benefits, and subscription features.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executePlayerPremiumCommand,

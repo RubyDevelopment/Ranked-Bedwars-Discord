@@ -3,9 +3,10 @@ package general
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -24,7 +25,7 @@ func init() {
 var QueuePugsCommand = &types.Command{
 	Name:        "pugs",
 	Description: "Manages active pickup games (PUGs), lobby rotations, and queue statuses.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

@@ -31,7 +31,7 @@ func init() {
 var PlayerStatsCommand = &types.Command{
 	Name:        "stats",
 	Description: "Displays a player's seasonal statistics, win rates, and performance breakdown.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

@@ -28,7 +28,7 @@ func init() {
 var PlayerProfileCommand = &types.Command{
 	Name:        "profile",
 	Description: "Displays a player's ranked profile, username, nickname, and rank.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

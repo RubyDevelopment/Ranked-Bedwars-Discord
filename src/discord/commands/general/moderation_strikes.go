@@ -27,7 +27,7 @@ func init() {
 var ModerationStrikesCommand = &types.Command{
 	Name:        "strikes",
 	Description: "Displays the strike history of a player.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

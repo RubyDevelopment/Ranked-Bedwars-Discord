@@ -30,7 +30,7 @@ func init() {
 var QueueStatusCommand = &types.Command{
 	Name:        "queues",
 	Description: "Views game stats, draft status, or the status of the queue you are in.",
-	Ephemeral:   true,
+	Ephemeral:   false,
 	Cooldown:    3 * time.Second,
 	Data:        &discordgo.ApplicationCommand{},
 	Execute:     executeQueueStatusCommand,
