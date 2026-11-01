@@ -2804,7 +2804,7 @@ func (m *GameManager) archiveLogs(g Game) {
 
 // collectBotLog asks the engine for everything its bot(s) did in this game. Nothing when the engine is away or kept nothing.
 func (m *GameManager) collectBotLog(g Game) []json.RawMessage {
-	params, _ := json.Marshal(map[string]any{"game": g.ID, "span": true, "limit": 20000})
+	params, _ := json.Marshal(map[string]any{"game": g.ID, "span": true, "limit": 50000})
 	result := LiveChat.Control(g.GuildID, "", "logs.read", params)
 	if !result.OK {
 		return nil
