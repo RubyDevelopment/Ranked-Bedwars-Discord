@@ -177,7 +177,10 @@ func ResultsVars(number int, season, mode, mapName string, teams []ResultsTeam) 
 // DefaultResultsBanner is the match results card for a game with these teams: a header, then one panel per team
 // (two across) listing its players with their rank and ELO change. It is built to fit the game, so a 2v2 and an
 // 8v8 both read well. A server's own "results" banner from the Banner Builder takes its place.
-func DefaultResultsBanner(teams []ResultsTeam) *Banner {
+func DefaultResultsBanner(teams []ResultsTeam) *Banner { return DefaultResultsBannerFor(teams, true) }
+
+// DefaultResultsBannerFor is DefaultResultsBanner, with the rank and ELO columns left out when the game has no rating (showElo false).
+func DefaultResultsBannerFor(teams []ResultsTeam, showElo bool) *Banner {
 	perRow := 2
 	if len(teams) == 1 {
 		perRow = 1
@@ -223,10 +226,14 @@ func DefaultResultsBanner(teams []ResultsTeam) *Banner {
 				bnPic(fmt.Sprintf("head%d_%d", t, p), x+24, ry+6, 44, 44, "{"+q+"head}", "cover"),
 				bnTxt(fmt.Sprintf("name%d_%d", t, p), x+80, ry, 250, rowH, "{"+q+"name}", 26, bnMain, bnBold),
 				bnTxt(fmt.Sprintf("mvp%d_%d", t, p), x+300, ry, 100, rowH, "{"+q+"mvp}", 18, "#facc15", bnBold),
-				bnTxt(fmt.Sprintf("rank%d_%d", t, p), x+400, ry, 150, rowH, "{"+q+"rank}", 22, bnAccent, bnCenter),
-				bnTxt(fmt.Sprintf("elo%d_%d", t, p), x+556, ry, 120, rowH, "{"+q+"after}", 24, bnMain, bnBold, bnRight),
-				bnTxt(fmt.Sprintf("chg%d_%d", t, p), x+680, ry, 80, rowH, "{"+q+"change}", 24, bnMuted, bnBold, bnRight, up, down),
 			)
+			if showElo {
+				layers = append(layers,
+					bnTxt(fmt.Sprintf("rank%d_%d", t, p), x+400, ry, 150, rowH, "{"+q+"rank}", 22, bnAccent, bnCenter),
+					bnTxt(fmt.Sprintf("elo%d_%d", t, p), x+556, ry, 120, rowH, "{"+q+"after}", 24, bnMain, bnBold, bnRight),
+					bnTxt(fmt.Sprintf("chg%d_%d", t, p), x+680, ry, 80, rowH, "{"+q+"change}", 24, bnMuted, bnBold, bnRight, up, down),
+				)
+			}
 		}
 	}
 	b := bnBase("default-results", "results", w, h, layers...)

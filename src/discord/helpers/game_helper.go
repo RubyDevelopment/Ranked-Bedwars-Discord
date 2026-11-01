@@ -742,7 +742,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventCasualDone:
 		d.post(s, g, "casualDone", embedData{})
 		go func() { // a casual game is a game entry too: its results banner goes out when the mode's "Send results" is on
-			if png := d.resultsPNG(g); len(png) > 0 {
+			if png := d.resultsPNG(g, outcomeCasual); len(png) > 0 {
 				d.sendResultsPNG(s, g, png)
 			}
 		}()
@@ -754,7 +754,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		// One message: the scored embed (text, mentions, a box or none) with the results card attached. When the server switched that
 		// embed off, the card alone is posted.
 		go func() {
-			png := d.resultsPNG(g)
+			png := d.resultsPNG(g, resultsOutcome(g, false))
 			if !d.post(s, g, "scored", embedData{File: png}) && len(png) > 0 {
 				d.sendResultsPNG(s, g, png)
 			}
@@ -778,6 +778,11 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventVoided:
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
+		go func() { // a voided game is still a game entry: its card (the void variant) goes out when the mode's "Send results" is on
+			if png := d.resultsPNG(g, outcomeVoid); len(png) > 0 {
+				d.sendResultsPNG(s, g, png)
+			}
+		}()
 		StaffAlert(s, g.GuildID, "game_voided", fmt.Sprintf("Game #%d was voided.", g.Number), &discordgo.MessageEmbedField{Name: "Reason", Value: firstNonEmpty(ev.Reason, "No reason given")})
 		d.forget(g.ID)
 	}
