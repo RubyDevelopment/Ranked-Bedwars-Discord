@@ -26,7 +26,7 @@ func init() {
 // PlayerSyncCommand synchronizes the caller's registered role, rank role, and nickname.
 var PlayerSyncCommand = &types.Command{
 	Name:          "sync",
-	Requirements:  types.GeneralRequirements,
+	Requirements:  types.RegistrationRequirements, // it hands the registered role out, so a registered player without it must be able to run it
 	Description:   "Synchronizes your registered role, rank role, and nickname with the guild.",
 	PrefixAliases: []string{"refresh"},
 	Ephemeral:     true,
