@@ -729,6 +729,9 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		}
 		go d.postResultsBanner(s, g)
 		d.forget(g.ID)
+	case EventChatVote:
+		n, _ := strconv.Atoi(ev.Vars["number"])
+		d.chatVote(s, g, ev.Key, n)
 	case EventTrackingLost:
 		reason := ev.Reason
 		if reason == "" {
@@ -889,9 +892,16 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	WithGuildFooterIconForGuild(s, g.GuildID, emb)
 	live := embedKinds[key].Live
 	buttons := hostButtons(g, key, t)
+	// The text above the embed, when the template has one (variables work, {mentions} pings the players).
+	data.Game = g
+	var content *string
+	if t.Content != nil {
+		text := strings.TrimSpace(fill(*t.Content, data.common()))
+		content = &text
+	}
 	if live && msgID != "" {
 		embeds := []*discordgo.MessageEmbed{emb}
-		edit := &discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds}
+		edit := &discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds, Content: content}
 		if buttons != nil {
 			edit.Components = &buttons
 		}
@@ -900,11 +910,8 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		}
 	}
 	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}, Components: buttons}
-	if t.Content != nil { // the template says what goes above the embed, even nothing
-		data.Game = g
-		send.Content = strings.TrimSpace(fill(*t.Content, data.common()))
-	} else if t.Ping != nil && *t.Ping {
-		send.Content = pingsOf(g) // an older template: the mention toggle
+	if content != nil { // the template says what goes above the embed, even nothing
+		send.Content = *content
 	}
 	if send.Content != "" {
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
@@ -1105,6 +1112,11 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 	d.mu.Lock()
 	d.votes[g.ID] = v
 	d.mu.Unlock()
+	names := make([]string, len(maps))
+	for i, m := range maps {
+		names[i] = m.Name
+	}
+	_ = Engine.write(map[string]any{"type": "host.map.vote.options", "game_id": g.ID, "maps": names}) // so the bot can say them in the party chat
 	defer func() {
 		d.mu.Lock()
 		delete(d.votes, g.ID)
@@ -1178,6 +1190,72 @@ func mapSelection(m types.Map, mode string) *engineMapSelection {
 		GUISlot:   m.GUISlot,
 		MapHeight: m.MapHeight,
 		Teams:     m.TeamsFor(mode),
+	}
+}
+
+// settled reports whether the vote can end now: everybody voted, or (when the most votes win) the leading map cannot be caught
+// by the votes still to come, as the old bot ended it. Callers hold d.mu.
+func (v *mapVote) settled() bool {
+	if len(v.votes) >= len(v.game.Players) {
+		return true
+	}
+	if v.weighted {
+		return false
+	}
+	remaining := 0.0
+	for _, p := range v.game.Players {
+		if _, voted := v.votes[p.UserID]; !voted {
+			remaining += v.weights[p.UserID]
+		}
+	}
+	first, second := 0.0, 0.0
+	for _, t := range v.totals() {
+		if t > first {
+			first, second = t, first
+		} else if t > second {
+			second = t
+		}
+	}
+	return first > second+remaining
+}
+
+// chatVote counts a vote a player made in the Minecraft party chat (the engine passes it on) and tells the engine what to say back.
+func (d *gameDiscord) chatVote(s *discordgo.Session, g Game, user string, number int) {
+	d.mu.Lock()
+	v := d.votes[g.ID]
+	if v == nil || number < 1 || number > len(v.maps) {
+		d.mu.Unlock()
+		return
+	}
+	if _, in := v.game.Player(user); !in {
+		d.mu.Unlock()
+		return
+	}
+	idx := number - 1
+	previous, had := v.votes[user]
+	outcome := "voted"
+	switch {
+	case had && previous == idx:
+		outcome = "duplicate"
+	case had:
+		outcome = "changed"
+	}
+	if outcome != "duplicate" {
+		v.votes[user] = idx
+	}
+	done := outcome != "duplicate" && v.settled()
+	name, weight, msg := v.maps[idx].Name, v.weights[user], v.message
+	d.mu.Unlock()
+
+	if outcome != "duplicate" {
+		embed, _ := d.voteEmbed(v, "")
+		WithGuildFooterIconForGuild(s, g.GuildID, embed)
+		comps := v.components(g.ID, false, -1)
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: msg.ChannelID, ID: msg.ID, Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &comps})
+	}
+	_ = Engine.write(map[string]any{"type": "host.map.vote.result", "game_id": g.ID, "player": user, "outcome": outcome, "map": name, "weight": weight})
+	if done {
+		v.closeOnce.Do(func() { close(v.done) })
 	}
 }
 
@@ -1639,7 +1717,7 @@ func (d *gameDiscord) handleMapVote(s *discordgo.Session, i *discordgo.Interacti
 		return
 	}
 	v.votes[user] = idx
-	all := len(v.votes) >= len(v.game.Players)
+	all := v.settled()
 	d.mu.Unlock()
 	embed, _ := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, v.game.GuildID, embed)
@@ -1734,7 +1812,6 @@ type embedTemplate struct {
 	Thumbnail   *string       `json:"thumbnail,omitempty"`
 	Image       *string       `json:"image,omitempty"`
 	Footer      *string       `json:"footer,omitempty"`
-	Ping        *bool         `json:"ping,omitempty"`
 	Content     *string       `json:"content,omitempty"` // text above the embed: variables work, {mentions} pings the players
 	Fields      *[]embedField `json:"fields,omitempty"`
 	Buttons     *bool         `json:"buttons,omitempty"`
@@ -1809,9 +1886,6 @@ func (t embedTemplate) merge(o embedTemplate) embedTemplate {
 	if o.Footer != nil {
 		t.Footer = o.Footer
 	}
-	if o.Ping != nil {
-		t.Ping = o.Ping
-	}
 	if o.Content != nil {
 		t.Content = o.Content
 	}
@@ -1860,18 +1934,16 @@ type statLabel struct {
 
 // flowStep is one block of the profile's pipeline as the Go side needs it. Groups and ifs hold more blocks.
 type flowStep struct {
-	Type      string          `json:"type"`
-	Embed     string          `json:"embed"`
-	Enabled   *bool           `json:"enabled"`
-	Phase     string          `json:"phase"`
-	ID        string          `json:"id"`
-	Message   string          `json:"message"`
-	Builtin   bool            `json:"builtin"`
-	Reply     json.RawMessage `json:"reply"`
-	Hosting   string          `json:"hosting"`
-	Ping      bool            `json:"ping"`
-	Children  []flowStep      `json:"children"`
-	Otherwise []flowStep      `json:"otherwise"`
+	Type      string     `json:"type"`
+	Embed     string     `json:"embed"`
+	Enabled   *bool      `json:"enabled"`
+	Phase     string     `json:"phase"`
+	ID        string     `json:"id"`
+	Message   string     `json:"message"`
+	Builtin   bool       `json:"builtin"`
+	Hosting   string     `json:"hosting"`
+	Children  []flowStep `json:"children"`
+	Otherwise []flowStep `json:"otherwise"`
 }
 
 type guildFlow struct {
@@ -1879,7 +1951,6 @@ type guildFlow struct {
 	Stats        []statLabel
 	Announced    map[string]bool         // embeds the pipeline posts itself with an Announce step
 	Manual       map[string][]manualStep // phase -> what the manual-hosting Announce steps post, in order
-	Pings        map[string]bool         // step id -> mention every player with its message
 	Replies      map[string]*stepReply   // step id -> the message built in that Announce step
 	PartyInvite  string                  // the profile's party invite command, with {players}
 	ButtonLabels map[string]string       // host button id -> its text (hosting.buttons), blank = the default
@@ -2001,7 +2072,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	if json.Unmarshal(raw, &server) != nil {
 		return guildFlow{}
 	}
-	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]manualStep{}, Replies: map[string]*stepReply{}, Pings: map[string]bool{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
+	f := guildFlow{Embeds: map[string]embedTemplate{}, Stats: server.Profile.Stats, Announced: map[string]bool{}, Manual: map[string][]manualStep{}, Replies: map[string]*stepReply{}, PartyInvite: strings.TrimSpace(server.Profile.Commands.PartyInvite)}
 	b := server.Profile.Hosting.Buttons
 	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner, f.MapVote.Enabled = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner, server.Profile.Hosting.MapVote.Enabled
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
@@ -2023,17 +2094,9 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 			stPhase, stHosting := firstNonEmpty(st.Phase, phase), firstNonEmpty(st.Hosting, hosting)
 			walk(st.Children, stPhase, stHosting)
 			walk(st.Otherwise, stPhase, stHosting)
-			if st.Ping && st.ID != "" {
-				f.Pings[st.ID] = true
-			}
 			if st.Builtin { // the step posts its built-in embed: a custom embed kept on it is not used
 			} else if rep := saved[st.Message]; st.Message != "" && rep != nil {
 				f.Replies[st.ID] = rep
-			} else if len(st.Reply) > 0 {
-				var rep stepReply
-				if json.Unmarshal(st.Reply, &rep) == nil && st.ID != "" {
-					f.Replies[st.ID] = &rep
-				}
 			}
 			if st.Type == "announce" && (st.Enabled == nil || *st.Enabled) && stHosting == "manual" {
 				p := firstNonEmpty(stPhase, "pre")
@@ -2129,6 +2192,11 @@ func (d embedData) common() map[string]string {
 		vars["winnerMentions"], vars["loserMentions"] = resultMentions(g)
 	}
 	vars["mentions"] = pingsOf(g)
+	pending := make([]string, 0, len(d.Waiting)+len(d.Invited))
+	for _, id := range append(slices.Clone(d.Waiting), d.Invited...) {
+		pending = append(pending, "<@"+id+">")
+	}
+	vars["waitingMentions"] = strings.Join(pending, " ") // everyone the party or the teams are still waiting for
 	vars["statTable"] = statTable(g, d.Flow)
 	vars["joined"], vars["joinedCount"] = namesList(g, d.Joined)
 	vars["waiting"], vars["waitingCount"] = namesList(g, d.Waiting)
@@ -3065,6 +3133,7 @@ const (
 	EventEmbed                             // the hosting bot asks for one of the configured embeds (Key, Vars and the id lists say which)
 	EventMatch                             // something happened in the match (Match says what)
 	EventMatchEnded                        // the bot saw the match end, before it is scored
+	EventChatVote                          // a player voted for a map in the Minecraft party chat (Key is their Discord id, Vars["number"] the map number)
 )
 
 // MatchEvent is defined in package types (games.go).

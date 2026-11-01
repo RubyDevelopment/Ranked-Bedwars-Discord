@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -136,6 +137,8 @@ type engineInbound struct {
 	Kind        string              `json:"kind"`
 	Lines       []GameChatLine      `json:"lines"`
 	Missing     []string            `json:"missing"`
+	Voter       string              `json:"voter"`  // host.map.vote: the Discord id of the player who voted in the party chat
+	Number      int                 `json:"number"` // host.map.vote: the map number they wrote
 	Maps        []engineMapOption   `json:"maps"`
 	MapMenuRead bool                `json:"map_menu_read"`
 	Map         *engineMapSelection `json:"map"`
@@ -721,6 +724,9 @@ func (b *EngineBridge) handle(msg engineInbound) {
 				b.logf("send map selection for game %d: %v", msg.GameID, writeErr)
 			}
 		}()
+
+	case "host.map.vote": // a player voted for a map in the Minecraft party chat
+		Games.Notify(msg.GameID, GameEvent{Kind: EventChatVote, Key: msg.Voter, Vars: map[string]string{"number": strconv.Itoa(msg.Number)}})
 
 	case "host.map.hosted":
 		if msg.Map != nil {

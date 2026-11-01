@@ -42,9 +42,11 @@ func TestManualHostingStepsAreKeptApartFromTheBotsOwn(t *testing.T) {
 }
 
 func TestAnnounceStepWithItsOwnMessageIsPostedFromTheStep(t *testing.T) {
-	f := parseGuildFlow([]byte(`{"profile":{"pipeline":[
-		{"id":"hello","type":"announce","reply":{"type":"embed","embeds":[{"title":"Game {match.number}","description":"On {game.map} with {match.teams}"}]}},
-		{"id":"after","type":"announce","hosting":"manual","phase":"post","reply":{"type":"message","content":"gg {game.mode}"}}]}}`))
+	f := parseGuildFlow([]byte(`{"profile":{"messages":[
+		{"id":"m1","reply":{"type":"embed","embeds":[{"title":"Game {match.number}","description":"On {game.map} with {match.teams}"}]}},
+		{"id":"m2","reply":{"type":"message","content":"gg {game.mode}"}}],"pipeline":[
+		{"id":"hello","type":"announce","message":"m1"},
+		{"id":"after","type":"announce","hosting":"manual","phase":"post","message":"m2"}]}}`))
 	rep := f.Replies["hello"]
 	if rep == nil || len(f.Announced) != 0 {
 		t.Fatalf("a step's own message is kept by its id and is no built-in embed: %v %v", f.Replies, f.Announced)
@@ -66,5 +68,22 @@ func TestAStepUsesACustomEmbedOfTheProfile(t *testing.T) {
 		"pipeline":[{"id":"a","type":"announce","message":"embed-1"},{"id":"b","type":"announce","message":"gone"}]}}`))
 	if f.Replies["a"] == nil || f.Replies["b"] != nil {
 		t.Errorf("a step gets the custom embed it names, and nothing when it is gone: %v", f.Replies)
+	}
+}
+
+func TestVoteEndsWhenTheLeaderCannotBeCaught(t *testing.T) {
+	players := []GamePlayer{{UserID: "1"}, {UserID: "2"}, {UserID: "3"}, {UserID: "4"}, {UserID: "5"}}
+	v := &mapVote{maps: make([]types.Map, 2), votes: map[string]int{}, weights: map[string]float64{"1": 1, "2": 1, "3": 1, "4": 1, "5": 1}, game: Game{Players: players}}
+	v.votes["1"], v.votes["2"] = 0, 0
+	if v.settled() {
+		t.Fatal("two votes of five can still be caught by the other three")
+	}
+	v.votes["3"] = 0
+	if !v.settled() {
+		t.Fatal("three of five votes cannot be caught by two")
+	}
+	w := &mapVote{weighted: true, maps: make([]types.Map, 2), votes: map[string]int{"1": 0, "2": 0, "3": 0}, weights: v.weights, game: Game{Players: players}}
+	if w.settled() {
+		t.Fatal("a weighted vote is a lottery by share: it only ends when everybody voted")
 	}
 }
