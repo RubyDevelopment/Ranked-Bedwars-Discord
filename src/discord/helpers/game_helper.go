@@ -677,16 +677,18 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if g.Bot != "" || !Engine.Connected() || !flowOf(g.GuildID).Announced["teams"] {
 			d.post(s, g, "teams", embedData{})
 		}
-		if g.Bot == "" {
-			d.manualSteps(s, g, "pre")
-		}
 	case EventStarted:
 		if g.Bot != "" {
 			d.post(s, g, "matchStarted", embedData{})
 			d.startTracker(s, g)
 		} else {
-			d.manualSetup(s, g)
-			d.post(s, g, "matchStartedManual", embedData{})
+			// Hosted by hand: the flow's manual blocks, once the map is chosen (the party and map instructions need it). A game with no flow saved
+			// at all gets the old fixed set.
+			d.manualSteps(s, g, "pre")
+			if flowOf(g.GuildID).ManualDefaults {
+				d.manualSetup(s, g)
+				d.post(s, g, "matchStartedManual", embedData{})
+			}
 			d.manualSteps(s, g, "in")
 		}
 	case EventHostStatus:
@@ -765,8 +767,9 @@ func (d *gameDiscord) finishVote(s *discordgo.Session, g Game, ev GameEvent) boo
 	return true
 }
 
-// manualSetup tells the players of a game nobody hosts for them how to set it up: the party to form and the map to play.
-func (d *gameDiscord) manualSetup(s *discordgo.Session, g Game) {
+// manualVars are the variables the party and map instructions of a hand-hosted game use: the invite command for everyone but the host, and
+// the chosen map's height and team colours.
+func (d *gameDiscord) manualVars(g Game) map[string]string {
 	flow := flowOf(g.GuildID)
 	var invite []string
 	for _, p := range g.Players {
@@ -775,19 +778,14 @@ func (d *gameDiscord) manualSetup(s *discordgo.Session, g Game) {
 		}
 	}
 	command := fill(firstNonEmpty(flow.PartyInvite, "/party invite {players}"), map[string]string{"players": strings.Join(invite, " ")})
-	d.post(s, g, "partySetup", embedData{Vars: map[string]string{"inviteCommand": strings.TrimSpace(command)}})
-
-	if g.Map == "" || g.Map == MapUndecided {
-		return
-	}
+	vars := map[string]string{"inviteCommand": strings.TrimSpace(command), "mapHeight": "—", "mapTeams": "—", "mapCount": "0"}
 	maps, _ := GuildMetaMaps(g.GuildID)
-	vars := map[string]string{"mapHeight": "—", "mapTeams": "—"}
 	count := 0
 	for _, m := range maps {
 		if m.IsEnabled && m.IsMapAvailable {
 			count++
 		}
-		if m.Name == g.Map {
+		if g.Map != "" && m.Name == g.Map {
 			if m.MapHeight > 0 {
 				vars["mapHeight"] = strconv.Itoa(m.MapHeight)
 			}
@@ -797,6 +795,16 @@ func (d *gameDiscord) manualSetup(s *discordgo.Session, g Game) {
 		}
 	}
 	vars["mapCount"] = strconv.Itoa(count)
+	return vars
+}
+
+// manualSetup tells the players of a game nobody hosts for them how to set it up: the party to form and the map to play.
+func (d *gameDiscord) manualSetup(s *discordgo.Session, g Game) {
+	vars := d.manualVars(g)
+	d.post(s, g, "partySetup", embedData{Vars: map[string]string{"inviteCommand": vars["inviteCommand"]}})
+	if g.Map == "" || g.Map == MapUndecided {
+		return
+	}
 	d.post(s, g, "mapSetup", embedData{Vars: vars})
 }
 
@@ -835,7 +843,7 @@ func (d *gameDiscord) manualSteps(s *discordgo.Session, g Game, phase string) {
 		if flow.Replies[st.StepID] != nil {
 			d.postStepReply(s, g, st.StepID)
 		} else if st.Embed != "" {
-			d.post(s, g, st.Embed, embedData{Force: true})
+			d.post(s, g, st.Embed, embedData{Force: true, Vars: d.manualVars(g)})
 		}
 	}
 }
@@ -1947,14 +1955,16 @@ type flowStep struct {
 }
 
 type guildFlow struct {
-	Embeds       map[string]embedTemplate
-	Stats        []statLabel
-	Announced    map[string]bool         // embeds the pipeline posts itself with an Announce step
-	Manual       map[string][]manualStep // phase -> what the manual-hosting Announce steps post, in order
-	Replies      map[string]*stepReply   // step id -> the message built in that Announce step
-	PartyInvite  string                  // the profile's party invite command, with {players}
-	ButtonLabels map[string]string       // host button id -> its text (hosting.buttons), blank = the default
-	MapVote      struct {                // hosting.mapVote; zero values mean the defaults
+	Embeds    map[string]embedTemplate
+	Stats     []statLabel
+	Announced map[string]bool         // embeds the pipeline posts itself with an Announce step
+	Manual    map[string][]manualStep // phase -> what the manual-hosting Announce steps post, in order
+	// ManualDefaults: no flow was saved at all, so a hand-hosted game gets the fixed party, map and submit-your-win messages.
+	ManualDefaults bool
+	Replies        map[string]*stepReply // step id -> the message built in that Announce step
+	PartyInvite    string                // the profile's party invite command, with {players}
+	ButtonLabels   map[string]string     // host button id -> its text (hosting.buttons), blank = the default
+	MapVote        struct {              // hosting.mapVote; zero values mean the defaults
 		Seconds float64
 		Perks   *bool
 		Winner  string
@@ -2078,6 +2088,7 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
 	if server.Profile.Pipeline == nil { // no flow saved at all: the default one posts the introduction; an empty flow posts nothing
 		f.Announced["introduction"] = true
+		f.ManualDefaults = true
 	}
 	saved := map[string]*stepReply{} // the profile's custom embeds, by id
 	for _, m := range server.Profile.Messages {

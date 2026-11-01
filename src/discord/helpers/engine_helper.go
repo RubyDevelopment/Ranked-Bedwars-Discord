@@ -1280,6 +1280,8 @@ func (c *ChatStream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 const (
 	controlTimeout   = 35 * time.Second
 	controlBodyLimit = 8 << 10
+	// experimentBodyLimit is the most an experiment.run request may carry: the server profile it runs.
+	experimentBodyLimit = 1 << 20
 )
 
 // controlActions are the actions a viewer may ask for.
@@ -1288,6 +1290,8 @@ var controlActions = map[string]bool{
 	"inventory": true, "state": true, "control": true, "control.stop": true, "look": true, "swing": true, "block.use": true,
 	"respawn": true, "connect": true, "disconnect": true, "keepalive": true,
 	"scoreboard": true, "tab": true, "entities": true, "entity.use": true, "entity.attack": true, "bossbars": true,
+	// Trying a server profile on a live bot (Game phases › Run): the run carries the profile, so it may be large.
+	"experiment.run": true, "experiment.pause": true, "experiment.resume": true, "experiment.step": true, "experiment.stop": true, "experiment.status": true,
 }
 
 type controlResult struct {
@@ -1363,8 +1367,8 @@ func (c *ChatStream) ServeControl(w http.ResponseWriter, r *http.Request) {
 		Action string          `json:"action"`
 		Params json.RawMessage `json:"params"`
 	}
-	raw, err := io.ReadAll(io.LimitReader(r.Body, controlBodyLimit))
-	if err != nil || json.Unmarshal(raw, &body) != nil || !chatGuildID.MatchString(body.Guild) || len(strings.TrimSpace(body.Bot)) > 32 || !controlActions[body.Action] {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, experimentBodyLimit+1))
+	if err != nil || len(raw) > experimentBodyLimit || json.Unmarshal(raw, &body) != nil || !chatGuildID.MatchString(body.Guild) || len(strings.TrimSpace(body.Bot)) > 32 || !controlActions[body.Action] || (len(raw) > controlBodyLimit && body.Action != "experiment.run") {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
