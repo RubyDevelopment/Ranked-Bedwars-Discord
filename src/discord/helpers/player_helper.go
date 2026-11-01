@@ -848,8 +848,12 @@ func LowestRankDefaults(ranks []types.Rank) (string, int) {
 // Registration Role Resolution
 // ============================================================================
 
-// RegisteredRoleID returns the configured "guild_role_registered" role snowflake.
+// RegisteredRoleID returns the role registered players get: the `registered_role` assigned on the dashboard (every command that
+// declares it holds the same one, so /register is asked), else the older "guild_role_registered" role of the guild state.
 func RegisteredRoleID(guildID string) string {
+	if id, err := RequirementSlotID(guildID, "register", types.ReqRole, types.RegisteredRoleKey); err == nil && strings.TrimSpace(id) != "" {
+		return strings.TrimSpace(id)
+	}
 	roles, err := GuildStateRoles(guildID)
 	if err != nil {
 		return ""
