@@ -1218,13 +1218,17 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 	if !voting {
 		return mapSelectionWithFallbacks(maps, maps[rand.IntN(len(maps))], g.Mode.Name), nil
 	}
-	v := &mapVote{weighted: weighted, maps: maps, votes: map[string]int{}, weights: map[string]float64{}, done: make(chan struct{}), game: g, endsAt: time.Now().Add(lasts).Unix()}
+	// The perks are looked up first (they are database reads that can take a while), and only then is the end of the vote fixed: the
+	// countdown on the message and the moment the vote really closes are the same one, so the embed never runs out before the vote does.
+	weights := map[string]float64{}
 	for _, p := range g.Players {
-		v.weights[p.UserID] = 1
+		weights[p.UserID] = 1
 		if perks {
-			v.weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
+			weights[p.UserID] = Elo.perks(g.GuildID, p.UserID).MapVoteWeight()
 		}
 	}
+	deadline := time.Now().Add(lasts)
+	v := &mapVote{weighted: weighted, maps: maps, votes: map[string]int{}, weights: weights, done: make(chan struct{}), game: g, endsAt: deadline.Unix()}
 	embed, _ := d.voteEmbed(v, "")
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}, Components: v.components(g.ID, false, -1)})
@@ -1249,7 +1253,7 @@ func (d *gameDiscord) selectMap(g Game, available []engineMapOption, mapMenuRead
 
 	select {
 	case <-v.done:
-	case <-time.After(lasts):
+	case <-time.After(time.Until(deadline)):
 	}
 
 	d.mu.Lock()
