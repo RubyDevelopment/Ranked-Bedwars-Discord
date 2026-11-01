@@ -72,9 +72,9 @@ func (d *gameDiscord) resultsPNG(g Game) []byte {
 	return png
 }
 
-// sendResultsPNG posts the card on its own, where the server wants results (the game's chat by default).
+// sendResultsPNG posts the card on its own, where the server wants results (the profile's channel, else game_logs, else the game's chat).
 func (d *gameDiscord) sendResultsPNG(s *discordgo.Session, g Game, png []byte) {
-	channel := flowOf(g.GuildID).resultsChannel(g.Channels.Text)
+	channel := ResultsChannelFor(g.GuildID, g.Channels.Text)
 	if channel == "" {
 		return
 	}

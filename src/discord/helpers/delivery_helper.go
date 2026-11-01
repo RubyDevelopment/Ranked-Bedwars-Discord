@@ -47,6 +47,16 @@ func (f guildFlow) resultsChannel(gameChat string) string {
 	return gameChat
 }
 
+// ResultsChannelFor is where a game's results go: the channel the profile names, else the guild's game_logs channel (Events > host game,
+// the same channel every game event is recorded in), else the game's own chat, which is cleaned up when the game ends.
+func ResultsChannelFor(guildID, gameChat string) string {
+	logs := EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameLogsKey)
+	if strings.TrimSpace(logs) == "" {
+		logs = gameChat
+	}
+	return flowOf(guildID).resultsChannel(logs)
+}
+
 // alertOn says whether staff are told about this kind of event.
 func (f guildFlow) alertOn(key string) bool {
 	if strings.TrimSpace(f.Delivery.AlertsChannel) == "" {

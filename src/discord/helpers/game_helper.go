@@ -1032,7 +1032,7 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	}
 	channel := g.Channels.Text
 	if key == "scored" {
-		channel = flowOf(g.GuildID).resultsChannel(channel) // the server may want results somewhere else
+		channel = ResultsChannelFor(g.GuildID, channel) // results go to the profile's channel, else game_logs, not the game chat that gets cleaned up
 	}
 	m, err := s.ChannelMessageSendComplex(channel, send)
 	if err != nil {
