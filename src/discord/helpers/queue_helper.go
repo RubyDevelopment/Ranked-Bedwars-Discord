@@ -487,6 +487,8 @@ func sendQueueAlert(s *discordgo.Session, guildID, userID string, embed *discord
 	if err != nil {
 		queueLogger.Warn(fmt.Sprintf("Failed to send queue alert to %s in guild %s: %v", userID, guildID, err))
 	}
+	// Staff hear about it too when the server asked for queue-denied alerts (Game phases > Post-game > Results and alerts).
+	StaffAlert(s, guildID, "queue_denied", fmt.Sprintf("<@%s> was refused a place in the queue.", userID), &discordgo.MessageEmbedField{Name: "Why", Value: firstNonEmpty(embed.Description, "No reason given")})
 }
 
 func init() { registerGameEffects() }

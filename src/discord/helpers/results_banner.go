@@ -35,31 +35,50 @@ func resultsTeams(g Game) []ResultsTeam {
 	return out
 }
 
-// postResultsBanner draws the match results card for a scored game and posts it in the game's chat. A server's own
-// "results" banner (Banner Builder) is used when it has one, the built-in card otherwise. The "scored" embed can switch it
-// off with "banner": false. A card that cannot be drawn is logged and skipped: the scored embed already told the result.
-func (d *gameDiscord) postResultsBanner(s *discordgo.Session, g Game) {
-	if t, ok := flowOf(g.GuildID).embedFor("scored"); ok && t.Banner != nil && !*t.Banner {
-		return
+// resultsPNG draws the match results card of a scored game, or returns nil when there is none to post: the server turned it off, the
+// scored embed switched it off with "banner": false, or no player was rated. A server's own "results" banner (Banner Builder) is used
+// when it has one and can be drawn, the built-in card otherwise.
+func (d *gameDiscord) resultsPNG(g Game) []byte {
+	flow := flowOf(g.GuildID)
+	if flow.Delivery.ResultsMode == "off" {
+		return nil
+	}
+	if t, ok := flow.embedFor("scored"); ok && t.Banner != nil && !*t.Banner {
+		return nil
 	}
 	teams := resultsTeams(g)
-	if len(teams) == 0 || g.Channels.Text == "" {
-		return
-	}
-	b := LoadBanners(g.GuildID).Choose("results", Viewer{}, "")
-	if b == nil {
-		b = DefaultResultsBanner(teams)
+	if len(teams) == 0 {
+		return nil
 	}
 	season := "Season"
 	if key, _, err := ActiveSeasonKey(g.GuildID); err == nil && key != "" {
 		season = key
 	}
-	png, err := RenderBanner(b, ResultsVars(g.Number, season, g.Mode.Name, g.Map, teams))
+	vars := ResultsVars(g.Number, season, g.Mode.Name, g.Map, teams)
+	if flow.Delivery.ResultsMode != "builtin" {
+		if custom := LoadBanners(g.GuildID).Choose("results", Viewer{}, ""); custom != nil {
+			if png, err := RenderBanner(custom, vars); err == nil {
+				return png
+			} else {
+				log.Printf("results banner of the server for game %d (using the built-in card): %v", g.ID, err)
+			}
+		}
+	}
+	png, err := RenderBanner(DefaultResultsBanner(teams), vars)
 	if err != nil {
 		log.Printf("results banner for game %d: %v", g.ID, err)
+		return nil
+	}
+	return png
+}
+
+// sendResultsPNG posts the card on its own, where the server wants results (the game's chat by default).
+func (d *gameDiscord) sendResultsPNG(s *discordgo.Session, g Game, png []byte) {
+	channel := flowOf(g.GuildID).resultsChannel(g.Channels.Text)
+	if channel == "" {
 		return
 	}
-	if _, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{Files: []*discordgo.File{{Name: "results.png", ContentType: "image/png", Reader: bytes.NewReader(png)}}}); err != nil {
+	if _, err := s.ChannelMessageSendComplex(channel, &discordgo.MessageSend{Files: []*discordgo.File{{Name: "results.png", ContentType: "image/png", Reader: bytes.NewReader(png)}}}); err != nil {
 		log.Printf("post results banner for game %d: %v", g.ID, err)
 	}
 }

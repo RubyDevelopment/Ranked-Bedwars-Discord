@@ -80,7 +80,11 @@ type Asset = types.Asset
 type Banner struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
-	Command    string     `json:"command"` // "stats", "leaderboard", "profile" or "custom:<name>"
+	Command    string     `json:"command"` // "stats", "leaderboard", "profile", "results" or "custom:<name>"
+	// Mode is "layers" (drawn here from Layers) or "html" (HTML and CSS, drawn by the dashboard: see banner_remote.go).
+	Mode string `json:"mode"`
+	HTML string `json:"html"`
+	CSS  string `json:"css"`
 	Enabled    bool       `json:"enabled"`
 	Width      int        `json:"width"`
 	Height     int        `json:"height"`
@@ -88,7 +92,8 @@ type Banner struct {
 	Layers     []*Layer   `json:"layers"`
 	Access     Access     `json:"access"`
 
-	assets map[string]Asset // set by Parse, for asset: sources
+	assets  map[string]Asset // set by Parse, for asset: sources
+	guildID string           // set by LoadBanners, so an html banner can be drawn for its guild
 }
 
 // Background is defined in package types (banners.go).
@@ -531,6 +536,9 @@ const maxSide = 2400
 // RenderBanner draws banner b with vars filled in and returns it as a PNG. A layer that cannot be drawn (an
 // image that will not load) is skipped or shown as a placeholder: one bad link never loses the banner.
 func RenderBanner(b *Banner, vars Vars) ([]byte, error) {
+	if b.Mode == "html" {
+		return renderRemote(b, vars)
+	}
 	w, h := b.Width, b.Height
 	if w < 50 || h < 50 || w > maxSide || h > maxSide {
 		return nil, errors.New("banner size is out of range")
@@ -939,6 +947,11 @@ func LoadBanners(guildID string) *Doc {
 	doc, err := ParseBanners([]byte(cfg.BannerLayouts))
 	if err != nil {
 		return &Doc{}
+	}
+	for _, b := range doc.Banners {
+		if b != nil {
+			b.guildID = guildID
+		}
 	}
 	return doc
 }

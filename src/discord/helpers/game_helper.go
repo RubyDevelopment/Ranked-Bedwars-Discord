@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -730,11 +731,18 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		}
 		d.forget(g.ID)
 	case EventScored:
-		d.post(s, g, "scored", embedData{})
+		// One message: the scored embed (text, mentions, a box or none) with the results card attached. When the server switched that
+		// embed off, the card alone is posted.
+		go func() {
+			png := d.resultsPNG(g)
+			if !d.post(s, g, "scored", embedData{File: png}) && len(png) > 0 {
+				d.sendResultsPNG(s, g, png)
+			}
+		}()
 		if g.Bot == "" {
 			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
 		}
-		go d.postResultsBanner(s, g)
+		StaffAlert(s, g.GuildID, "game_scored", scoreSummary(g))
 		d.forget(g.ID)
 	case EventChatVote:
 		n, _ := strconv.Atoi(ev.Vars["number"])
@@ -746,9 +754,11 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		}
 		// The same "Submit your win" message hosting by hand posts: players send their win to staff.
 		d.post(s, g, "matchStartedManual", embedData{Vars: map[string]string{"reason": reason}})
+		StaffAlert(s, g.GuildID, "tracking_lost", fmt.Sprintf("Game #%d is no longer tracked by the bot: %s", g.Number, reason))
 		d.forget(g.ID)
 	case EventVoided:
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
+		StaffAlert(s, g.GuildID, "game_voided", fmt.Sprintf("Game #%d was voided.", g.Number), &discordgo.MessageEmbedField{Name: "Reason", Value: firstNonEmpty(ev.Reason, "No reason given")})
 		d.forget(g.ID)
 	}
 }
@@ -1006,13 +1016,25 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		}
 	}
 	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}, Components: buttons}
+	if len(data.File) > 0 {
+		send.Files = []*discordgo.File{{Name: "results.png", ContentType: "image/png", Reader: bytes.NewReader(data.File)}}
+		if embedIsEmpty(emb) || (t.Box != nil && !*t.Box) {
+			send.Embeds = nil // nothing to show in a box: the message is its text and the picture, like a plain post
+		} else if emb.Image == nil {
+			emb.Image = &discordgo.MessageEmbedImage{URL: "attachment://results.png"}
+		}
+	}
 	if content != nil { // the template says what goes above the embed, even nothing
 		send.Content = *content
 	}
 	if send.Content != "" {
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
 	}
-	m, err := s.ChannelMessageSendComplex(g.Channels.Text, send)
+	channel := g.Channels.Text
+	if key == "scored" {
+		channel = flowOf(g.GuildID).resultsChannel(channel) // the server may want results somewhere else
+	}
+	m, err := s.ChannelMessageSendComplex(channel, send)
 	if err != nil {
 		return false
 	}
@@ -1917,6 +1939,7 @@ type embedTemplate struct {
 	Content     *string       `json:"content,omitempty"` // text above the embed: variables work, {mentions} pings the players
 	Fields      *[]embedField `json:"fields,omitempty"`
 	Buttons     *bool         `json:"buttons,omitempty"`
+	Box         *bool         `json:"box,omitempty"`    // false: no embed box, only the text above it (and the picture, when there is one)
 	Banner      *bool         `json:"banner,omitempty"` // the "scored" embed: also post the match results card (see results_banner.go); on unless false // the host buttons under the party and team embeds (see host_buttons.go); on unless false
 
 	// How the {teamPlayers} list of a team is written. PlayerLine is one player, PlayerLineOut one who is out of the match
@@ -2011,6 +2034,9 @@ func (t embedTemplate) merge(o embedTemplate) embedTemplate {
 	if o.Banner != nil {
 		t.Banner = o.Banner
 	}
+	if o.Box != nil {
+		t.Box = o.Box
+	}
 	if o.Fields != nil {
 		t.Fields = o.Fields
 	}
@@ -2074,6 +2100,7 @@ type guildFlow struct {
 	Replies        map[string]*stepReply // step id -> the message built in that Announce step
 	PartyInvite    string                // the profile's party invite command, with {players}
 	ButtonLabels   map[string]string     // host button id -> its text (hosting.buttons), blank = the default
+	Delivery       delivery              // where results and staff alerts go (delivery_helper.go)
 	MapVote        struct {              // hosting.mapVote; zero values mean the defaults
 		Seconds float64
 		Perks   *bool
@@ -2184,6 +2211,17 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 					PGKickLabel      string `json:"pgKickLabel"`
 				} `json:"buttons"`
 			} `json:"hosting"`
+			Delivery struct {
+				Results struct {
+					ChannelID string `json:"channel_id"`
+					Mode      string `json:"mode"`
+				} `json:"results"`
+				Alerts struct {
+					ChannelID string          `json:"channel_id"`
+					RoleID    string          `json:"role_id"`
+					Events    map[string]bool `json:"events"`
+				} `json:"alerts"`
+			} `json:"delivery"`
 			Messages []struct {
 				ID    string          `json:"id"`
 				Reply json.RawMessage `json:"reply"`
@@ -2198,6 +2236,10 @@ func parseGuildFlow(raw json.RawMessage) guildFlow {
 	b := server.Profile.Hosting.Buttons
 	f.MapVote.Seconds, f.MapVote.Perks, f.MapVote.Winner, f.MapVote.Enabled = server.Profile.Hosting.MapVote.DurationSec, server.Profile.Hosting.MapVote.UsePerks, server.Profile.Hosting.MapVote.Winner, server.Profile.Hosting.MapVote.Enabled
 	f.MapVote.Manual = server.Profile.Hosting.MapVote.Manual
+	f.Delivery = delivery{
+		ResultsChannel: server.Profile.Delivery.Results.ChannelID, ResultsMode: server.Profile.Delivery.Results.Mode,
+		AlertsChannel: server.Profile.Delivery.Alerts.ChannelID, AlertRole: server.Profile.Delivery.Alerts.RoleID, Alerts: server.Profile.Delivery.Alerts.Events,
+	}
 	f.ButtonLabels = map[string]string{"party_warp": b.PartyWarpLabel, "party_invite": b.PartyInviteLabel, "game_warp": b.GameWarpLabel, "pg_kick": b.PGKickLabel}
 	if server.Profile.Pipeline == nil { // no flow saved at all: the default one posts the introduction; an empty flow posts nothing
 		f.Announced["introduction"] = true
@@ -2264,6 +2306,7 @@ type embedData struct {
 	MapRows    []map[string]string // per-map values of the map vote ({mapName}, {mapIcon}, {mapScore}, {winnerTag})
 	Invited    []string            // ... invited to the party but not joined yet
 	Force      bool                // draw it even when the guild switched the embed off: the vote and the draft cannot be skipped
+	File       []byte              // a picture (the results card) sent with the message: it is the embed's image, or the whole message when the embed has no text
 }
 
 func fill(text string, vars map[string]string) string {
@@ -6391,4 +6434,9 @@ func (f FlowSettings) CaptainFor(m types.Mode) CaptainFlow {
 		c.MaxPartySize = x.MaxPartySize
 	}
 	return c
+}
+
+// embedIsEmpty says whether an embed would show nothing worth a box (Discord refuses one too): no title, text, fields, author or footer.
+func embedIsEmpty(e *discordgo.MessageEmbed) bool {
+	return strings.TrimSpace(e.Title) == "" && strings.TrimSpace(e.Description) == "" && len(e.Fields) == 0 && e.Author == nil && (e.Footer == nil || strings.TrimSpace(e.Footer.Text) == "") && e.Image == nil && e.Thumbnail == nil
 }
