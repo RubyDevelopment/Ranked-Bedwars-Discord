@@ -1320,6 +1320,8 @@ var controlActions = map[string]bool{
 	"inventory": true, "state": true, "control": true, "control.stop": true, "look": true, "swing": true, "block.use": true,
 	"respawn": true, "connect": true, "disconnect": true, "keepalive": true,
 	"scoreboard": true, "tab": true, "entities": true, "entity.use": true, "entity.attack": true, "bossbars": true,
+	// The bot log: what every bot of the guild did, read from the engine's files (a dashboard route for staff asks for it).
+	"logs.read": true,
 	// Trying a server profile on a live bot (Game phases › Run): the run carries the profile, so it may be large.
 	"experiment.start": true, "experiment.run": true, "experiment.end": true, "experiment.pause": true, "experiment.resume": true, "experiment.step": true, "experiment.stop": true, "experiment.status": true,
 }
