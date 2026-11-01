@@ -1067,7 +1067,12 @@ func (d *gameDiscord) matchEvent(s *discordgo.Session, g Game, ev *MatchEvent) {
 	st := d.state(g.ID)
 	switch ev.Kind {
 	case "kill":
+		killVars := map[string]string{"killer": mention(ev.Killer), "victim": mention(ev.Victim)}
+		if ev.FirstBlood {
+			d.post(s, g, "firstBlood", embedData{Vars: killVars})
+		}
 		if !ev.Final {
+			d.post(s, g, "kill", embedData{Vars: killVars})
 			return
 		}
 		d.mu.Lock()

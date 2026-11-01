@@ -6093,6 +6093,8 @@ var defaultEmbeds = map[string]embedTemplate{
 	"liveTracker": tpl("info", "Game #{game} Live Match Tracker",
 		"Here is a real-time team rosters and elimination status for the `{mode}` match!\n\n**Time Elapsed:** <t:{startedAt}:R>",
 		embedField{Name: "{team} {bed}", Value: "{teamPlayers}", Inline: true, Each: "team"}),
+	"kill":           off(tpl("info", "Kill", "{killer} killed {victim}.")),
+	"firstBlood":     off(tpl("caution", "First Blood", "{killer} drew first blood on {victim}.")),
 	"bedDestroyed":   off(tpl("caution", "Bed Destroyed", "**{team}**'s bed was destroyed by {destroyer}.")),
 	"finalKill":      off(tpl("info", "Final Kill", "{killer} eliminated {victim}.")),
 	"teamEliminated": off(tpl("caution", "Team Eliminated", "**{team}** has been eliminated.")),
