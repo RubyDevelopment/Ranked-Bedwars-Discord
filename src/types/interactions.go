@@ -136,6 +136,40 @@ const CommandLogsKey = "command_logs"
 // ModerationAlertsKey is the optional channel requirement for punishment alerts (expiry, enforcement).
 const ModerationAlertsKey = "moderation_alerts"
 
+// Channel requirements shared by game commands and game events: one assignment on either side applies to both (the dashboard's
+// Commands and Events pages, /config).
+const (
+	GameLogsKey    = "game_logs"    // every game event is recorded here
+	GameAlertsKey  = "game_alerts"  // staff are told here when a game needs eyes
+	DecayAlertsKey = "decay_alerts" // ELO decay notices go here when a queue sets no alert channel of its own
+)
+
+// GameChannelRequirements are the optional log and alert channels every game command and game event shares.
+var GameChannelRequirements = []Requirement{
+	{Type: ReqChannel, Key: GameLogsKey, Optional: true},
+	{Type: ReqChannel, Key: GameAlertsKey, Optional: true},
+}
+
+// GameRequirements is StaffRequirements plus the shared game channels.
+func GameRequirements() []Requirement {
+	return append(append([]Requirement{}, StaffRequirements...), GameChannelRequirements...)
+}
+
+// PunishmentEventRequirements is every punishment's log and alert channel (and the roles they hand out), for the event that
+// ends timed punishments: the keys are the commands' own, so assigning either side assigns both.
+func PunishmentEventRequirements() []Requirement {
+	reqs := []Requirement{{Type: ReqChannel, Key: ModerationAlertsKey, Optional: true}}
+	for _, k := range []string{"server_ban", "server_kick", "chat_mute", "queue_ban", "strike", "warn", "vc_mute"} {
+		reqs = append(reqs,
+			Requirement{Type: ReqChannel, Key: k + "_logs", Optional: true},
+			Requirement{Type: ReqChannel, Key: k + "_alerts", Optional: true})
+	}
+	for _, k := range []string{"chat_muted_role", "queue_banned_role", "vc_muted_role"} {
+		reqs = append(reqs, Requirement{Type: ReqRole, Key: k, Grants: true})
+	}
+	return reqs
+}
+
 // ModerationRequirements is declared by every moderation command. Requirements are identified by type and key, so one
 // assignment of each (/config channel|role set) applies to all of them.
 var ModerationRequirements = []Requirement{

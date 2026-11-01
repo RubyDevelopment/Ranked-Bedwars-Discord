@@ -23,7 +23,7 @@ func init() {
 // GameScoreCommand scores a game in progress by marking the winning team.
 var GameScoreCommand = &types.Command{
 	Name:         "score",
-	Requirements: types.StaffRequirements,
+	Requirements: types.GameRequirements(),
 	Description:  "Scores a game in progress by marking the winning team.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

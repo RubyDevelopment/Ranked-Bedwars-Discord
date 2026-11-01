@@ -25,9 +25,10 @@ func init() {
 
 // GameHistoryCommand Retrieves the detailed match history and past game outcomes for a player.
 var GameHistoryCommand = &types.Command{
-	Name:        "games",
-	Description: "Retrieves the detailed match history and past game outcomes for a player.",
-	Cooldown:    3 * time.Second,
+	Name:         "games",
+	Requirements: types.GameChannelRequirements,
+	Description:  "Retrieves the detailed match history and past game outcomes for a player.",
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

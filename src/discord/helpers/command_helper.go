@@ -2280,8 +2280,51 @@ func SetRequirementSlotID(actor, guildID, cmdName string, reqType types.Requirem
 		return fmt.Errorf("unsupported requirement type %q", reqType)
 	}
 
-	err = database.Must().GuildConfig.SaveField(actor, guildID, "commands", commandsMap)
-	return err
+	if err := database.Must().GuildConfig.SaveField(actor, guildID, "commands", commandsMap); err != nil {
+		return err
+	}
+	return syncEventRequirementSlot(actor, guildID, reqType, key, id)
+}
+
+// Event names the shared requirements are looked up under.
+const (
+	DecaySweeperEventName = "Decay Sweeper"
+	HostGameEventName     = "Host Game Panel"
+)
+
+// syncEventRequirementSlot makes an assignment made on a command apply to every event that declares the same requirement, as the
+// Events page does the other way round.
+func syncEventRequirementSlot(actor, guildID string, reqType types.RequirementType, key, id string) error {
+	configs, err := loadEventConfigs(guildID, false)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for name, cfg := range configs {
+		var m map[string]types.RequirementSlot
+		switch reqType {
+		case types.ReqRole:
+			m = cfg.RequiredRoles
+		case types.ReqChannel:
+			m = cfg.RequiredChannels
+		case types.ReqCategory:
+			m = cfg.RequiredCategories
+		}
+		if slot, ok := m[key]; ok && slot.ID != id {
+			slot.ID = id
+			m[key] = slot
+			configs[name] = cfg
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	if err := database.Must().GuildConfig.SaveField(actor, guildID, eventConfigField, configs); err != nil {
+		return err
+	}
+	InvalidateEventConfig(guildID)
+	return nil
 }
 
 // assignRequirementSlot points the slot (reqType, key) at id on cmdName and on every command that already has that

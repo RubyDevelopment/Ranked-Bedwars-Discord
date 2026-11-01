@@ -23,7 +23,7 @@ func init() {
 // GamePartialVoidCommand reverses only the losing team's stats for a game.
 var GamePartialVoidCommand = &types.Command{
 	Name:          "partialvoid",
-	Requirements:  types.StaffRequirements,
+	Requirements:  types.GameRequirements(),
 	Description:   "Partially voids a game by reversing only the losing team's stats.",
 	PrefixAliases: []string{"pvg", "pv"},
 	Ephemeral:     true,

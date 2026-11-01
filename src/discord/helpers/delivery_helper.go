@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+
+	"ranked-bedwars/src/types"
 )
 
 // How a server wants the outcome of its games delivered. It lives in the server profile (Game phases > Post-game > Results and alerts):
@@ -62,10 +64,23 @@ func StaffAlert(s *discordgo.Session, guildID, key, description string, fields .
 	}
 	flow := flowOf(guildID)
 	kind, known := AlertKinds[key]
-	if !known || !flow.alertOn(key) {
+	if !known {
 		return
 	}
-	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{{Title: kind.Title, Description: description, Color: kind.Color, Fields: fields}}}
+	embed := &discordgo.MessageEmbed{Title: kind.Title, Description: description, Color: kind.Color, Fields: fields}
+	// Every game event is recorded in the shared game_logs channel; only the alerts the profile leaves on reach staff.
+	if logs := EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameLogsKey); logs != "" {
+		if _, err := s.ChannelMessageSendEmbed(logs, embed); err != nil {
+			log.Printf("game log %s for guild %s: %v", key, guildID, err)
+		}
+	}
+	if strings.TrimSpace(flow.Delivery.AlertsChannel) == "" { // the profile names none: the shared game_alerts channel
+		flow.Delivery.AlertsChannel = EventRequirementID(guildID, HostGameEventName, types.ReqChannel, types.GameAlertsKey)
+	}
+	if !flow.alertOn(key) {
+		return
+	}
+	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}
 	if role := strings.TrimSpace(flow.Delivery.AlertRole); role != "" {
 		send.Content = "<@&" + role + ">"
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Roles: []string{role}}

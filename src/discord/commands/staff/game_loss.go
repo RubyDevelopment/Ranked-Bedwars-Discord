@@ -27,7 +27,7 @@ func init() {
 // GameLossCommand removes loss-equivalent ELO from a registered player without recording a game.
 var GameLossCommand = &types.Command{
 	Name:         "loss",
-	Requirements: types.StaffRequirements,
+	Requirements: types.GameRequirements(),
 	Description:  "Removes loss-equivalent ELO from a registered player without recording a game.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

@@ -30,7 +30,7 @@ func init() {
 // GameHostCommand builds a custom game with a setup panel and manages the ones running.
 var GameHostCommand = &types.Command{
 	Name:         "host",
-	Requirements: types.StaffRequirements,
+	Requirements: types.GameRequirements(),
 	Description:  "Creates a custom game with a setup panel, or manages the hosted games that are running.",
 	Ephemeral:    true,
 	Cooldown:     3 * time.Second,

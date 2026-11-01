@@ -23,7 +23,7 @@ func init() {
 // QueueSubstituteCommand swaps a player in a running hosted game for a substitute on the same team.
 var QueueSubstituteCommand = &types.Command{
 	Name:         "substitute",
-	Requirements: types.StaffRequirements,
+	Requirements: types.GameRequirements(),
 	Description:  "Swaps a player in a hosted game for a substitute on the same team.",
 	Ephemeral:    true,
 	Cooldown:     5 * time.Second,

@@ -96,6 +96,9 @@ func deliverDecayNotice(n DecayNotice) bool {
 	}
 
 	via, channelID := n.Config.Via(), n.Config.AlertChannelID
+	if channelID == "" { // the queue sets none: the shared decay alerts channel (Events page, or any command that declares it)
+		channelID = EventRequirementID(n.GuildID, DecaySweeperEventName, types.ReqChannel, types.DecayAlertsKey)
+	}
 	sent := false
 	if via == "dm" || via == "both" {
 		if dm, err := s.UserChannelCreate(n.UserID); err == nil {
