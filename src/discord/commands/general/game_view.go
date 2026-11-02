@@ -1,11 +1,14 @@
 package general
 
 import (
+	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -73,7 +76,33 @@ func executeGameViewCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.GameViewOverviewEmbed(i, game))
+	return helpers.EditInteractionEmbed(s, i, helpers.GameViewOverviewEmbed(i, game, gameRatios(i.GuildID, game)))
+}
+
+// gameRatios looks up each player's season W/L and K/D (nil when there is no active season).
+func gameRatios(guildID string, game helpers.Game) map[string]string {
+	_, seasonID, err := helpers.ActiveSeasonKey(guildID)
+	if err != nil || seasonID == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(game.Players))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, p := range game.Players {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			wlr, kdr := "0.00", "0.00"
+			if st, err := database.Must().Stats.Get(guildID, p.UserID, seasonID); err == nil {
+				wlr, kdr = helpers.Ratio(st.Wins, st.Losses), helpers.Ratio(st.Kills, st.Deaths)
+			}
+			mu.Lock()
+			out[p.UserID] = "W/L **" + wlr + "** · K/D **" + kdr + "**"
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return out
 }
 
 // ============================================================================

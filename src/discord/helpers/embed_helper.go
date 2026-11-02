@@ -1558,7 +1558,8 @@ func GameViewNoGameEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed
 	})
 }
 
-func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo.MessageEmbed {
+// ratios maps a user id to the "W/L x · K/D y" text shown beside that player.
+func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game Game, ratios map[string]string) *discordgo.MessageEmbed {
 	var description strings.Builder
 
 	// Basic info
@@ -1575,21 +1576,22 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo
 		description.WriteString(fmt.Sprintf("**Started:** %s\n", game.StartedAt.UTC().Format("Jan 2, 2006 15:04")))
 	}
 
-	// Teams
-	if len(game.Teams) > 0 {
-		description.WriteString("\n**Teams:**\n")
-		for _, teamName := range game.Teams {
-			teamPlayers := game.TeamPlayers(teamName)
-			playerList := make([]string, len(teamPlayers))
-			for idx, p := range teamPlayers {
-				captainMark := ""
-				if p.Captain {
-					captainMark = "👑 "
-				}
-				playerList[idx] = fmt.Sprintf("%s<@%s>", captainMark, p.UserID)
+	// Teams, side by side
+	var fields []*discordgo.MessageEmbedField
+	for _, teamName := range game.Teams {
+		teamPlayers := game.TeamPlayers(teamName)
+		rows := make([]string, len(teamPlayers))
+		for idx, p := range teamPlayers {
+			captainMark := ""
+			if p.Captain {
+				captainMark = "👑 "
 			}
-			description.WriteString(fmt.Sprintf("> **%s:** %s\n", teamName, strings.Join(playerList, ", ")))
+			rows[idx] = fmt.Sprintf("%s<@%s>", captainMark, p.UserID)
+			if r, ok := ratios[p.UserID]; ok {
+				rows[idx] += " · " + r
+			}
 		}
+		fields = append(fields, &discordgo.MessageEmbedField{Name: teamName, Value: strings.Join(rows, "\n"), Inline: true})
 	}
 
 	// Custom game info
@@ -1619,32 +1621,10 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo
 		description.WriteString(fmt.Sprintf("**MVP:** <@%s>\n", game.MVP))
 	}
 
-	// Channels
-	if game.Channels.Text != "" {
-		description.WriteString("\n**Channels:**\n")
-		description.WriteString(fmt.Sprintf("> **Text:** <#%s>\n", game.Channels.Text))
-		if len(game.Channels.Voice) > 0 {
-			for team, channelID := range game.Channels.Voice {
-				description.WriteString(fmt.Sprintf("> **%s Voice:** <#%s>\n", team, channelID))
-			}
-		}
-	}
-
-	// Duration if in game or completed
-	if !game.StartedAt.IsZero() {
-		var endTime time.Time
-		if game.State == GameCleanup || game.State == GameVoided {
-			endTime = game.StateAt
-		} else {
-			endTime = time.Now()
-		}
-		duration := endTime.Sub(game.StartedAt)
-		description.WriteString(fmt.Sprintf("\n**Duration:** %s\n", duration.Round(time.Second)))
-	}
-
 	return Preset("info", types.PresetOptions{
 		Title:       fmt.Sprintf("Game Information · #%d", game.Number),
 		Description: description.String(),
+		Fields:      fields,
 		Thumbnail:   ThumbDoubleSwords,
 	})
 }
