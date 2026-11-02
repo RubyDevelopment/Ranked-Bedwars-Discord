@@ -9,7 +9,7 @@ import (
 func TestEventInheritsWhatCommandsAlreadyHave(t *testing.T) {
 	commands := map[string]types.CommandConfig{
 		"mute":  {RequiredChannels: map[string]types.RequirementSlot{"chat_mute_logs": {ID: "111"}}, RequiredRoles: map[string]types.RequirementSlot{"chat_muted_role": {ID: "222"}}},
-		"unban": {RequiredChannels: map[string]types.RequirementSlot{"server_ban_logs": {}}},
+		"serverunban": {RequiredChannels: map[string]types.RequirementSlot{"server_ban_logs": {}}},
 	}
 	event := types.EventConfig{
 		RequiredChannels: map[string]types.RequirementSlot{"chat_mute_logs": {}, "server_ban_logs": {}, "warn_logs": {ID: "keep"}},

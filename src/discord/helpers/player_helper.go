@@ -1011,9 +1011,11 @@ func SyncRegisteredPlayerProfile(
 		return nil, err
 	}
 
-	member, err := FetchGuildMember(s, guildID, discordUserID)
+	member, err := s.GuildMember(guildID, discordUserID)
 	if err != nil || member == nil {
-		return nil, err
+		if member, err = FetchGuildMember(s, guildID, discordUserID); err != nil || member == nil {
+			return nil, err
+		}
 	}
 
 	_, seasonID, err := ActiveSeasonKey(guildID)
@@ -1066,6 +1068,9 @@ func SyncRegisteredPlayerProfile(
 	if member != nil && member.Nick != expectedNick {
 		if err := SetMemberNickname(s, guildID, discordUserID, expectedNick); err == nil {
 			actions = append(actions, fmt.Sprintf("Updated server nickname to **%s**.", expectedNick))
+		} else {
+			appLogf("nickname sync for %s in guild %s: %v", discordUserID, guildID, err)
+			actions = append(actions, fmt.Sprintf("Could not set the server nickname to **%s** (the bot needs Manage Nicknames and a role above the member; server owners cannot be renamed).", expectedNick))
 		}
 	}
 

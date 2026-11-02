@@ -1034,12 +1034,15 @@ func (m *EloManager) syncRank(actor, guildID, userID string, st *models.PlayerSt
 		return st.Rank, err
 	}
 	r := RankFor(ranks, elo)
-	if r == nil || r.RankName == "" || r.RankName == st.Rank {
+	if r == nil || r.RankName == "" {
 		return st.Rank, nil
 	}
-	if _, err := m.api().Patch(actor, guildID, userID, st.SeasonID, map[string]any{"rank": r.RankName}); err != nil {
-		return st.Rank, err
+	if r.RankName != st.Rank {
+		if _, err := m.api().Patch(actor, guildID, userID, st.SeasonID, map[string]any{"rank": r.RankName}); err != nil {
+			return st.Rank, err
+		}
 	}
+	// The hook runs on every ELO change, not only a rank change: the nickname shows the ELO.
 	m.mu.RLock()
 	hook := m.rankSync
 	m.mu.RUnlock()

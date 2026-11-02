@@ -23,7 +23,7 @@ func init() {
 
 // ModerationQueueUnbanCommand removes a player's active queue ban.
 var ModerationQueueUnbanCommand = &types.Command{
-	Name:          "queueunban",
+	Name:          "unban",
 	Requirements:  types.PunishmentRequirements("queue_ban_logs", "queue_banned_role"),
 	Description:   "Removes a queue ban from a player.",
 	PrefixAliases: []string{"qunban"},
@@ -41,7 +41,7 @@ var ModerationQueueUnbanCommand = &types.Command{
 
 func executeModerationQueueUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
-		Command:   "queueban",
+		Command:   "ban",
 		Ladder:    "queue_ban",
 		RoleKey:   "queue_banned_role",
 		Action:    "Queue Ban",

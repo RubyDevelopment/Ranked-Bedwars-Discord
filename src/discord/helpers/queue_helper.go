@@ -23,7 +23,7 @@ const (
 	QueueEventName = "Queue"
 
 	// Requirement key of the Queue event, assigned on the dashboard's Queue Config page.
-	QueueRoleBanned = "queue_banned" // optional: members with this role can't queue (the queueban command's bans are checked too)
+	QueueRoleBanned = "queue_banned" // optional: members with this role can't queue (the ban command's bans are checked too)
 
 	partyCmdName   = "party"
 	partyAlertsKey = "party_alerts"
@@ -180,7 +180,7 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 
 	bannedRoles := []string{
 		EventRequirementID(guildID, QueueEventName, types.ReqRole, QueueRoleBanned),
-		LadderRole(guildID, "queue_ban"), // the role /queueban hands out
+		LadderRole(guildID, "queue_ban"), // the role /ban hands out
 	}
 	for _, id := range bannedRoles {
 		if id == "" || !memberHasRole(s, guildID, userID, id) {

@@ -1,45 +1,45 @@
 {
 	"commands": [
 		{
-			"name": "ban",
+			"name": "serverban",
 			"responses": [
 				{
-					"key": "ban.invalid-target",
+					"key": "serverban.invalid-target",
 					"slug": "invalid-target",
 					"title": "Invalid Target",
 					"look": "error",
 					"description": "You cannot … yourself. Select a different member to moderate."
 				},
 				{
-					"key": "ban.reason-required",
+					"key": "serverban.reason-required",
 					"slug": "reason-required",
 					"title": "Reason Required",
 					"look": "error",
 					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
 				},
 				{
-					"key": "ban.unexpected-error",
+					"key": "serverban.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
 					"look": "error",
 					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
 				},
 				{
-					"key": "ban.punishment-already-active",
+					"key": "serverban.punishment-already-active",
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "ban.hierarchy-error",
+					"key": "serverban.hierarchy-error",
 					"slug": "hierarchy-error",
 					"title": "Hierarchy Error",
 					"look": "error",
 					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
 				},
 				{
-					"key": "ban.server-ban-applied",
+					"key": "serverban.server-ban-applied",
 					"slug": "server-ban-applied",
 					"title": "Server Ban Applied",
 					"look": "success",
@@ -1837,45 +1837,45 @@
 			]
 		},
 		{
-			"name": "queueban",
+			"name": "ban",
 			"responses": [
 				{
-					"key": "queueban.invalid-target",
+					"key": "ban.invalid-target",
 					"slug": "invalid-target",
 					"title": "Invalid Target",
 					"look": "error",
 					"description": "You cannot … yourself. Select a different member to moderate."
 				},
 				{
-					"key": "queueban.reason-required",
+					"key": "ban.reason-required",
 					"slug": "reason-required",
 					"title": "Reason Required",
 					"look": "error",
 					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
 				},
 				{
-					"key": "queueban.unexpected-error",
+					"key": "ban.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
 					"look": "error",
 					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
 				},
 				{
-					"key": "queueban.punishment-already-active",
+					"key": "ban.punishment-already-active",
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "queueban.hierarchy-error",
+					"key": "ban.hierarchy-error",
 					"slug": "hierarchy-error",
 					"title": "Hierarchy Error",
 					"look": "error",
 					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
 				},
 				{
-					"key": "queueban.queue-ban-applied",
+					"key": "ban.queue-ban-applied",
 					"slug": "queue-ban-applied",
 					"title": "Queue Ban Applied",
 					"look": "success",
@@ -1939,38 +1939,38 @@
 			]
 		},
 		{
-			"name": "queueunban",
+			"name": "unban",
 			"responses": [
 				{
-					"key": "queueunban.invalid-target",
+					"key": "unban.invalid-target",
 					"slug": "invalid-target",
 					"title": "Invalid Target",
 					"look": "error",
 					"description": "You must specify a player to …. Select a member from the command options."
 				},
 				{
-					"key": "queueunban.player-not-found",
+					"key": "unban.player-not-found",
 					"slug": "player-not-found",
 					"title": "Player Not Found",
 					"look": "error",
 					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
 				},
 				{
-					"key": "queueunban.unexpected-error",
+					"key": "unban.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
 					"look": "error",
 					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
 				},
 				{
-					"key": "queueunban.punishment-not-active",
+					"key": "unban.punishment-not-active",
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
 					"description": "That player is not currently **…**. Verify their status with `/punishments`."
 				},
 				{
-					"key": "queueunban.queue-ban-removed",
+					"key": "unban.queue-ban-removed",
 					"slug": "queue-ban-removed",
 					"title": "Queue Ban Removed",
 					"look": "success",
@@ -3123,31 +3123,31 @@
 			]
 		},
 		{
-			"name": "unban",
+			"name": "serverunban",
 			"responses": [
 				{
-					"key": "unban.unexpected-error",
+					"key": "serverunban.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
 					"look": "error",
 					"description": "An unexpected error occurred while processing the server unban. Please try again later or contact support."
 				},
 				{
-					"key": "unban.invalid-user-id",
+					"key": "serverunban.invalid-user-id",
 					"slug": "invalid-user-id",
 					"title": "Invalid User ID",
 					"look": "error",
 					"description": "That is not a valid Discord user ID. Provide the 17-20 digit ID of the user to unban."
 				},
 				{
-					"key": "unban.punishment-not-active",
+					"key": "serverunban.punishment-not-active",
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
 					"description": "That player is not currently **server banned**. Verify their status with `/punishments`."
 				},
 				{
-					"key": "unban.server-unban-applied",
+					"key": "serverunban.server-unban-applied",
 					"slug": "server-unban-applied",
 					"title": "Server Unban Applied",
 					"look": "success"

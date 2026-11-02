@@ -292,10 +292,22 @@ func PlanPunishment(guildID, playerID, ladderType, levelName string) (*Punishmen
 	if cfg.OffenceMode == "season_reset" {
 		since = seasonStart(guildID)
 	}
+	// A level can mix actions (warn, then mute, then ban). A command only walks the steps of its own action, counting
+	// only its own earlier punishments, so /ban never lands on a chat mute step.
+	steps := lvl.Steps[:0:0]
+	for _, st := range lvl.Steps {
+		if st.action() == ladderType {
+			steps = append(steps, st)
+		}
+	}
+	ownType := ""
+	if sp := ladderSpecs[ladderType]; sp != nil {
+		ownType = sp.Type
+	}
 	now := time.Now()
 	count := 0
 	for _, p := range prior.Data {
-		if p.LadderLevel != lvl.Key || p.IsVoided || p.IsAppealed || p.CreatedAt.Before(since) {
+		if p.LadderLevel != lvl.Key || p.IsVoided || p.IsAppealed || p.CreatedAt.Before(since) || (ownType != "" && p.Type != ownType) {
 			continue
 		}
 		if cfg.OffenceMode == "active_only" && (!p.IsEnabled || p.RevokedAt != nil || (p.ExpiresAt != nil && !p.ExpiresAt.After(now))) {
@@ -303,8 +315,8 @@ func PlanPunishment(guildID, playerID, ladderType, levelName string) (*Punishmen
 		}
 		count++
 	}
-	idx := min(count, len(lvl.Steps)-1)
-	step := lvl.Steps[idx]
+	idx := min(count, len(steps)-1)
+	step := steps[idx]
 	return &PunishmentPlan{Level: lvl.Key, Step: idx + 1, Action: step.action(), Span: step.span(), Also: step.extras()}, nil
 }
 
@@ -852,7 +864,7 @@ type restrictionRole struct{ command, name string }
 
 var restrictionRoles = map[string]restrictionRole{
 	"mute":     {"mute", "chat_mute"},
-	"ban":      {"queueban", "queue_ban"},
+	"ban":      {"ban", "queue_ban"},
 	"vc_mute":  {"vcmute", "vc_mute"},
 	"restrict": {"vcmute", "vc_mute"},
 }
@@ -861,7 +873,7 @@ var restrictionRoles = map[string]restrictionRole{
 // punishment ladder settings (the assignment made before those settings had role pickers).
 var ladderRoleCommands = map[string]restrictionRole{
 	"chat_mute": {"mute", "chat_muted_role"},
-	"queue_ban": {"queueban", "queue_banned_role"},
+	"queue_ban": {"ban", "queue_banned_role"},
 	"vc_mute":   {"vcmute", "vc_muted_role"},
 }
 
@@ -1034,7 +1046,7 @@ func announceExpiredPunishment(s *discordgo.Session, guildID, userID string, p m
 	if rr, ok := restrictionRoles[p.Type]; ok {
 		command = rr.command
 	} else if p.Type == "server_ban" {
-		command = "unban"
+		command = "serverban"
 	}
 	logPunishmentExpiry(s, guildID, command, userID, p)
 	SendPunishmentAlert(s, guildID, PunishmentNotice{Command: command, Action: "expired", User: &discordgo.User{ID: userID}, Username: userID, Type: p.Type, Reason: p.Reason, By: p.StaffID})
@@ -1123,8 +1135,8 @@ const PunishmentExpiryEventName = "Punishment Expiry"
 var punishmentAlertKeys = map[string]string{
 	"mute": "chat_mute_alerts", "unmute": "chat_mute_alerts",
 	"vcmute": "vc_mute_alerts", "vcunmute": "vc_mute_alerts",
-	"queueban": "queue_ban_alerts", "queueunban": "queue_ban_alerts",
-	"ban": "server_ban_alerts", "unban": "server_ban_alerts",
+	"ban": "queue_ban_alerts", "unban": "queue_ban_alerts",
+	"serverban": "server_ban_alerts", "serverunban": "server_ban_alerts",
 	"warn": "warn_alerts", "unwarn": "warn_alerts",
 	"kick":   "server_kick_alerts",
 	"strike": "strike_alerts", "unstrike": "strike_alerts",

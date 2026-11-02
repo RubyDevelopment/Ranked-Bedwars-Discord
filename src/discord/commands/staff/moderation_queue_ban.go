@@ -24,7 +24,7 @@ func init() {
 
 // ModerationQueueBanCommand bans a player from joining queues by recording a ban restriction.
 var ModerationQueueBanCommand = &types.Command{
-	Name:          "queueban",
+	Name:          "ban",
 	Requirements:  types.PunishmentRequirements("queue_ban_logs", "queue_banned_role"),
 	Description:   "Bans a disruptive player from joining queues.",
 	PrefixAliases: []string{"qban"},
@@ -42,7 +42,7 @@ var ModerationQueueBanCommand = &types.Command{
 // ============================================================================
 
 var queueBanSpec = &helpers.ApplySpec{
-	Command:     "queueban",
+	Command:     "ban",
 	RoleKey:     "queue_banned_role",
 	Action:      "queue ban",
 	Adjective:   "queue banned",

@@ -24,7 +24,7 @@ func init() {
 
 // ModerationBanCommand bans a player from the Discord guild and records the punishment.
 var ModerationBanCommand = &types.Command{
-	Name:         "ban",
+	Name:         "serverban",
 	Requirements: types.PunishmentRequirements("server_ban_logs"),
 	Description:  "Bans a player from the Discord guild.",
 	Cooldown:     3 * time.Second,
@@ -40,7 +40,7 @@ var ModerationBanCommand = &types.Command{
 // ============================================================================
 
 var serverBanSpec = &helpers.ApplySpec{
-	Command:     "ban",
+	Command:     "serverban",
 	Action:      "server ban",
 	Adjective:   "server banned",
 	Summary:     "the server ban",

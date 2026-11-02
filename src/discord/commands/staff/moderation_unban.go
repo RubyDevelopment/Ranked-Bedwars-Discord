@@ -29,7 +29,7 @@ func init() {
 
 // ModerationUnbanCommand removes a Discord guild ban by user ID.
 var ModerationUnbanCommand = &types.Command{
-	Name:         "unban",
+	Name:         "serverunban",
 	Requirements: types.PunishmentRequirements("server_ban_logs"),
 	Description:  "Revokes a guild-wide ban by user ID.",
 	Cooldown:     3 * time.Second,
@@ -122,7 +122,7 @@ func executeModerationUnbanCommand(s *discordgo.Session, i *discordgo.Interactio
 		username = profile.Username
 	}
 	embed := helpers.ModerationUnbanSuccessEmbed(i, targetID, username, reason, unbanned)
-	helpers.LogCommandResult(s, i.GuildID, "unban", actor, embed)
-	helpers.SendPunishmentAlert(s, i.GuildID, helpers.PunishmentNotice{Command: "ban", Action: "revoked", User: &discordgo.User{ID: targetID}, Username: username, Type: "server_ban", Reason: reason, By: actor})
+	helpers.LogCommandResult(s, i.GuildID, "serverunban", actor, embed)
+	helpers.SendPunishmentAlert(s, i.GuildID, helpers.PunishmentNotice{Command: "serverban", Action: "revoked", User: &discordgo.User{ID: targetID}, Username: username, Type: "server_ban", Reason: reason, By: actor})
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
