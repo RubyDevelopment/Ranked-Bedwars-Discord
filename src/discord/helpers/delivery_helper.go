@@ -159,8 +159,5 @@ func voidAlert(g Game, reason string) (string, []*discordgo.MessageEmbedField) {
 	if !teamed && len(g.Players) > 0 {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: fmt.Sprintf("Players (%d)", len(g.Players)), Value: lines(g.Players)})
 	}
-	if g.Channels.Text != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Game channel", Value: "<#" + g.Channels.Text + ">", Inline: true})
-	}
 	return desc, fields
 }

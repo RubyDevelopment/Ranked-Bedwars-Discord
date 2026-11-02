@@ -1856,6 +1856,33 @@ func draftPing(view DraftView) string {
 	return "<@" + view.Teams[view.Turn][0] + ">"
 }
 
+// PlayerRatios maps each user id to "W/L **x** · K/D **y**" for the active season (0.00 without stats yet);
+// nil when the guild has no active season.
+func PlayerRatios(guildID string, ids []string) map[string]string {
+	_, seasonID, err := ActiveSeasonKey(guildID)
+	if err != nil || seasonID == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(ids))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			wlr, kdr := "0.00", "0.00"
+			if st, err := database.Must().Stats.Get(guildID, id, seasonID); err == nil {
+				wlr, kdr = Ratio(st.Wins, st.Losses), Ratio(st.Kills, st.Deaths)
+			}
+			mu.Lock()
+			out[id] = "W/L **" + wlr + "** · K/D **" + kdr + "**"
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
 // draftRows are the rosters of the captain draft for the "captainPicking" template's per-team fields. The draft has no
 // teams on the game yet, so they come from the draft's own view.
 func draftRows(g Game, view DraftView, t embedTemplate) []map[string]string {
@@ -1913,10 +1940,14 @@ func (d *gameDiscord) draftEmbed(s *discordgo.Session, g Game, view DraftView, u
 		}
 	}
 	remaining := make([]string, 0, len(view.Pool))
+	ratios := PlayerRatios(g.GuildID, view.Pool)
 	for _, id := range view.Pool {
 		line := "- <@" + id + ">"
 		if p, ok := g.Player(id); ok {
 			line += fmt.Sprintf(" · ELO: `%d`", p.EloBefore)
+		}
+		if r, ok := ratios[id]; ok {
+			line += " · " + r
 		}
 		remaining = append(remaining, line)
 	}

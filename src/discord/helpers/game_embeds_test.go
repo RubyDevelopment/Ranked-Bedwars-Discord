@@ -102,8 +102,8 @@ func TestMapVoteShowsEachMapWithItsScoreAndMarksTheWinner(t *testing.T) {
 	if len(emb.Fields) != 2 || emb.Fields[0].Name != "🏆 Garden [WINNER]" || emb.Fields[0].Value != "`Score: 3`" || emb.Fields[1].Name != "🗺️ Ruins" {
 		t.Errorf("fields = %+v", emb.Fields)
 	}
-	if !strings.Contains(renderDescription(t, "mapVoting", d), "using the menu below") {
-		t.Error("the vote keeps the old wording")
+	if !strings.Contains(renderDescription(t, "mapVoting", d), "with the buttons below") {
+		t.Error("the vote lost its wording")
 	}
 }
 
