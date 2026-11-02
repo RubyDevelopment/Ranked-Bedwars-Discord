@@ -116,7 +116,7 @@ func executeModerationPunishmentsCommand(s *discordgo.Session, i *discordgo.Inte
 		activeFlag = "1"
 	}
 	totalPages := helpers.HistoryTotalPages(len(filtered))
-	embed := helpers.BuildPunishmentHistoryEmbed(view.Config.Username, filtered, 0, activeOnly)
+	embed := helpers.BuildPunishmentHistoryEmbed(i.GuildID, view.Config.Username, filtered, 0, activeOnly)
 	components := pagination.BuildHistoryPageComponents(pagination.HistoryPagePunishments, target.ID, 1, totalPages, []string{activeFlag, filterInput})
 	return helpers.EditInteractionComponents(s, i, embed, components)
 }

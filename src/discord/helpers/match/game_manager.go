@@ -330,6 +330,16 @@ func (m *GameManager) ForceVoidSuggestions(guildID, typed string) ([]Game, error
 			records = append(records, *rec)
 		}
 	}
+	// Only the active season's games: older seasons' games are not offered.
+	if _, seasonID, err := helpers.ActiveSeasonKey(guildID); err == nil && seasonID != 0 {
+		inSeason := records[:0]
+		for _, rec := range records {
+			if rec.SeasonID == seasonID {
+				inSeason = append(inSeason, rec)
+			}
+		}
+		records = inSeason
+	}
 	return m.forceVoidGames(guildID, records), nil
 }
 

@@ -260,13 +260,13 @@ func unassignedGuildEmbed() *discordgo.MessageEmbed {
 }
 
 // BuildStrikeHistoryEmbed renders the strike history embed for one page.
-func BuildStrikeHistoryEmbed(username string, entries []models.PlayerStrikesModel, page int) *discordgo.MessageEmbed {
+func BuildStrikeHistoryEmbed(guildID, username string, entries []models.PlayerStrikesModel, page int) *discordgo.MessageEmbed {
 	totalPages := HistoryTotalPages(len(entries))
 	description := fmt.Sprintf("This player has a total of **%d** strike(s) on record.", len(entries))
 	if len(entries) == 0 {
 		description = "No strike history was found for this player."
 	} else {
-		description += "\n\n" + strings.Join(BuildStrikeHistoryDescriptionsDirect(entries, page), "\n\n")
+		description += "\n\n" + strings.Join(BuildStrikeHistoryDescriptionsDirect(guildID, entries, page), "\n\n")
 	}
 	return Preset("success", types.PresetOptions{
 		Title:       fmt.Sprintf("%s's Strike History • Page %d of %d", username, page+1, totalPages),
@@ -305,13 +305,13 @@ func BuildDecayHistoryEmbed(username string, entries []models.PlayerDecaysModel,
 }
 
 // BuildPunishmentHistoryEmbed renders the punishment history embed for one page.
-func BuildPunishmentHistoryEmbed(username string, entries []models.PlayerPunishmentsModel, page int, activeOnly bool) *discordgo.MessageEmbed {
+func BuildPunishmentHistoryEmbed(guildID, username string, entries []models.PlayerPunishmentsModel, page int, activeOnly bool) *discordgo.MessageEmbed {
 	totalPages := HistoryTotalPages(len(entries))
 	description := fmt.Sprintf("This player has a total of **%d** punishment(s) on record.", len(entries))
 	if len(entries) == 0 {
 		description = "No punishment history was found for this player."
 	} else {
-		description += "\n\n" + strings.Join(BuildPunishmentHistoryDescriptionsDirect(entries, page), "\n\n")
+		description += "\n\n" + strings.Join(BuildPunishmentHistoryDescriptionsDirect(guildID, entries, page), "\n\n")
 	}
 	titlePrefix := "Punishment History"
 	if activeOnly {

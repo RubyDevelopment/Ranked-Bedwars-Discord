@@ -1175,3 +1175,22 @@ func init() {
 	helpers.FindPrefixLevel = findPrefixLevel
 	helpers.OnPunishmentTimed = PunishmentWatch.Track
 }
+
+var ladderNames = base.NewTTLCache[map[string]string](base.ConfigCacheTTL)
+
+func init() {
+	helpers.LadderLevelName = func(guildID, field, levelKey string) string {
+		names, _ := ladderNames.Get(guildID+"|"+field, func() (map[string]string, error) {
+			cfg, err := LoadLadder(guildID, field, "Ladders")
+			if err != nil {
+				return nil, err
+			}
+			out := map[string]string{}
+			for k, lvl := range cfg.Levels {
+				out[k] = lvl.Name
+			}
+			return out, nil
+		})
+		return names[levelKey]
+	}
+}

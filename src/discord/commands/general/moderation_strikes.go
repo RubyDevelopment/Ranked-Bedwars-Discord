@@ -100,7 +100,7 @@ func executeModerationStrikesCommand(s *discordgo.Session, i *discordgo.Interact
 
 	// 5. Render First Page
 	totalPages := helpers.HistoryTotalPages(len(filtered))
-	embed := helpers.BuildStrikeHistoryEmbed(view.Config.Username, filtered, 0)
+	embed := helpers.BuildStrikeHistoryEmbed(i.GuildID, view.Config.Username, filtered, 0)
 	components := pagination.BuildHistoryPageComponents(pagination.HistoryPageStrikes, target.ID, 1, totalPages, []string{filterInput})
 	return helpers.EditInteractionComponents(s, i, embed, components)
 }

@@ -226,7 +226,7 @@ func renderHistoryPage(guildID string, kind HistoryPageKind, snowflake string, p
 		filtered := helpers.FilterStrikeHistoryEntries(entries, duration)
 		totalPages := helpers.HistoryTotalPages(len(filtered))
 		page = clampHistoryPage(page, totalPages)
-		emb := helpers.BuildStrikeHistoryEmbed(username, filtered, page-1)
+		emb := helpers.BuildStrikeHistoryEmbed(guildID, username, filtered, page-1)
 		components := BuildHistoryPageComponents(HistoryPageStrikes, snowflake, page, totalPages, opts)
 		return emb, components, nil
 
@@ -240,7 +240,7 @@ func renderHistoryPage(guildID string, kind HistoryPageKind, snowflake string, p
 		filtered := helpers.FilterPunishmentHistoryEntries(entries.Data, activeOnly, duration)
 		totalPages := helpers.HistoryTotalPages(len(filtered))
 		page = clampHistoryPage(page, totalPages)
-		emb := helpers.BuildPunishmentHistoryEmbed(username, filtered, page-1, activeOnly)
+		emb := helpers.BuildPunishmentHistoryEmbed(guildID, username, filtered, page-1, activeOnly)
 		components := BuildHistoryPageComponents(HistoryPagePunishments, snowflake, page, totalPages, opts)
 		return emb, components, nil
 

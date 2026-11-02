@@ -482,7 +482,7 @@ func formatStaffDisplay(staffID string) string {
 }
 
 // BuildStrikeHistoryDescriptionsDirect builds description blocks for one page of strike history.
-func BuildStrikeHistoryDescriptionsDirect(entries []models.PlayerStrikesModel, page int) []string {
+func BuildStrikeHistoryDescriptionsDirect(guildID string, entries []models.PlayerStrikesModel, page int) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -508,7 +508,7 @@ func BuildStrikeHistoryDescriptionsDirect(entries []models.PlayerStrikesModel, p
 		if !IsAutomaticActor(strike.StaffID) {
 			valueLines = append(valueLines, fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(strike.StaffID)))
 		}
-		valueLines = append(valueLines, fmt.Sprintf("> **Reason:** %s", strike.Reason))
+		valueLines = append(valueLines, fmt.Sprintf("> **Reason:** %s", LadderReason(guildID, "strike_ladder", strike.LadderLevel, strike.Reason)))
 		if strike.EloChange < 0 {
 			valueLines = append(valueLines, fmt.Sprintf("> **ELO removed:** `%d` (`%d` → `%d`)", -strike.EloChange, strike.EloOld, strike.EloNew))
 		}
@@ -575,7 +575,7 @@ func BuildDecayHistoryDescriptionsDirect(entries []models.PlayerDecaysModel, pag
 }
 
 // BuildPunishmentHistoryDescriptionsDirect builds description blocks for one page of punishment history.
-func BuildPunishmentHistoryDescriptionsDirect(entries []models.PlayerPunishmentsModel, page int) []string {
+func BuildPunishmentHistoryDescriptionsDirect(guildID string, entries []models.PlayerPunishmentsModel, page int) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -605,7 +605,7 @@ func BuildPunishmentHistoryDescriptionsDirect(entries []models.PlayerPunishments
 			valueLines = append(valueLines, fmt.Sprintf("> **Duration:** `%s`", FormatSpan(punishment.ExpiresAt.Sub(punishment.CreatedAt).Round(time.Minute))))
 		}
 		valueLines = append(valueLines,
-			fmt.Sprintf("> **Reason:** %s", punishment.Reason),
+			fmt.Sprintf("> **Reason:** %s", LadderReason(guildID, "punishment_ladder", punishment.LadderLevel, punishment.Reason)),
 			fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(punishment.CreatedAt)),
 			"> **Expires:** Never",
 		)
@@ -1583,3 +1583,18 @@ func PunishmentBy(label, actorID string) string {
 
 // OnPunishmentTimed is told when a punishment that expires was created; the punishment code sets it to start its expiry sweep.
 var OnPunishmentTimed = func(guildID string) {}
+
+// LadderLevelName is the name a guild gave a ladder level (field "punishment_ladder" or "strike_ladder"), "" when there is none; the
+// punishment code sets it when it loads.
+var LadderLevelName = func(guildID, field, levelKey string) string { return "" }
+
+// LadderReason is what a history entry shows as its reason: the name of the ladder level that chose it, which is short, or the
+// recorded reason when the entry did not come from the ladder.
+func LadderReason(guildID, field, levelKey, reason string) string {
+	if levelKey != "" {
+		if name := LadderLevelName(guildID, field, levelKey); name != "" {
+			return name
+		}
+	}
+	return reason
+}
