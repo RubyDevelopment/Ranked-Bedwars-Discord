@@ -631,7 +631,7 @@ type DecayConfig struct {
 	DecayFloor     int  `json:"decayFloor"`
 	InactivityDays int  `json:"inactivityDays"`
 
-	// Everything below is optional on the dashboard's Season Config page.
+	// Everything below is optional on the dashboard's Elo Decays tab (Queue Configuration).
 	WarningHours   int    `json:"warningHours"`  // warn this long before a decay (default 12)
 	IntervalDays   int    `json:"intervalDays"`  // repeat every this many days once decay has started (default 1)
 	NotifyWarning  *bool  `json:"notifyWarning"` // tell the player a decay is coming (default on)
@@ -695,9 +695,8 @@ type EloDeps struct {
 	Perks      func(guildID, userID string) PerkContext // nil = no perks; needs the member's roles, so the Discord layer supplies it
 	Party      func(guildID string) types.PartiesConfig
 	PartyGames func(guildID, userID string) int
-	Decay      func(guildID string) DecayConfig            // the guild-wide default (elo_engine.elo_decay): used by modes whose queues set no decay of their own
-	QueueDecay func(guildID string) map[string]DecayConfig // each queue's own decay, by lower-case mode name
-	InGame     func(guildID, userID string) bool           // in-game players never decay
+	Decay      func(guildID string) DecayConfig  // the guild's decay rules (elo_engine.elo_decay), the same for every queue and mode
+	InGame     func(guildID, userID string) bool // in-game players never decay
 	Now        func() time.Time
 }
 
@@ -740,13 +739,6 @@ func NewEloManager(d EloDeps) *EloManager {
 			return c
 		}
 	}
-	if d.QueueDecay == nil {
-		cache := newTTLCache[map[string]DecayConfig](eloConfigCacheTTL)
-		d.QueueDecay = func(g string) map[string]DecayConfig {
-			out, _ := cache.get(g, func() (map[string]DecayConfig, error) { return loadQueueDecay(g) })
-			return out
-		}
-	}
 	if d.InGame == nil {
 		d.InGame = func(string, string) bool { return false }
 	}
@@ -772,56 +764,6 @@ func loadDecayConfig(guildID string) (DecayConfig, error) {
 	}
 	engine.Decay.DecayFloor = max(0, engine.Decay.DecayFloor)
 	return engine.Decay, nil
-}
-
-// loadQueueDecay reads the decay each enabled queue sets, keyed by the lower-case name of the mode it plays. When several
-// queues play one mode, the first that sets a decay wins.
-func loadQueueDecay(guildID string) (map[string]DecayConfig, error) {
-	snap, err := Queues.Snapshot(guildID)
-	if err != nil || snap == nil {
-		return nil, err
-	}
-	out := map[string]DecayConfig{}
-	for _, q := range snap.Queues {
-		if !q.IsEnabled {
-			continue
-		}
-		for _, ch := range q.Settings {
-			if !ch.IsEnabled || ch.EloDecay == nil {
-				continue
-			}
-			mode := FindMode(snap.Modes, ch.Mode)
-			if mode == nil {
-				continue
-			}
-			key := strings.ToLower(strings.TrimSpace(mode.Name))
-			if _, taken := out[key]; taken {
-				continue
-			}
-			cfg := DecayConfig(*ch.EloDecay)
-			cfg.DecayFloor = max(0, cfg.DecayFloor)
-			out[key] = cfg
-		}
-	}
-	return out, nil
-}
-
-// decayFor is the decay that applies to a player whose last game was in mode: that mode's queue's own rules, else the
-// guild-wide default.
-func (m *EloManager) decayFor(guildID, mode string) DecayConfig {
-	if cfg, ok := m.deps.QueueDecay(guildID)[strings.ToLower(strings.TrimSpace(mode))]; ok {
-		return cfg
-	}
-	return m.deps.Decay(guildID)
-}
-
-// decayConfigs is every decay rule set a guild can have in play: the default and each queue's own.
-func (m *EloManager) decayConfigs(guildID string) []DecayConfig {
-	out := []DecayConfig{m.deps.Decay(guildID)}
-	for _, cfg := range m.deps.QueueDecay(guildID) {
-		out = append(out, cfg)
-	}
-	return out
 }
 
 // GuildPerks loads the guild's enabled, named perks from the game config.
@@ -1358,7 +1300,7 @@ func (m *EloManager) AddDecay(actor, guildID, userID string, amount int, reason 
 	if err != nil {
 		return nil, err
 	}
-	floor := m.decayFor(guildID, st.LastPlayedMode).DecayFloor
+	floor := m.deps.Decay(guildID).DecayFloor
 	applied := min(amount, st.Elo-floor)
 	if applied <= 0 {
 		return nil, ErrAtDecayFloor
@@ -1440,20 +1382,12 @@ func (m *EloManager) applyDecay(actor, guildID, userID string, st *models.Player
 // who never played this season, sit at the floor, hold a rank with no decay
 // amount, or are mid-game are skipped. It returns how many players decayed.
 func (m *EloManager) SweepDecay(guildID string) int {
-	// Ask for fewer days than the smallest setting so rows inside a warning window come back too.
-	candidateDays, any := 0, false
-	for _, cfg := range m.decayConfigs(guildID) {
-		if !cfg.Enabled || cfg.InactivityDays <= 0 {
-			continue
-		}
-		days := max(0, cfg.InactivityDays-int(math.Ceil(cfg.warningWindow().Hours()/24)))
-		if !any || days < candidateDays {
-			candidateDays, any = days, true
-		}
-	}
-	if !any {
+	cfg := m.deps.Decay(guildID)
+	if !cfg.Enabled || cfg.InactivityDays <= 0 {
 		return 0
 	}
+	// Ask for fewer days than the setting so rows inside a warning window come back too.
+	candidateDays := max(0, cfg.InactivityDays-int(math.Ceil(cfg.warningWindow().Hours()/24)))
 	ranks, err := m.deps.Ranks(guildID)
 	if err != nil || len(ranks) == 0 {
 		return 0
@@ -1466,8 +1400,7 @@ func (m *EloManager) SweepDecay(guildID string) int {
 	now := m.deps.Now()
 	applied := 0
 	for _, row := range rows {
-		cfg := m.decayFor(guildID, row.LastPlayedMode)
-		if !cfg.Enabled || cfg.InactivityDays <= 0 || row.LastPlayedAt == nil || row.Elo <= cfg.DecayFloor {
+		if row.LastPlayedAt == nil || row.Elo <= cfg.DecayFloor {
 			continue
 		}
 		next := NextDecayAt(*row.LastPlayedAt, row.LastEloDecayAt, cfg.InactivityDays, cfg.interval())
@@ -1544,16 +1477,11 @@ func (m *EloManager) autoDecay(guildID, userID string, cfg DecayConfig, ranks []
 	return true
 }
 
-// DecayPending reports whether any player of the guild could still decay: decay is on for some rule set and a
-// player who has played sits above that rule's floor. An error counts as yes, so a hiccup never drops a guild.
+// DecayPending reports whether any player of the guild could still decay: decay is on and a player who has played sits
+// above the floor. An error counts as yes, so a hiccup never drops a guild.
 func (m *EloManager) DecayPending(guildID string) bool {
-	enabled := false
-	for _, cfg := range m.decayConfigs(guildID) {
-		if cfg.Enabled && cfg.InactivityDays > 0 {
-			enabled = true
-		}
-	}
-	if !enabled {
+	cfg := m.deps.Decay(guildID)
+	if !cfg.Enabled || cfg.InactivityDays <= 0 {
 		return false
 	}
 	rows, err := m.api().DecayCandidates(guildID, 0)
@@ -1561,7 +1489,7 @@ func (m *EloManager) DecayPending(guildID string) bool {
 		return true
 	}
 	for _, row := range rows {
-		if cfg := m.decayFor(guildID, row.LastPlayedMode); cfg.Enabled && cfg.InactivityDays > 0 && row.Elo > cfg.DecayFloor {
+		if row.Elo > cfg.DecayFloor {
 			return true
 		}
 	}

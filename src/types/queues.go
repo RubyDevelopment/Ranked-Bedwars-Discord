@@ -33,8 +33,6 @@ type QueueChannelSetting struct {
 	// Allowed/Denied hold Discord role ids; Denied wins, empty Allowed = everyone.
 	AllowedRoles []string `json:"allowed_roles,omitempty"`
 	DeniedRoles  []string `json:"denied_roles,omitempty"`
-	// EloDecay is the decay for players whose last game was in this queue's mode; nil = the guild's older default.
-	EloDecay *EloDecaySetting `json:"elo_decay,omitempty"`
 }
 
 // QueueBinding ties a queue voice channel to its queue and mode.

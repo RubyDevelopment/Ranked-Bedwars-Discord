@@ -1,19 +1,5 @@
 package types
 
-// EloDecaySetting is the ELO decay a queue applies to players whose last game was in its mode (the dashboard's
-// Queues page). The keys are camelCase because they are shared with the guild's older elo_engine.elo_decay.
-type EloDecaySetting struct {
-	Enabled        bool   `json:"enabled"`
-	DecayFloor     int    `json:"decayFloor"`
-	InactivityDays int    `json:"inactivityDays"`
-	WarningHours   int    `json:"warningHours"`
-	IntervalDays   int    `json:"intervalDays"`
-	NotifyWarning  *bool  `json:"notifyWarning"`
-	NotifyApplied  *bool  `json:"notifyApplied"`
-	NotifyVia      string `json:"notifyVia"`
-	AlertChannelID string `json:"alertChannelId"`
-}
-
 // Rank is one entry of the game config's "ranks" array.
 type Rank struct {
 	RankName    string `json:"rank_name"`
