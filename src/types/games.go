@@ -82,14 +82,73 @@ type Mode struct {
 // game chat a thread of ThreadParentID instead, with the voice channels still
 // made in the queue's category (threads can't hold voice).
 type GameChannelsConfig struct {
-	Mode             string   `json:"mode"` // "channel" or "thread"
-	CategoryID       string   `json:"category_id,omitempty"`
-	ThreadParentID   string   `json:"thread_parent_id,omitempty"`
-	PrivateThreads   *bool    `json:"private_threads,omitempty"` // nil = private
-	AutoArchiveMins  int      `json:"auto_archive_minutes,omitempty"`
-	ExtraRoleIDs     []string `json:"extra_role_ids,omitempty"`     // roles that can also see the game channels
+	Mode                string   `json:"mode"` // "channel" or "thread"
+	CategoryID          string   `json:"category_id,omitempty"`
+	ThreadParentID      string   `json:"thread_parent_id,omitempty"`
+	PrivateThreads      *bool    `json:"private_threads,omitempty"` // nil = private
+	AutoArchiveMins     int      `json:"auto_archive_minutes,omitempty"`
+	ExtraRoleIDs        []string `json:"extra_role_ids,omitempty"`         // roles that can also see the game channels
 	VoiceVisibleRoleIDs []string `json:"voice_visible_role_ids,omitempty"` // roles that can see (not join) the team voice channels; empty = the registered role (everyone when none is set)
-	TextNameTemplate string   `json:"text_name_template,omitempty"` // {game}, {season_game}, {total_game}, {game_id}, {mode}; empty = "game-{game}"
+	TextNameTemplate    string   `json:"text_name_template,omitempty"`     // {game}, {season_game}, {total_game}, {game_id}, {mode}; empty = "game-{game}"
+
+	// TextAccess and VoiceAccess say who can see and who can use the game chat and the team voice channels. Unset, the
+	// chat is players only and the voice channels are visible to registered players but joinable by the players only.
+	TextAccess  *ChannelAccess `json:"text_access,omitempty"`
+	VoiceAccess *ChannelAccess `json:"voice_access,omitempty"`
+}
+
+// Who can see a game channel (ChannelAccess.View).
+const (
+	ViewPlayers    = "players"    // only the game's players (and the bot, ExtraRoleIDs and the roles below)
+	ViewRegistered = "registered" // every registered player
+	ViewEveryone   = "everyone"   // the whole server
+)
+
+// Who can use a game channel once they can see it (ChannelAccess.Use): join and speak in a voice channel, send messages in the chat.
+const (
+	UsePlayers = "players" // only the game's players (and the roles below)
+	UseViewers = "viewers" // everyone who can see it
+)
+
+// ChannelAccess is the visibility and access of one kind of game channel.
+type ChannelAccess struct {
+	View        string   `json:"view,omitempty"`          // ViewPlayers (default for the chat), ViewRegistered (default for voice) or ViewEveryone
+	ViewRoleIDs []string `json:"view_role_ids,omitempty"` // roles that can see the channel on top of View, without being able to use it
+	Use         string   `json:"use,omitempty"`           // UsePlayers (default) or UseViewers
+	UseRoleIDs  []string `json:"use_role_ids,omitempty"`  // roles that can see and use the channel on top of the players (staff)
+}
+
+// Text is the access of the game chat: the stored one, else players only. ExtraRoleIDs keep full access.
+func (c GameChannelsConfig) Text() ChannelAccess {
+	a := ChannelAccess{View: ViewPlayers, Use: UsePlayers}
+	if c.TextAccess != nil {
+		a = c.TextAccess.withDefaults(ViewPlayers)
+	}
+	a.UseRoleIDs = append(append([]string{}, a.UseRoleIDs...), c.ExtraRoleIDs...)
+	return a
+}
+
+// Voice is the access of the team voice channels: the stored one, else visible to registered players (or to the older
+// VoiceVisibleRoleIDs when those are set), joinable by the players. ExtraRoleIDs keep full access.
+func (c GameChannelsConfig) Voice() ChannelAccess {
+	a := ChannelAccess{View: ViewRegistered, Use: UsePlayers}
+	if c.VoiceAccess != nil {
+		a = c.VoiceAccess.withDefaults(ViewRegistered)
+	} else if len(c.VoiceVisibleRoleIDs) > 0 {
+		a.View, a.ViewRoleIDs = ViewPlayers, c.VoiceVisibleRoleIDs
+	}
+	a.UseRoleIDs = append(append([]string{}, a.UseRoleIDs...), c.ExtraRoleIDs...)
+	return a
+}
+
+func (a ChannelAccess) withDefaults(view string) ChannelAccess {
+	if a.View != ViewPlayers && a.View != ViewRegistered && a.View != ViewEveryone {
+		a.View = view
+	}
+	if a.Use != UseViewers {
+		a.Use = UsePlayers
+	}
+	return a
 }
 
 // IsThread reports whether the game chat is a thread.

@@ -254,38 +254,68 @@ func startGameThread(s *discordgo.Session, g Game, cfg types.GameChannelsConfig,
 	return thread, nil
 }
 
-// gameOverwrites hides the channels from everyone but the bot, the players and the extra roles.
+// Permission bits that make up "seeing" and "using" a game channel of each kind.
+const (
+	textUseBits  = discordgo.PermissionSendMessages
+	voiceUseBits = discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+	textSeeBits  = discordgo.PermissionViewChannel | discordgo.PermissionReadMessageHistory
+	voiceSeeBits = discordgo.PermissionViewChannel
+)
+
+// gameOverwrites is the permissions of the game chat (see accessOverwrites).
 func gameOverwrites(s *discordgo.Session, g Game, cfg types.GameChannelsConfig) []*discordgo.PermissionOverwrite {
-	out := []*discordgo.PermissionOverwrite{
-		{ID: g.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Deny: discordgo.PermissionViewChannel},
+	return accessOverwrites(s, g, cfg.Text(), textSeeBits, textUseBits)
+}
+
+// voiceOverwrites is the permissions of the team voice channels (see accessOverwrites).
+func voiceOverwrites(s *discordgo.Session, g Game, cfg types.GameChannelsConfig) []*discordgo.PermissionOverwrite {
+	return accessOverwrites(s, g, cfg.Voice(), voiceSeeBits, voiceUseBits)
+}
+
+// accessOverwrites turns a channel's access settings into permission overwrites. The bot and the game's players can
+// always see and use the channel. Who else can see it is acc.View (nobody, registered players or everyone) plus
+// acc.ViewRoleIDs; those who can see it can use it too only when acc.Use says viewers, otherwise the use bits are
+// denied to them. acc.UseRoleIDs (staff) get full access.
+func accessOverwrites(s *discordgo.Session, g Game, acc types.ChannelAccess, see, use int64) []*discordgo.PermissionOverwrite {
+	var deny int64
+	if acc.Use != types.UseViewers {
+		deny = use
 	}
+	// One overwrite per role, however many of the settings name it.
+	viewers := map[string]bool{}
+	everyone := &discordgo.PermissionOverwrite{ID: g.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Deny: discordgo.PermissionViewChannel}
+	switch acc.View {
+	case types.ViewEveryone:
+		everyone.Allow, everyone.Deny = see, deny
+	case types.ViewRegistered:
+		if id := RegisteredRoleID(g.GuildID); id != "" {
+			viewers[id] = true
+		} else {
+			everyone.Allow, everyone.Deny = see, deny
+		}
+	}
+	for _, id := range cleanIDs(acc.ViewRoleIDs) {
+		viewers[id] = true
+	}
+	staff := map[string]bool{}
+	for _, id := range cleanIDs(acc.UseRoleIDs) {
+		staff[id] = true
+	}
+
+	out := []*discordgo.PermissionOverwrite{everyone}
 	if s.State != nil && s.State.User != nil {
 		out = append(out, &discordgo.PermissionOverwrite{ID: s.State.User.ID, Type: discordgo.PermissionOverwriteTypeMember, Allow: gameChannelAllow | discordgo.PermissionManageChannels})
 	}
 	for _, p := range g.Players {
 		out = append(out, &discordgo.PermissionOverwrite{ID: p.UserID, Type: discordgo.PermissionOverwriteTypeMember, Allow: gameChannelAllow})
 	}
-	for _, id := range cleanIDs(cfg.ExtraRoleIDs) {
+	for id := range staff {
 		out = append(out, &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Allow: gameChannelAllow})
 	}
-	return out
-}
-
-// voiceOverwrites lets the visible roles (default: registered players) see the team voice
-// channels, but only the players, the bot and the extra roles can join them.
-func voiceOverwrites(s *discordgo.Session, g Game, cfg types.GameChannelsConfig) []*discordgo.PermissionOverwrite {
-	out := gameOverwrites(s, g, cfg)
-	out[0].Deny |= discordgo.PermissionVoiceConnect
-	visible := cleanIDs(cfg.VoiceVisibleRoleIDs)
-	if len(visible) == 0 {
-		if id := RegisteredRoleID(g.GuildID); id != "" {
-			visible = []string{id}
-		} else {
-			out[0] = &discordgo.PermissionOverwrite{ID: g.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Allow: discordgo.PermissionViewChannel, Deny: discordgo.PermissionVoiceConnect}
+	for id := range viewers {
+		if !staff[id] {
+			out = append(out, &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Allow: see, Deny: deny})
 		}
-	}
-	for _, id := range visible {
-		out = append(out, &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Allow: discordgo.PermissionViewChannel, Deny: discordgo.PermissionVoiceConnect})
 	}
 	return out
 }

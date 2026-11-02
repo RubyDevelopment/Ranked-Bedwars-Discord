@@ -165,14 +165,12 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 	}
 
 	if Games.InGame(guildID, userID) {
-		ejectFromQueue(s, guildID, userID, "")
 		sendQueueAlert(s, guildID, userID, queueDeniedEmbed("You cannot queue while you are inside an active game. Finish your current game first."))
 		return false
 	}
 
 	if user := memberUser(s, guildID, userID); user != nil {
 		if msg := EnforceAccountAge(s, guildID, user); msg != "" {
-			ejectFromQueue(s, guildID, userID, "")
 			sendQueueAlert(s, guildID, userID, queueDeniedEmbed(msg))
 			return false
 		}
@@ -186,13 +184,11 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 		if id == "" || !memberHasRole(s, guildID, userID, id) {
 			continue
 		}
-		ejectFromQueue(s, guildID, userID, "")
 		sendQueueAlert(s, guildID, userID, queueDeniedEmbed("You are banned from queueing."))
 		return false
 	}
 
 	if msg := queueRoleGate(s, guildID, userID, bind.Channel); msg != "" {
-		ejectFromQueue(s, guildID, userID, snap.WaitingVC(channelID))
 		sendQueueAlert(s, guildID, userID, queueDeniedEmbed(msg))
 		return false
 	}
@@ -200,7 +196,6 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 	view, err := database.Must().Player.Get(guildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			ejectFromQueue(s, guildID, userID, "")
 			sendQueueAlert(s, guildID, userID, queueDeniedEmbed("You must be registered to queue. Register with `/register` to link a Minecraft account first."))
 			return false
 		}
@@ -210,7 +205,6 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 	playerID := sdk.UintToString(view.Player.ID)
 
 	if reason, restricted := queueRestriction(guildID, playerID); restricted {
-		ejectFromQueue(s, guildID, userID, "")
 		sendQueueAlert(s, guildID, userID, queueDeniedEmbed(reason))
 		return false
 	}
@@ -224,7 +218,6 @@ func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *
 			return false
 		}
 		if gate := EvaluateRankGate(rank, nil, bind.Channel); !gate.Allowed {
-			ejectFromQueue(s, guildID, userID, snap.WaitingVC(channelID))
 			sendQueueAlert(s, guildID, userID, queueDeniedEmbed(rankDenyMessage(gate.Reason, rank)))
 			return false
 		}
@@ -284,18 +277,22 @@ func rankDenyMessage(reason, rank string) string {
 	return fmt.Sprintf("Your rank (**%s**) does not meet the requirements to join this queue.", rank)
 }
 
-// ejectFromQueue moves the member to the queue's waiting VC, or disconnects them.
-func ejectFromQueue(s *discordgo.Session, guildID, userID, waitingVC string) {
-	var target *string
-	if waitingVC != "" {
-		target = &waitingVC
-	}
-	if err := s.GuildMemberMove(guildID, userID, target); err != nil {
-		queueLogger.Warn(fmt.Sprintf("Failed to remove %s from the queue channel: %v", userID, err))
-	}
-}
+// A member refused a place stays in the queue channel (nothing is kicked) and is simply left out of the queue. alerted
+// remembers what they were told during this stay, so staying or re-sweeping does not repeat the alert; leaving the queue
+// channel forgets it.
+var (
+	alertedMu sync.Mutex
+	alerted   = map[string]bool{}
+)
 
 func forgetAdmitted(channelID, userID string) {
+	alertedMu.Lock()
+	for k := range alerted {
+		if strings.HasPrefix(k, userID+":") {
+			delete(alerted, k)
+		}
+	}
+	alertedMu.Unlock()
 	admittedMu.Lock()
 	delete(admitted, channelID+":"+userID)
 	admittedMu.Unlock()
@@ -477,39 +474,16 @@ func memberHasRole(s *discordgo.Session, guildID, userID, roleID string) bool {
 	return false
 }
 
-// onceInWindow lets one key through once per window.
-type onceInWindow struct {
-	mu   sync.Mutex
-	last map[string]time.Time
-	span time.Duration
-}
-
-func (c *onceInWindow) take(key string) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	now := time.Now()
-	if t, ok := c.last[key]; ok && now.Sub(t) < c.span {
-		return false
-	}
-	if c.last == nil {
-		c.last = map[string]time.Time{}
-	}
-	for k, t := range c.last { // forget old entries so the map does not grow forever
-		if now.Sub(t) >= c.span {
-			delete(c.last, k)
-		}
-	}
-	c.last[key] = now
-	return true
-}
-
-var queueAlertCooldown = &onceInWindow{span: 30 * time.Second}
-
-// sendQueueAlert tells a member why they were turned away, by direct message (they were just removed from the queue
-// channel, and there is no alerts channel to post to).
+// sendQueueAlert tells a member why they were turned away, by direct message (they stay in the queue channel, just not queued;
+// there is no alerts channel to post to).
 func sendQueueAlert(s *discordgo.Session, guildID, userID string, embed *discordgo.MessageEmbed) {
-	// The same refusal is not repeated while the member keeps bouncing off the queue (each join attempt would alert again).
-	if !queueAlertCooldown.take(guildID + ":" + userID + ":" + embed.Description) {
+	// The member stays in the channel, so the same refusal is told once per stay, not on every sweep or rejoin.
+	alertedMu.Lock()
+	key := userID + ":" + guildID + ":" + embed.Description
+	already := alerted[key]
+	alerted[key] = true
+	alertedMu.Unlock()
+	if already {
 		return
 	}
 	dm, err := s.UserChannelCreate(userID)
