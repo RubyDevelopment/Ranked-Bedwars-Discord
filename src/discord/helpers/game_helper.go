@@ -1896,7 +1896,7 @@ func draftPing(view DraftView) string {
 	return "<@" + view.Teams[view.Turn][0] + ">"
 }
 
-// PlayerRatios maps each user id to "W/L **x** · K/D **y**" for the active season (0.00 without stats yet);
+// PlayerRatios maps each user id to their record, "**12W/9L** · **30K/40D**", for the active season (zeros without stats yet);
 // nil when the guild has no active season.
 func PlayerRatios(guildID string, ids []string) map[string]string {
 	_, seasonID, err := ActiveSeasonKey(guildID)
@@ -1910,12 +1910,12 @@ func PlayerRatios(guildID string, ids []string) map[string]string {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			wlr, kdr := "0.00", "0.00"
+			wl, kd := "0W/0L", "0K/0D"
 			if st, err := database.Must().Stats.Get(guildID, id, seasonID); err == nil {
-				wlr, kdr = Ratio(st.Wins, st.Losses), Ratio(st.Kills, st.Deaths)
+				wl, kd = fmt.Sprintf("%dW/%dL", st.Wins, st.Losses), fmt.Sprintf("%dK/%dD", st.Kills, st.Deaths)
 			}
 			mu.Lock()
-			out[id] = "W/L **" + wlr + "** · K/D **" + kdr + "**"
+			out[id] = "**" + wl + "** · **" + kd + "**"
 			mu.Unlock()
 		}()
 	}
@@ -4026,13 +4026,23 @@ func (m *GameManager) PlayerGame(guildID, userID string) (Game, bool) {
 	return m.Get(id)
 }
 
-// InGame reports whether the player is in an active (not yet finished) game.
+// InGame reports whether the player is in an active (not yet finished, not yet submitted) game.
 // The queue, party and decay code use it.
 func (m *GameManager) InGame(guildID, userID string) bool {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	_, ok := m.byPlayer[playerKey(guildID, userID)]
-	return ok
+	id, ok := m.byPlayer[playerKey(guildID, userID)]
+	m.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	// A game whose result was submitted is over for its players, even in the moment before it moves to scoring: they may queue.
+	if lg := m.live(id); lg != nil {
+		lg.mu.Lock()
+		submitted := lg.submitted
+		lg.mu.Unlock()
+		return !submitted
+	}
+	return true
 }
 
 // GuildGames lists the live games of a guild (including ones awaiting scoring).

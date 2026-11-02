@@ -334,6 +334,7 @@ func BuildPrefixInteraction(s *discordgo.Session, message *discordgo.Message, cm
 	}
 
 	resolvePrefixUserNames(message.GuildID, data.Options)
+	addPrefixAttachments(&data, cmd, route, message.Attachments)
 	user := message.Author
 	if user == nil {
 		user = &discordgo.User{}
@@ -407,7 +408,8 @@ func buildPrefixLeafOptions(guildID string, options []*discordgo.ApplicationComm
 		if opt == nil {
 			continue
 		}
-		if opt.Type == discordgo.ApplicationCommandOptionSubCommand || opt.Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+		// Attachments come from the message itself (see addPrefixAttachments), never from a typed word.
+		if opt.Type == discordgo.ApplicationCommandOptionSubCommand || opt.Type == discordgo.ApplicationCommandOptionSubCommandGroup || opt.Type == discordgo.ApplicationCommandOptionAttachment {
 			continue
 		}
 		leaf = append(leaf, opt)
@@ -1863,4 +1865,54 @@ func OptionUserUnresolved(i *discordgo.InteractionCreate, name string) bool {
 		}
 	}
 	return false
+}
+
+// addPrefixAttachments gives a prefix command the files attached to its message, so "=submit" with a screenshot works like
+// /submit with the screenshot option: each attachment option takes the next attached file, in the order they were sent.
+func addPrefixAttachments(data *discordgo.ApplicationCommandInteractionData, cmd *types.Command, route *types.PrefixCommandRoute, files []*discordgo.MessageAttachment) {
+	if cmd == nil || cmd.Data == nil || len(files) == 0 {
+		return
+	}
+	declared := cmd.Data.Options
+	target := &data.Options
+	if route != nil && route.SubcommandPath != "" {
+		for _, part := range strings.Split(route.SubcommandPath, ".") {
+			var next *discordgo.ApplicationCommandOption
+			for _, opt := range declared {
+				if opt != nil && opt.Name == part {
+					next = opt
+					break
+				}
+			}
+			var shown *discordgo.ApplicationCommandInteractionDataOption
+			for _, opt := range *target {
+				if opt.Name == part {
+					shown = opt
+					break
+				}
+			}
+			if next == nil || shown == nil {
+				return
+			}
+			declared, target = next.Options, &shown.Options
+		}
+	}
+	for _, opt := range declared {
+		if opt == nil || opt.Type != discordgo.ApplicationCommandOptionAttachment {
+			continue
+		}
+		if len(files) == 0 {
+			break
+		}
+		file := files[0]
+		files = files[1:]
+		if data.Resolved == nil {
+			data.Resolved = &discordgo.ApplicationCommandInteractionDataResolved{}
+		}
+		if data.Resolved.Attachments == nil {
+			data.Resolved.Attachments = map[string]*discordgo.MessageAttachment{}
+		}
+		data.Resolved.Attachments[file.ID] = file
+		*target = append(*target, &discordgo.ApplicationCommandInteractionDataOption{Name: opt.Name, Type: opt.Type, Value: file.ID})
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -653,7 +654,17 @@ func WithGuildFooterIconForGuild(s *discordgo.Session, guildID string, embeds ..
 	b := guildEmbedBranding(guildID)
 	var icon string
 	for _, emb := range embeds {
-		if emb == nil || emb.Color == EmbedBlendColor || emb.Color == ColorTransparent {
+		if emb == nil {
+			continue
+		}
+		if emb.Color == EmbedBlendColor || emb.Color == ColorTransparent {
+			// A plain embed gets no new footer or thumbnail, but a footer it already has still carries the server's icon.
+			if b.footer && emb.Footer != nil && emb.Footer.IconURL == "" {
+				if icon == "" {
+					icon = guildIconURL(s, guildID)
+				}
+				emb.Footer.IconURL = icon
+			}
 			continue
 		}
 		if b.thumbnail && emb.Thumbnail == nil {
@@ -1944,19 +1955,19 @@ func SubmitResultNoTeamEmbed(i *discordgo.InteractionCreate) *discordgo.MessageE
 }
 
 func SubmitResultStaffScoringEmbed(i *discordgo.InteractionCreate, gameNumber int, team, screenshotURL string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
+	return withProofImage(Preset("success", types.PresetOptions{
 		Title:       "Result Submitted for Staff Scoring",
 		Description: fmt.Sprintf("Your win screenshot for game **#%d** has been submitted. Staff will review and score the match using the screenshot as proof.\n\n> **Your Team:** `%s`\n> **Proof:** %s", gameNumber, team, screenshotURL),
 		Thumbnail:   ThumbSprout,
-	})
+	}), screenshotURL)
 }
 
 func SubmitResultCasualEmbed(i *discordgo.InteractionCreate, gameNumber int, team, screenshotURL string) *discordgo.MessageEmbed {
-	return Preset("success", types.PresetOptions{
+	return withProofImage(Preset("success", types.PresetOptions{
 		Title:       "Casual Match Result Recorded",
 		Description: fmt.Sprintf("Your win screenshot for game **#%d** has been recorded and scored.\n\n> **Your Team:** `%s`\n> **Proof:** %s", gameNumber, team, screenshotURL),
 		Thumbnail:   ThumbSprout,
-	})
+	}), screenshotURL)
 }
 
 // ============================================================================
@@ -6198,4 +6209,18 @@ var defaultEmbeds = map[string]embedTemplate{
 	"staffPending": thumb(colored(tpl("pending", "Win Submitted • Game #{game}",
 		"**Status:** Pending staff scoring\n**Claimed winner:** {winner}\n\nThe match was moved to the review category. Staff will score it shortly."), "#fee75c"), ThumbTimer),
 	"voided": thumb(tpl("error", "Game Voided", "This game was voided and will not count towards your stats.\n\n**Reason:** {reason}"), ThumbFlag),
+}
+
+// withProofImage shows a submitted screenshot in full below the embed when the proof is a picture (an attachment or an
+// image link); any other link stays a link in the text.
+func withProofImage(emb *discordgo.MessageEmbed, proofURL string) *discordgo.MessageEmbed {
+	link := strings.TrimSpace(proofURL)
+	path, _, _ := strings.Cut(link, "?")
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+		if strings.HasPrefix(link, "https://") || strings.HasPrefix(link, "http://") {
+			emb.Image = &discordgo.MessageEmbedImage{URL: link}
+		}
+	}
+	return emb
 }
