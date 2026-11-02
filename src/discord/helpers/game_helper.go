@@ -1144,12 +1144,18 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		}
 		embeds := []*discordgo.MessageEmbed{emb}
 		edit := &discordgo.MessageEdit{Channel: g.Channels.Text, ID: msgID, Embeds: &embeds, Content: content}
-		if buttons != nil {
+		if key == "partyReady" { // the party is complete: the invitation's host buttons have nothing left to do
+			none := []discordgo.MessageComponent{}
+			edit.Components = &none
+		} else if buttons != nil {
 			edit.Components = &buttons
 		}
 		if _, err := s.ChannelMessageEditComplex(edit); err == nil {
 			return true
 		}
+	}
+	if key == "partyReady" {
+		buttons = nil
 	}
 	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{emb}, Components: buttons}
 	if len(data.File) > 0 {

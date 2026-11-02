@@ -5886,6 +5886,21 @@ func botStatus(status, emoji string) botDisplayConfig {
 	}
 }
 
+// botDisplayStatus is the group an enabled account's stored state belongs in.
+func botDisplayStatus(stored string) string {
+	switch strings.ToLower(strings.TrimSpace(stored)) {
+	case "starting":
+		return "Starting"
+	case "busy":
+		return "Busy"
+	case "cooldown":
+		return "Cooldown"
+	case "maintenance":
+		return "Offline"
+	}
+	return "Available" // available, offline (rested) or not set: idle and ready to host
+}
+
 func BotsOverviewEmbed(guildID string, bots []types.Bot) *discordgo.MessageEmbed {
 	statusGroups := make(map[string][]string, len(botDisplayConfigs))
 	for _, cfg := range botDisplayConfigs {
@@ -5897,19 +5912,12 @@ func BotsOverviewEmbed(guildID string, bots []types.Bot) *discordgo.MessageEmbed
 			continue
 		}
 
-		status, note := bot.Status, ""
+		// The engine writes lowercase states: starting (leased), busy (on the server), cooldown (resting after a game) and
+		// offline once it is rested, which for an enabled account means idle and ready to host.
+		status, note := botDisplayStatus(bot.Status), ""
 		if !bot.IsEnabled {
 			status = "Offline"
 			note = FillLayout(guildID, LayoutBotsDisabled, nil)
-		}
-
-		// If bot is "Available", treat it as "Offline" for display
-		// Only show active hosting states (Starting, Busy, Cooldown)
-		if status == "Available" {
-			status = "Offline"
-		}
-		if _, ok := statusGroups[status]; !ok {
-			status = "Offline"
 		}
 		statusGroups[status] = append(statusGroups[status], FillLayout(guildID, LayoutBotsBot, map[string]string{
 			"name": bot.Username, "tier": bot.Tier, "status": status, "note": note,
