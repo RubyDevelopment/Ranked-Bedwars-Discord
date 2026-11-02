@@ -4758,7 +4758,7 @@ var (
 	// /queues in a game channel
 	LayoutQueuesTeamTitle   = DefineLayout("queues.team_title", "Team heading", "👥 {team} · Avg ELO {avg_elo}", "team", "avg_elo", "players")
 	LayoutQueuesPoolTitle   = DefineLayout("queues.pool_title", "Draft pool heading", "📦 Draft Pool · Avg ELO {avg_elo}", "avg_elo", "players")
-	LayoutQueuesPlayer      = DefineRepeatedLayout("queues.player_row", "One player of a team or the pool", "> {mention} · ELO: **{elo}**", "mention", "id", "name", "elo", "team")
+	LayoutQueuesPlayer      = DefineRepeatedLayout("queues.player_row", "One player of a team or the pool", "> {mention} · ELO: **{elo}** · W/L: **{wlr}** · K/D: **{kdr}**", "mention", "id", "name", "elo", "team", "wlr", "kdr")
 	LayoutQueuesDraftTitle  = DefineLayout("queues.draft_title", "Draft turn heading", "👑 Draft Turn")
 	LayoutQueuesDraftTurn   = DefineLayout("queues.draft_turn", "Draft turn text", "It is **{captain}**'s turn to pick.", "captain", "captain_mention")
 	LayoutQueuesGameDetails = DefineLayout("queues.game_details", "Game stats description", "> **Mode:** `{mode}`\n> **Season:** `{season}`", "game", "mode", "season", "players")

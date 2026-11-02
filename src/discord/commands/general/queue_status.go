@@ -63,7 +63,7 @@ func executeQueueStatusCommand(s *discordgo.Session, i *discordgo.InteractionCre
 // showGameStats displays the game's stats and roster
 func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID string, game helpers.Game) error {
 	// Get season info
-	seasonKey, _, err := helpers.ActiveSeasonKey(guildID)
+	seasonKey, seasonID, err := helpers.ActiveSeasonKey(guildID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueStatusEmbed(i))
 	}
@@ -85,7 +85,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 			for _, p := range teamPlayers {
 				assignedPlayerIDs[p.UserID] = true
 			}
-			fields = append(fields, queueRosterField(guildID, helpers.LayoutQueuesTeamTitle, teamName, teamPlayers))
+			fields = append(fields, queueRosterField(guildID, seasonID, helpers.LayoutQueuesTeamTitle, teamName, teamPlayers))
 		}
 	}
 
@@ -98,7 +98,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 	}
 
 	if len(unassigned) > 0 {
-		fields = append(fields, queueRosterField(guildID, helpers.LayoutQueuesPoolTitle, "", unassigned))
+		fields = append(fields, queueRosterField(guildID, seasonID, helpers.LayoutQueuesPoolTitle, "", unassigned))
 	}
 
 	// Check for active draft
@@ -121,13 +121,29 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 }
 
 // queueRosterField is a team's (or the draft pool's) field: its heading and a row for each player, from the layouts.
-func queueRosterField(guildID, titleLayout, team string, players []helpers.GamePlayer) *discordgo.MessageEmbedField {
+func queueRosterField(guildID string, seasonID uint, titleLayout, team string, players []helpers.GamePlayer) *discordgo.MessageEmbedField {
+	// Each player's win/loss and kill/death ratios for the season, looked up side by side (a player with no stats yet reads 0.00).
+	wlr, kdr := make([]string, len(players)), make([]string, len(players))
+	var wg sync.WaitGroup
+	for n, p := range players {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			wlr[n], kdr[n] = "0.00", "0.00"
+			if st, err := database.Must().Stats.Get(guildID, p.UserID, seasonID); err == nil {
+				wlr[n], kdr[n] = helpers.Ratio(st.Wins, st.Losses), helpers.Ratio(st.Kills, st.Deaths)
+			}
+		}()
+	}
+	wg.Wait()
+
 	rows := make([]string, 0, len(players))
 	total := 0
-	for _, p := range players {
+	for n, p := range players {
 		total += p.EloBefore
 		rows = append(rows, helpers.FillLayout(guildID, helpers.LayoutQueuesPlayer, map[string]string{
 			"mention": "<@" + p.UserID + ">", "id": p.UserID, "name": p.Username, "elo": strconv.Itoa(p.EloBefore), "team": team,
+			"wlr": wlr[n], "kdr": kdr[n],
 		}))
 	}
 	avg := 0
