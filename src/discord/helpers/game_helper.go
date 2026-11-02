@@ -179,6 +179,7 @@ func createGameChannels(s *discordgo.Session, g Game) (GameChannels, error) {
 
 	out := GameChannels{Voice: map[string]string{}, Waiting: strings.TrimSpace(queue.WaitingVCID)}
 	overwrites := gameOverwrites(s, g, cfg)
+	voiceOW := voiceOverwrites(s, g, cfg)
 	cleanup := func() { deleteGameChannels(s, out) }
 
 	// Text: a thread of the chosen channel, or a text channel in the category.
@@ -213,7 +214,7 @@ func createGameChannels(s *discordgo.Session, g Game) (GameChannels, error) {
 			continue
 		}
 		vc, err := s.GuildChannelCreateComplex(g.GuildID, discordgo.GuildChannelCreateData{
-			Name: expandGameName(template, g, name), Type: discordgo.ChannelTypeGuildVoice, ParentID: category, PermissionOverwrites: overwrites,
+			Name: expandGameName(template, g, name), Type: discordgo.ChannelTypeGuildVoice, ParentID: category, PermissionOverwrites: voiceOW,
 		})
 		if err != nil {
 			cleanup()
@@ -266,6 +267,25 @@ func gameOverwrites(s *discordgo.Session, g Game, cfg types.GameChannelsConfig) 
 	}
 	for _, id := range cleanIDs(cfg.ExtraRoleIDs) {
 		out = append(out, &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Allow: gameChannelAllow})
+	}
+	return out
+}
+
+// voiceOverwrites lets the visible roles (default: registered players) see the team voice
+// channels, but only the players, the bot and the extra roles can join them.
+func voiceOverwrites(s *discordgo.Session, g Game, cfg types.GameChannelsConfig) []*discordgo.PermissionOverwrite {
+	out := gameOverwrites(s, g, cfg)
+	out[0].Deny |= discordgo.PermissionVoiceConnect
+	visible := cleanIDs(cfg.VoiceVisibleRoleIDs)
+	if len(visible) == 0 {
+		if id := RegisteredRoleID(g.GuildID); id != "" {
+			visible = []string{id}
+		} else {
+			out[0] = &discordgo.PermissionOverwrite{ID: g.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Allow: discordgo.PermissionViewChannel, Deny: discordgo.PermissionVoiceConnect}
+		}
+	}
+	for _, id := range visible {
+		out = append(out, &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Allow: discordgo.PermissionViewChannel, Deny: discordgo.PermissionVoiceConnect})
 	}
 	return out
 }

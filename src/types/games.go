@@ -88,6 +88,7 @@ type GameChannelsConfig struct {
 	PrivateThreads   *bool    `json:"private_threads,omitempty"` // nil = private
 	AutoArchiveMins  int      `json:"auto_archive_minutes,omitempty"`
 	ExtraRoleIDs     []string `json:"extra_role_ids,omitempty"`     // roles that can also see the game channels
+	VoiceVisibleRoleIDs []string `json:"voice_visible_role_ids,omitempty"` // roles that can see (not join) the team voice channels; empty = the registered role (everyone when none is set)
 	TextNameTemplate string   `json:"text_name_template,omitempty"` // {game}, {season_game}, {total_game}, {game_id}, {mode}; empty = "game-{game}"
 }
 
