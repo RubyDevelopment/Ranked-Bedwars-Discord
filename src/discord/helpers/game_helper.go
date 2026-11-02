@@ -137,9 +137,6 @@ func createGameChannels(s *discordgo.Session, g Game) (GameChannels, error) {
 		}
 	}
 	cfg := queue.GameChannels
-	if strings.Contains(cfg.TextNameTemplate+queue.VoiceTeamTemplate, "{total_game}") {
-		g.Total = guildGameTotal(g.GuildID)
-	}
 
 	// Voice channels (and the text channel in "channel" mode) live in this category.
 	category := firstNonEmpty(cfg.CategoryID, queue.CategoryID, g.QueueCategoryID)
@@ -257,26 +254,6 @@ func expandGameName(template string, g Game, team string) string {
 		"{game}", strconv.Itoa(g.Number), "{season_game}", strconv.Itoa(g.Number), "{total_game}", strconv.Itoa(g.Total),
 		"{game_id}", strconv.FormatUint(uint64(g.ID), 10), "{mode}", g.Mode.Name, "{team}", team,
 	).Replace(template), 100)
-}
-
-// guildGameTotal counts every game the guild has recorded, across seasons (the new game included). It pages through
-// the guild's games, so it is only asked when a name template uses {total_game}.
-func guildGameTotal(guildID string) int {
-	svc := database.Get()
-	if svc == nil {
-		return 0
-	}
-	total := 0
-	for off := 0; ; off += 100 {
-		page, err := svc.Client().ListGames(context.Background(), guildID, sdk.Q("limit", 100, "offset", off))
-		if err != nil {
-			return total
-		}
-		total += len(page.Data)
-		if len(page.Data) < 100 {
-			return total
-		}
-	}
 }
 
 // slugify makes a Discord text channel name: lowercase, spaces as dashes.
@@ -2401,7 +2378,7 @@ func (d embedData) common() map[string]string {
 		m = "Not chosen"
 	}
 	vars := map[string]string{
-		"game": strconv.Itoa(g.Number), "gameUrl": MatchURL(g.GuildID, g.ID), "gameLink": MatchLink(g.GuildID, g.ID, "Game #"+strconv.Itoa(g.Number)), "mode": g.Mode.Name, "map": m, "bot": g.Bot, "host": "", "hostMention": "—",
+		"game": strconv.Itoa(g.Number), "gameUrl": MatchURL(g.GuildID, g.Total), "gameLink": MatchLink(g.GuildID, g.Total, "Game #"+strconv.Itoa(g.Number)), "mode": g.Mode.Name, "map": m, "bot": g.Bot, "host": "", "hostMention": "—",
 		"winner": g.Winner, "mvp": g.MVP, "mvpMention": "—", "playerCount": strconv.Itoa(len(g.Players)),
 	}
 	if p, ok := g.Player(g.Host); ok {
@@ -3062,7 +3039,7 @@ func mapValues(m map[string]string) []string {
 type Game struct {
 	ID       uint         `json:"id"`
 	Number   int          `json:"number"`          // within its season
-	Total    int          `json:"total,omitempty"` // among all the guild's games; only filled in when a channel name asks for it
+	Total    int          `json:"total,omitempty"` // among all the guild's games, across seasons (the record's guild_number); the match page's URL holds it
 	GuildID  string       `json:"guild_id"`
 	SeasonID uint         `json:"season_id"`
 	Mode     types.Mode   `json:"mode"`
@@ -3914,7 +3891,7 @@ func (m *GameManager) start(group *QueueGroup, custom *CustomGame) (Game, error)
 	if err != nil {
 		return Game{}, err
 	}
-	g.ID, g.Number = rec.ID, rec.GameNumber
+	g.ID, g.Number, g.Total = rec.ID, rec.GameNumber, rec.GuildNumber
 
 	lg := &liveGame{g: g}
 	m.mu.Lock()
@@ -4988,7 +4965,7 @@ func (m *GameManager) loadStored(guildID string, rec *models.GamesModel) (Game, 
 	for _, p := range g.Players {
 		names[p.UserID] = p.Username
 	}
-	g.ID, g.Number, g.GuildID, g.SeasonID, g.Map = rec.ID, rec.GameNumber, guildID, rec.SeasonID, rec.MapName
+	g.ID, g.Number, g.Total, g.GuildID, g.SeasonID, g.Map = rec.ID, rec.GameNumber, rec.GuildNumber, guildID, rec.SeasonID, rec.MapName
 	if g.Mode.Name == "" {
 		modes, err := GuildMetaModes(guildID)
 		if err != nil {
@@ -5486,7 +5463,7 @@ func (m *GameManager) ByNumberOrStored(guildID string, number int) (g Game, ok b
 	g, rows, err := m.loadStored(guildID, rec)
 	if err != nil {
 		// A mode that is no longer configured must not hide the game: show what the row itself says.
-		g = Game{ID: rec.ID, Number: rec.GameNumber, GuildID: guildID, SeasonID: rec.SeasonID, Map: rec.MapName, Mode: types.Mode{Name: rec.ModeName}}
+		g = Game{ID: rec.ID, Number: rec.GameNumber, Total: rec.GuildNumber, GuildID: guildID, SeasonID: rec.SeasonID, Map: rec.MapName, Mode: types.Mode{Name: rec.ModeName}}
 		rows = nil
 	}
 	switch rec.Status {
