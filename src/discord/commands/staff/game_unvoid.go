@@ -53,7 +53,10 @@ func executeGameUnvoidCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	gameNumber := helpers.SubOptionInt(i.ApplicationCommandData().Options, "game")
 
 	// 1. Validate the Game
-	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
+	game, ok, err := helpers.Games.ByNumberOrStored(i.GuildID, gameNumber)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("look up the game", err))
+	}
 	if !ok {
 		return helpers.EditInteractionEmbed(s, i, helpers.GameUnvoidNotFoundEmbed(i, gameNumber))
 	}

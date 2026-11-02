@@ -75,7 +75,10 @@ func executeGameRescoreCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	// 2. Validate the Game
-	game, ok := helpers.Games.ByNumber(i.GuildID, gameNumber)
+	game, ok, err := helpers.Games.ByNumberOrStored(i.GuildID, gameNumber)
+	if err != nil {
+		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("look up the game", err))
+	}
 	if !ok {
 		return helpers.EditInteractionEmbed(s, i, helpers.GameRescoreNotFoundEmbed(i, gameNumber))
 	}
