@@ -481,11 +481,11 @@ func punishmentResponses(root string, fset *token.FileSet, files []string) []com
 					names = append(names, "punishmentHierarchyEmbed")
 				}
 				rs = use(a, names...)
-				desc := "Successfully recorded " + spec["Summary"] + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + "> (**" + changing + "**)\n"
+				desc := "Successfully recorded " + spec["Summary"] + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + "> (**" + changing + "**)\n> **Type:** `" + changing + "`\n"
 				if spec["Duration"] == "true" {
-					desc += "> **Duration:** `" + changing + "`\n"
+					desc += "> **Duration:** `" + changing + "`\n> **Expires:** " + changing + "\n"
 				}
-				desc += "> **Reason:** " + changing
+				desc += "> **Reason:** " + changing + "\n> **Issued by:** <@" + changing + ">"
 				if spec["AppliedNote"] != "" {
 					desc += "\n\n" + spec["AppliedNote"]
 				}
@@ -496,7 +496,7 @@ func punishmentResponses(root string, fset *token.FileSet, files []string) []com
 				rs = use(a, "punishmentInvalidTargetEmbed", "PunishmentPlayerNotFoundEmbed", "unexpectedErrorPunishmentEmbed", "punishmentNotActiveEmbed")
 				title := spec["Action"] + " Removed"
 				rs = append(rs, response{Title: title, Look: "success", Slug: slug(title),
-					Description: "Successfully removed the " + lower + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + ">\n> **Reason:** " + changing})
+					Description: "Successfully removed the " + lower + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + ">\n> **Type:** `" + changing + "`\n> **Reason:** " + changing + "\n> **Removed by:** <@" + changing + ">"})
 			}
 			out = append(out, commandResponses{cmds[0], rs})
 			return true

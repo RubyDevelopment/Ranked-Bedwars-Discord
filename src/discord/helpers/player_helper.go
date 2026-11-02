@@ -411,19 +411,29 @@ const (
 	EmojiYellowDot = "<:yellow_dot:1490569602076512410>"
 )
 
-// FilterStrikeHistoryEntries filters strike entries by time duration
+// newestFirst sorts history entries by creation time, newest first (ID breaks ties).
+func newestFirst[T any](entries []T, key func(T) (time.Time, uint)) []T {
+	sort.SliceStable(entries, func(a, b int) bool {
+		ta, ia := key(entries[a])
+		tb, ib := key(entries[b])
+		if ta.Equal(tb) {
+			return ia > ib
+		}
+		return ta.After(tb)
+	})
+	return entries
+}
+
+// FilterStrikeHistoryEntries filters strike entries by time duration, newest first.
 func FilterStrikeHistoryEntries(entries []models.PlayerStrikesModel, window time.Duration) []models.PlayerStrikesModel {
-	if window <= 0 {
-		return entries
-	}
-	cutoff := time.Now().Add(-window)
 	filtered := make([]models.PlayerStrikesModel, 0, len(entries))
+	cutoff := time.Now().Add(-window)
 	for _, entry := range entries {
-		if entry.CreatedAt.After(cutoff) {
+		if window <= 0 || entry.CreatedAt.After(cutoff) {
 			filtered = append(filtered, entry)
 		}
 	}
-	return filtered
+	return newestFirst(filtered, func(e models.PlayerStrikesModel) (time.Time, uint) { return e.CreatedAt, e.ID })
 }
 
 // FilterPunishmentHistoryEntries filters punishment entries by active status and time duration
@@ -445,22 +455,19 @@ func FilterPunishmentHistoryEntries(entries []models.PlayerPunishmentsModel, act
 		}
 		filtered = append(filtered, entry)
 	}
-	return filtered
+	return newestFirst(filtered, func(e models.PlayerPunishmentsModel) (time.Time, uint) { return e.CreatedAt, e.ID })
 }
 
-// FilterDecayHistoryEntries filters decay entries by time duration
+// FilterDecayHistoryEntries filters decay entries by time duration, newest first.
 func FilterDecayHistoryEntries(entries []models.PlayerDecaysModel, window time.Duration) []models.PlayerDecaysModel {
-	if window <= 0 {
-		return entries
-	}
-	cutoff := time.Now().Add(-window)
 	filtered := make([]models.PlayerDecaysModel, 0, len(entries))
+	cutoff := time.Now().Add(-window)
 	for _, entry := range entries {
-		if entry.CreatedAt.After(cutoff) {
+		if window <= 0 || entry.CreatedAt.After(cutoff) {
 			filtered = append(filtered, entry)
 		}
 	}
-	return filtered
+	return newestFirst(filtered, func(e models.PlayerDecaysModel) (time.Time, uint) { return e.CreatedAt, e.ID })
 }
 
 // FilterGameHistoryEntries keeps a player's games from one season, optionally
@@ -517,12 +524,15 @@ func BuildStrikeHistoryDescriptionsDirect(entries []models.PlayerStrikesModel, p
 			emoji = DotRed
 		}
 
-		valueLines := []string{
-			fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(strike.StaffID)),
-			fmt.Sprintf("> **Reason:** %s", strike.Reason),
-			fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(strike.CreatedAt)),
-			"> **Expires:** Never",
+		valueLines := []string{}
+		if !IsAutomaticActor(strike.StaffID) {
+			valueLines = append(valueLines, fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(strike.StaffID)))
 		}
+		valueLines = append(valueLines, fmt.Sprintf("> **Reason:** %s", strike.Reason))
+		if strike.EloChange < 0 {
+			valueLines = append(valueLines, fmt.Sprintf("> **ELO removed:** `%d` (`%d` → `%d`)", -strike.EloChange, strike.EloOld, strike.EloNew))
+		}
+		valueLines = append(valueLines, fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(strike.CreatedAt)), "> **Expires:** Never")
 		if strike.ExpiresAt != nil {
 			valueLines[len(valueLines)-1] = fmt.Sprintf("> **Expires:** %s", DiscordRelativeTimestamp(*strike.ExpiresAt))
 		}
@@ -607,13 +617,18 @@ func BuildPunishmentHistoryDescriptionsDirect(entries []models.PlayerPunishments
 			emoji = DotRed
 		}
 
-		valueLines := []string{
-			fmt.Sprintf("> **Type:** `%s`", PunishmentTypeLabel(punishment.Type)),
-			fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(punishment.StaffID)),
+		valueLines := []string{fmt.Sprintf("> **Type:** `%s`", PunishmentTypeLabel(punishment.Type))}
+		if !IsAutomaticActor(punishment.StaffID) {
+			valueLines = append(valueLines, fmt.Sprintf("> **Staff:** %s", formatStaffDisplay(punishment.StaffID)))
+		}
+		if punishment.ExpiresAt != nil {
+			valueLines = append(valueLines, fmt.Sprintf("> **Duration:** `%s`", FormatSpan(punishment.ExpiresAt.Sub(punishment.CreatedAt).Round(time.Minute))))
+		}
+		valueLines = append(valueLines,
 			fmt.Sprintf("> **Reason:** %s", punishment.Reason),
 			fmt.Sprintf("> **Issued:** %s", DiscordRelativeTimestamp(punishment.CreatedAt)),
 			"> **Expires:** Never",
-		}
+		)
 		if punishment.ExpiresAt != nil {
 			expiryLabel := "Expires"
 			if !punishment.ExpiresAt.After(time.Now()) {

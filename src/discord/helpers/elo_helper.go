@@ -99,6 +99,7 @@ func deliverDecayNotice(n DecayNotice) bool {
 		return false
 	}
 
+	WithGuildFooterIconForGuild(s, n.GuildID, embed)
 	via, channelID := n.Config.Via(), n.Config.AlertChannelID
 	if channelID == "" { // the queue sets none: the shared decay alerts channel (Events page, or any command that declares it)
 		channelID = EventRequirementID(n.GuildID, DecaySweeperEventName, types.ReqChannel, types.DecayAlertsKey)

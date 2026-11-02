@@ -43,7 +43,7 @@
 					"slug": "server-ban-applied",
 					"title": "Server Ban Applied",
 					"look": "success",
-					"description": "Successfully recorded the server ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe member was banned from the Discord guild."
+					"description": "Successfully recorded the server ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe member was banned from the Discord guild."
 				}
 			]
 		},
@@ -985,7 +985,7 @@
 					"slug": "kick-applied",
 					"title": "Kick Applied",
 					"look": "success",
-					"description": "Successfully recorded the kick. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Reason:** …\n\nThe member was removed from the Discord guild."
+					"description": "Successfully recorded the kick. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe member was removed from the Discord guild."
 				}
 			]
 		},
@@ -1238,7 +1238,7 @@
 					"slug": "chat-mute-applied",
 					"title": "Chat Mute Applied",
 					"look": "success",
-					"description": "Successfully recorded the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe chat muted role was given to the member."
+					"description": "Successfully recorded the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe chat muted role was given to the member."
 				}
 			]
 		},
@@ -1306,7 +1306,7 @@
 					"slug": "nickname-removed",
 					"title": "Nickname Removed",
 					"look": "success",
-					"description": "Your in-game nickname has been cleared. Use `/player_refresh` to refresh your displayed name."
+					"description": "Your in-game nickname has been cleared. Use `/sync` to refresh your displayed name."
 				},
 				{
 					"key": "nickname.nickname-updated",
@@ -1879,7 +1879,7 @@
 					"slug": "queue-ban-applied",
 					"title": "Queue Ban Applied",
 					"look": "success",
-					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe queue banned role was given to the member."
+					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe queue banned role was given to the member."
 				}
 			]
 		},
@@ -1974,7 +1974,7 @@
 					"slug": "queue-ban-removed",
 					"title": "Queue Ban Removed",
 					"look": "success",
-					"description": "Successfully removed the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
+					"description": "Successfully removed the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Removed by:** \u003c@…\u003e"
 				}
 			]
 		},
@@ -2086,7 +2086,7 @@
 					"slug": "profile-not-found",
 					"title": "Profile Not Found",
 					"look": "error",
-					"description": "Your guild player profile could not be found. Try running `/player_refresh` or contact staff if the issue persists."
+					"description": "Your guild player profile could not be found. Try running `/sync` or contact staff if the issue persists."
 				},
 				{
 					"key": "rename.already-linked",
@@ -3190,7 +3190,7 @@
 					"slug": "chat-mute-removed",
 					"title": "Chat Mute Removed",
 					"look": "success",
-					"description": "Successfully removed the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
+					"description": "Successfully removed the chat mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Removed by:** \u003c@…\u003e"
 				}
 			]
 		},
@@ -3448,7 +3448,7 @@
 					"slug": "warning-removed",
 					"title": "Warning Removed",
 					"look": "success",
-					"description": "Successfully removed the warning. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
+					"description": "Successfully removed the warning. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Removed by:** \u003c@…\u003e"
 				}
 			]
 		},
@@ -3548,7 +3548,7 @@
 					"slug": "voice-mute-applied",
 					"title": "Voice Mute Applied",
 					"look": "success",
-					"description": "Successfully recorded the voice mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Duration:** `…`\n\u003e **Reason:** …\n\nThe member is now server-muted in voice channels."
+					"description": "Successfully recorded the voice mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe member is now server-muted in voice channels."
 				}
 			]
 		},
@@ -3588,7 +3588,7 @@
 					"slug": "voice-mute-removed",
 					"title": "Voice Mute Removed",
 					"look": "success",
-					"description": "Successfully removed the voice mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Reason:** …"
+					"description": "Successfully removed the voice mute. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Removed by:** \u003c@…\u003e"
 				}
 			]
 		},
@@ -3646,6 +3646,111 @@
 					"slug": "game-information",
 					"title": "Game Information · #…",
 					"look": "info"
+				},
+				{
+					"key": "viewgame.invalid-game-state",
+					"slug": "invalid-game-state",
+					"title": "Invalid Game State",
+					"look": "error",
+					"description": "That game is not in the right state for this action."
+				},
+				{
+					"key": "viewgame.not-in-match",
+					"slug": "not-in-match",
+					"title": "Not in Match",
+					"look": "error",
+					"description": "That player is not a participant in this game."
+				},
+				{
+					"key": "viewgame.already-submitted",
+					"slug": "already-submitted",
+					"title": "Already Submitted",
+					"look": "error",
+					"description": "A result has already been submitted for this game."
+				},
+				{
+					"key": "viewgame.unknown-team",
+					"slug": "unknown-team",
+					"title": "Unknown Team",
+					"look": "error",
+					"description": "That team does not exist in this game."
+				},
+				{
+					"key": "viewgame.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. Please contact an administrator to configure a season."
+				},
+				{
+					"key": "viewgame.nothing-to-restore",
+					"slug": "nothing-to-restore",
+					"title": "Nothing to Restore",
+					"look": "error",
+					"description": "That game has no recorded result to restore."
+				},
+				{
+					"key": "viewgame.game-busy",
+					"slug": "game-busy",
+					"title": "Game Busy",
+					"look": "error",
+					"description": "That game is currently being scored. Please try again in a moment."
+				},
+				{
+					"key": "viewgame.already-voided",
+					"slug": "already-voided",
+					"title": "Already Voided",
+					"look": "error",
+					"description": "That game has already been voided."
+				},
+				{
+					"key": "viewgame.not-scored",
+					"slug": "not-scored",
+					"title": "Not Scored",
+					"look": "error",
+					"description": "That game has not been scored yet."
+				},
+				{
+					"key": "viewgame.rescore-incomplete",
+					"slug": "rescore-incomplete",
+					"title": "Rescore Incomplete",
+					"look": "error",
+					"description": "The old results were reversed but the new ones could not be applied. Run the score again to finish."
+				},
+				{
+					"key": "viewgame.not-your-turn",
+					"slug": "not-your-turn",
+					"title": "Not Your Turn",
+					"look": "error",
+					"description": "It is not your turn to pick."
+				},
+				{
+					"key": "viewgame.invalid-selection",
+					"slug": "invalid-selection",
+					"title": "Invalid Selection",
+					"look": "error",
+					"description": "That player is not available to pick."
+				},
+				{
+					"key": "viewgame.draft-complete",
+					"slug": "draft-complete",
+					"title": "Draft Complete",
+					"look": "error",
+					"description": "The captain draft is already complete."
+				},
+				{
+					"key": "viewgame.no-active-draft",
+					"slug": "no-active-draft",
+					"title": "No Active Draft",
+					"look": "error",
+					"description": "There is no active captain draft for this game."
+				},
+				{
+					"key": "viewgame.not-a-captain",
+					"slug": "not-a-captain",
+					"title": "Not a Captain",
+					"look": "error",
+					"description": "Only team captains can pick players during the draft."
 				}
 			]
 		},
@@ -3667,18 +3772,18 @@
 					"description": "You must be a participant in this game to void it."
 				},
 				{
-					"key": "void.staff-only",
-					"slug": "staff-only",
-					"title": "Staff Only",
-					"look": "error",
-					"description": "Only staff can void matches. Please contact a staff member for assistance."
+					"key": "void.void-vote",
+					"slug": "void-vote",
+					"title": "Void Vote",
+					"look": "info",
+					"description": "…\n\nThe game is voided at **…** votes (three quarters of the players). Use `/void` to vote."
 				},
 				{
-					"key": "void.game-voided",
-					"slug": "game-voided",
-					"title": "Game Voided",
+					"key": "void.void-vote-passed",
+					"slug": "void-vote-passed",
+					"title": "Void Vote Passed",
 					"look": "success",
-					"description": "Game **#…** has been voided. No ELO or stats were recorded."
+					"description": "The void vote passed: game **#…** has been voided. No ELO or stats were recorded."
 				},
 				{
 					"key": "void.game-not-found",
@@ -3823,7 +3928,7 @@
 					"slug": "warning-issued",
 					"title": "Warning Issued",
 					"look": "success",
-					"description": "Successfully recorded the warning. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Reason:** …"
+					"description": "Successfully recorded the warning. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e"
 				}
 			]
 		},

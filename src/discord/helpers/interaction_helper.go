@@ -129,7 +129,7 @@ func Respond(s *discordgo.Session, i *discordgo.InteractionCreate, resp *discord
 		if len(resp.Data.Embeds) > 0 {
 			embeds = resp.Data.Embeds
 		}
-		return sendPrefixReply(s, i, content, embeds)
+		return sendPrefixReply(s, i, content, embeds, resp.Data.Components...)
 	}
 	return InteractionRespond(s, i.Interaction, resp)
 }
@@ -171,7 +171,11 @@ func EditInteractionResponse(s *discordgo.Session, i *discordgo.InteractionCreat
 		if edit != nil && edit.Content != nil {
 			content = *edit.Content
 		}
-		return sendPrefixReply(s, i, content, embeds)
+		var components []discordgo.MessageComponent
+		if edit != nil && edit.Components != nil {
+			components = *edit.Components
+		}
+		return sendPrefixReply(s, i, content, embeds, components...)
 	}
 	_, err := s.InteractionResponseEdit(i.Interaction, edit)
 	return err
@@ -186,7 +190,7 @@ func EditInteractionComponents(s *discordgo.Session, i *discordgo.InteractionCre
 		apputil.DiscordLogger.Warn(fmt.Sprintf("custom response for %q in %s failed, using the built-in embed: %v", emb.Title, i.GuildID, err))
 	}
 	if IsPrefixInteraction(i) {
-		return sendPrefixReply(s, i, "", []*discordgo.MessageEmbed{emb})
+		return sendPrefixReply(s, i, "", []*discordgo.MessageEmbed{emb}, components...)
 	}
 	_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{emb},
@@ -262,7 +266,7 @@ func IsDeferredSlashInteraction(i *discordgo.InteractionCreate) bool {
 }
 
 // sendPrefixReply sends a reply to a prefix command message.
-func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed) error {
+func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
 	messageID := PrefixSourceMessageID(i)
 	if messageID == "" {
 		return nil
@@ -270,8 +274,9 @@ func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 	content = strings.TrimSpace(content)
 	trimEmbeds(embeds)
 	_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
-		Content: content,
-		Embeds:  embeds,
+		Content:    content,
+		Embeds:     embeds,
+		Components: components,
 		Reference: &discordgo.MessageReference{
 			MessageID: messageID,
 			ChannelID: i.ChannelID,
@@ -321,9 +326,9 @@ func BuildPrefixInteraction(s *discordgo.Session, message *discordgo.Message, cm
 
 	if cmd != nil && cmd.Data != nil {
 		if route != nil && route.SubcommandPath != "" {
-			data.Options = buildPrefixSubcommandOptions(cmd.Data.Options, route.SubcommandPath, args)
+			data.Options = buildPrefixSubcommandOptions(message.GuildID, cmd.Data.Options, route.SubcommandPath, args)
 		} else {
-			data.Options = buildPrefixLeafOptions(cmd.Data.Options, args)
+			data.Options = buildPrefixLeafOptions(message.GuildID, cmd.Data.Options, args)
 		}
 	}
 
@@ -345,13 +350,13 @@ func BuildPrefixInteraction(s *discordgo.Session, message *discordgo.Message, cm
 	}
 }
 
-func buildPrefixSubcommandOptions(options []*discordgo.ApplicationCommandOption, subPath string, args []string) []*discordgo.ApplicationCommandInteractionDataOption {
+func buildPrefixSubcommandOptions(guildID string, options []*discordgo.ApplicationCommandOption, subPath string, args []string) []*discordgo.ApplicationCommandInteractionDataOption {
 	parts := strings.Split(subPath, ".")
 	if len(parts) == 1 {
 		return []*discordgo.ApplicationCommandInteractionDataOption{{
 			Type:    discordgo.ApplicationCommandOptionSubCommand,
 			Name:    parts[0],
-			Options: buildPrefixLeafOptions(findPrefixSubcommandOptions(options, parts[0]), args),
+			Options: buildPrefixLeafOptions(guildID, findPrefixSubcommandOptions(options, parts[0]), args),
 		}}
 	}
 	if len(parts) == 2 {
@@ -361,7 +366,7 @@ func buildPrefixSubcommandOptions(options []*discordgo.ApplicationCommandOption,
 			Options: []*discordgo.ApplicationCommandInteractionDataOption{{
 				Type:    discordgo.ApplicationCommandOptionSubCommand,
 				Name:    parts[1],
-				Options: buildPrefixLeafOptions(findPrefixGroupedSubcommandOptions(options, parts[0], parts[1]), args),
+				Options: buildPrefixLeafOptions(guildID, findPrefixGroupedSubcommandOptions(options, parts[0], parts[1]), args),
 			}},
 		}}
 	}
@@ -391,8 +396,10 @@ func findPrefixGroupedSubcommandOptions(options []*discordgo.ApplicationCommandO
 	return nil
 }
 
-// buildPrefixLeafOptions maps space-split prefix args onto slash options.
-func buildPrefixLeafOptions(options []*discordgo.ApplicationCommandOption, args []string) []*discordgo.ApplicationCommandInteractionDataOption {
+// buildPrefixLeafOptions maps space-split prefix args onto slash options. The options that can be told apart by what
+// they look like (a mention or ID for the user, 3d / perm for the duration, a ladder level's name) are taken wherever
+// they sit, so "=mute <user> 3d <level> <reason>" and "=mute <reason> 3d <user>" both work; the rest go in order.
+func buildPrefixLeafOptions(guildID string, options []*discordgo.ApplicationCommandOption, args []string) []*discordgo.ApplicationCommandInteractionDataOption {
 	leaf := make([]*discordgo.ApplicationCommandOption, 0, len(options))
 	for _, opt := range options {
 		if opt == nil {
@@ -403,6 +410,73 @@ func buildPrefixLeafOptions(options []*discordgo.ApplicationCommandOption, args 
 		}
 		leaf = append(leaf, opt)
 	}
+	if len(leaf) == 0 || len(args) == 0 {
+		return nil
+	}
+
+	found, rest, restArgs := extractPrefixOptions(guildID, leaf, args)
+	positional := buildPrefixPositionalOptions(rest, restArgs)
+	if len(found) == 0 {
+		return positional
+	}
+	for _, p := range positional {
+		found[p.Name] = p
+	}
+	out := make([]*discordgo.ApplicationCommandInteractionDataOption, 0, len(found))
+	for _, opt := range leaf {
+		if v, ok := found[opt.Name]; ok {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// extractPrefixOptions takes the self-identifying options out of args (see buildPrefixLeafOptions). It returns them
+// by name, the leaf options still to fill and the args still to place.
+func extractPrefixOptions(guildID string, leaf []*discordgo.ApplicationCommandOption, args []string) (map[string]*discordgo.ApplicationCommandInteractionDataOption, []*discordgo.ApplicationCommandOption, []string) {
+	found := map[string]*discordgo.ApplicationCommandInteractionDataOption{}
+	rest := append([]string{}, args...)
+	take := func(opt *discordgo.ApplicationCommandOption, start, end int, value string) {
+		found[opt.Name] = prefixOptionValue(opt, value)
+		rest = append(rest[:start], rest[end:]...)
+	}
+
+	// The user and the duration first, so a "3d" never ends up inside a level's name.
+	for _, opt := range leaf {
+		if found[opt.Name] != nil {
+			continue
+		}
+		isUser := opt.Type == discordgo.ApplicationCommandOptionUser
+		isDuration := opt.Type == discordgo.ApplicationCommandOptionString && opt.Name == "duration"
+		for idx, tok := range rest {
+			clean := strings.Trim(tok, "<@!>")
+			if (isUser && (strings.HasPrefix(tok, "<@") || prefixSnowflakePattern.MatchString(clean))) ||
+				(isDuration && prefixDurationPattern.MatchString(tok)) {
+				take(opt, idx, idx+1, tok)
+				break
+			}
+		}
+	}
+	for _, opt := range leaf {
+		if opt.Name != "level" || opt.Type != discordgo.ApplicationCommandOptionString || len(rest) == 0 {
+			continue
+		}
+		if start, end, key := findPrefixLevel(guildID, rest); end > start {
+			take(opt, start, end, key)
+		}
+	}
+
+	left := make([]*discordgo.ApplicationCommandOption, 0, len(leaf))
+	for _, opt := range leaf {
+		if found[opt.Name] == nil {
+			left = append(left, opt)
+		}
+	}
+	return found, left, rest
+}
+
+// buildPrefixPositionalOptions fills leaf from args in order.
+func buildPrefixPositionalOptions(leaf []*discordgo.ApplicationCommandOption, args []string) []*discordgo.ApplicationCommandInteractionDataOption {
 	if len(leaf) == 0 || len(args) == 0 {
 		return nil
 	}
@@ -1519,6 +1593,10 @@ func historyOwner(i *discordgo.InteractionCreate) string {
 	}
 	if i.Message.Interaction != nil && i.Message.Interaction.User != nil {
 		return i.Message.Interaction.User.ID
+	}
+	// A prefix command's answer is a reply to the message that ran it.
+	if ref := i.Message.ReferencedMessage; ref != nil && ref.Author != nil {
+		return ref.Author.ID
 	}
 	return ""
 }

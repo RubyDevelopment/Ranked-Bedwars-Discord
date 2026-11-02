@@ -30,6 +30,9 @@ type DiscordGuildProfile struct {
 	AppliedAppearance SyncedBotAppearance `json:"applied_appearance,omitempty"`
 	BlockedAvatarURL  string              `json:"blocked_avatar_url,omitempty"`
 	BlockedBannerURL  string              `json:"blocked_banner_url,omitempty"`
+	// The bot adds a footer (with the server icon) and a thumbnail to its embeds unless these are set.
+	HideEmbedFooter    bool `json:"hide_embed_footer,omitempty"`
+	HideEmbedThumbnail bool `json:"hide_embed_thumbnail,omitempty"`
 	IconURL           string              `json:"icon_url,omitempty"`
 	BannerURL         string              `json:"banner_url,omitempty"`
 }

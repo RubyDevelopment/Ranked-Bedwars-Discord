@@ -43,6 +43,9 @@ type ApplySpec struct {
 	Duration    bool     // whether the command accepts a duration
 	Duplicates  bool     // whether an already-active punishment blocks a new one
 
+	// ReasonOptional lets the command run without a reason; it is then recorded as "No reason provided".
+	ReasonOptional bool
+
 	// Ladder is the punishment-ladder type (queue_ban, chat_mute, vc_mute, server_ban, warning) whose level decides what
 	// this command applies and for how long. Empty = the command applies its own action (kick).
 	Ladder string
@@ -363,19 +366,48 @@ func PunishmentDurationOption() *discordgo.ApplicationCommandOption {
 
 // PunishmentOptions is the options the apply and revoke commands share: the target user, the reason (required when
 // applying, optional when revoking) and, for ladder punishments, the optional ladder level and, for timed ones, the
-// optional custom duration. Discord requires the required options first, so the order is user, reason, level, duration.
+// optional custom duration. Discord requires the required options first, so the order is user, level, reason, duration.
 func PunishmentOptions(userDescription, reasonDescription string, reasonRequired, withLevel, withDuration bool) []*discordgo.ApplicationCommandOption {
-	options := []*discordgo.ApplicationCommandOption{
-		{Name: "user", Description: userDescription, Type: discordgo.ApplicationCommandOptionUser, Required: true},
-		{Name: "reason", Description: reasonDescription, Type: discordgo.ApplicationCommandOptionString, Required: reasonRequired},
-	}
-	if withLevel {
-		options = append(options, PunishmentLevelOption())
+	user := &discordgo.ApplicationCommandOption{Name: "user", Description: userDescription, Type: discordgo.ApplicationCommandOptionUser, Required: true}
+	reason := &discordgo.ApplicationCommandOption{Name: "reason", Description: reasonDescription, Type: discordgo.ApplicationCommandOptionString, Required: reasonRequired}
+	options := []*discordgo.ApplicationCommandOption{user}
+	switch {
+	case reasonRequired:
+		// Discord wants the required options first, so a required reason sits right after the user.
+		options = append(options, reason)
+		if withLevel {
+			options = append(options, PunishmentLevelOption())
+		}
+	case withLevel:
+		options = append(options, PunishmentLevelOption(), reason)
+	default:
+		options = append(options, reason)
 	}
 	if withDuration {
 		options = append(options, PunishmentDurationOption())
 	}
 	return options
+}
+
+// findPrefixLevel looks for a ladder level's key, id or name written out in tokens (the longest run wins) and returns
+// where it sits and the level's key; end == start when there is none.
+func findPrefixLevel(guildID string, tokens []string) (start, end int, key string) {
+	cfg, err := loadLadder(guildID, "punishment_ladder", "Punishment ladders")
+	if err != nil {
+		return 0, 0, ""
+	}
+	levels := cfg.enabledLevels()
+	for n := len(tokens); n >= 1; n-- {
+		for s := 0; s+n <= len(tokens); s++ {
+			phrase := strings.Join(tokens[s:s+n], " ")
+			for _, lvl := range levels {
+				if lvl.matches(phrase) {
+					return s, s + n, lvl.Key
+				}
+			}
+		}
+	}
+	return 0, 0, ""
 }
 
 // PunishmentLevelAutocomplete suggests the ladder levels that have a step for ladderType.
@@ -549,7 +581,10 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	// 2. Validate Reason
 	reason := strings.TrimSpace(OptionString(i, "reason"))
 	if reason == "" {
-		return EditInteractionEmbed(s, i, punishmentReasonRequiredEmbed())
+		if !spec.ReasonOptional {
+			return EditInteractionEmbed(s, i, punishmentReasonRequiredEmbed())
+		}
+		reason = "No reason provided"
 	}
 
 	// 3. A custom duration (the optional "duration" option) replaces the ladder step's; check it before anything is created
@@ -691,9 +726,13 @@ func ApplyPunishmentTo(s *discordgo.Session, guildID, actor string, target *disc
 		}
 	}
 
-	embed := punishmentAppliedEmbed(spec, target, username, durationLabel, reason, applied)
+	embed := punishmentAppliedEmbed(spec, target, username, durationLabel, expiresAt, reason, actor, applied)
 	LogCommandResult(s, guildID, spec.Command, actor, embed)
-	SendPunishmentAlert(s, guildID, spec.Command, "applied", target, username, spec.Type, durationLabel, reason)
+	notice := PunishmentNotice{Command: spec.Command, Action: "applied", User: target, Username: username, Type: spec.Type, Reason: reason, By: actor}
+	if spec.Duration {
+		notice.Duration, notice.Expires = durationLabel, expiresAt
+	}
+	SendPunishmentAlert(s, guildID, notice)
 	return embed, true
 }
 
@@ -782,9 +821,9 @@ func RevokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec
 			StaffID: actor, Reason: reason, Type: spec.RecordType,
 		})
 	}
-	embed := punishmentRevokedEmbed(spec.Action, target, reason)
+	embed := punishmentRevokedEmbed(spec.Action, spec.Type, target, reason, actor)
 	LogCommandResult(s, i.GuildID, spec.Command, actor, embed)
-	SendPunishmentAlert(s, i.GuildID, spec.Command, "revoked", target, target.Username, spec.Type, "removed", reason)
+	SendPunishmentAlert(s, i.GuildID, PunishmentNotice{Command: spec.Command, Action: "revoked", User: target, Username: target.Username, Type: spec.Type, Reason: reason, By: actor})
 	return EditInteractionEmbed(s, i, embed)
 }
 
@@ -998,7 +1037,7 @@ func announceExpiredPunishment(s *discordgo.Session, guildID, userID string, p m
 		command = "unban"
 	}
 	logPunishmentExpiry(s, guildID, command, userID, p)
-	SendPunishmentAlert(s, guildID, command, "expired", &discordgo.User{ID: userID}, userID, p.Type, "expired", p.Reason)
+	SendPunishmentAlert(s, guildID, PunishmentNotice{Command: command, Action: "expired", User: &discordgo.User{ID: userID}, Username: userID, Type: p.Type, Reason: p.Reason, By: p.StaffID})
 }
 
 // ReapplyPunishments gives a member who just (re)joined the roles of the punishments still in force on them, so leaving
@@ -1069,8 +1108,10 @@ func logPunishmentExpiry(s *discordgo.Session, guildID, command, userID string, 
 	if command == "" {
 		return
 	}
+	emb := PunishmentExpiredLogEmbed(userID, p)
+	WithGuildFooterIconForGuild(s, guildID, emb)
 	for _, channelID := range CommandLogChannels(guildID, command) {
-		_, _ = s.ChannelMessageSendEmbed(channelID, PunishmentExpiredLogEmbed(userID, p))
+		_, _ = s.ChannelMessageSendEmbed(channelID, emb)
 	}
 }
 
@@ -1089,9 +1130,47 @@ var punishmentAlertKeys = map[string]string{
 	"strike": "strike_alerts", "unstrike": "strike_alerts",
 }
 
+// IsAutomaticActor says whether a punishment was issued by the bot itself rather than a person: nobody is credited then.
+func IsAutomaticActor(id string) bool {
+	return strings.Trim(id, "0") == "" || id == sdk.SystemActor
+}
+
+// punishmentBy is the "who did it" line of a punishment message ("" when the bot did it on its own).
+func punishmentBy(label, actorID string) string {
+	if IsAutomaticActor(actorID) {
+		return ""
+	}
+	return fmt.Sprintf("\n> **%s:** <@%s>", label, actorID)
+}
+
+// punishmentExpiry is how a punishment message says when the punishment ends, from an RFC 3339 time ("" = never).
+func punishmentExpiry(expiresAt string) string {
+	t, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		return "Never"
+	}
+	return fmt.Sprintf("<t:%d:f> (<t:%d:R>)", t.Unix(), t.Unix())
+}
+
+// PunishmentNotice is what a punishment alert says: who was punished, what with, why, for how long (or how much ELO),
+// until when, and who did it (left out when the bot did).
+type PunishmentNotice struct {
+	Command  string
+	Action   string // applied, revoked or expired
+	User     *discordgo.User
+	Username string
+	Type     string
+	Duration string // "" for a punishment with no length (a warning, a strike)
+	Expires  string // RFC 3339; with a Duration, "" means it never ends
+	Elo      string // ELO taken, e.g. "`25` (`1200` → `1175`)"
+	Reason   string
+	By       string // the staff member's ID
+}
+
 // SendPunishmentAlert tells the player in the command's alerts channel (chat_mute_alerts, queue_ban_alerts...) that a
 // punishment was applied, revoked or has expired, pinging them. Nothing is sent when the channel is not assigned.
-func SendPunishmentAlert(s *discordgo.Session, guildID, command, action string, user *discordgo.User, username, pType, duration, reason string) {
+func SendPunishmentAlert(s *discordgo.Session, guildID string, n PunishmentNotice) {
+	command, user := n.Command, n.User
 	key, ok := punishmentAlertKeys[command]
 	if !ok {
 		return
@@ -1103,9 +1182,11 @@ func SendPunishmentAlert(s *discordgo.Session, guildID, command, action string, 
 	if channelID == "" {
 		return
 	}
+	alert := PunishmentAlertEmbed(n)
+	WithGuildFooterIconForGuild(s, guildID, alert)
 	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content:         "<@" + user.ID + ">",
-		Embeds:          []*discordgo.MessageEmbed{PunishmentAlertEmbed(action, user, username, pType, duration, reason)},
+		Embeds:          []*discordgo.MessageEmbed{alert},
 		AllowedMentions: &discordgo.MessageAllowedMentions{Users: []string{user.ID}},
 	})
 }

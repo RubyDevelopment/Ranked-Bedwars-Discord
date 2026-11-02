@@ -126,7 +126,7 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 		embed.Description += fmt.Sprintf("\n> **Also lifted:** %d punishment(s) this strike applied", ended)
 	}
 	helpers.LogCommandResult(s, i.GuildID, "unstrike", actor, embed)
-	helpers.SendPunishmentAlert(s, i.GuildID, "strike", "revoked", target, username, "strike", "voided", "Strike voided by staff")
+	helpers.SendPunishmentAlert(s, i.GuildID, helpers.PunishmentNotice{Command: "strike", Action: "revoked", User: target, Username: username, Type: "strike", Reason: "Strike voided by staff", By: actor})
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
 

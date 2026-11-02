@@ -29,7 +29,7 @@ var ModerationMuteCommand = &types.Command{
 	Description:  "Mutes a player in text chat across the guild.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to chat mute", "Reason for the chat mute", true, true, true),
+		Options: helpers.PunishmentOptions("Discord user to chat mute", "Reason for the chat mute", false, true, true),
 	},
 	Autocomplete: helpers.PunishmentLevelAutocomplete("chat_mute"),
 	Execute:      executeModerationMuteCommand,
@@ -49,6 +49,8 @@ var muteSpec = &helpers.ApplySpec{
 	Type:        "mute",
 	Duration:    true,
 	Duplicates:  true,
+
+	ReasonOptional: true,
 	AppliedNote: "The chat muted role was given to the member.",
 	FailedNote:  "The punishment was recorded, but no chat muted role is set (or it could not be given). Choose one in the dashboard under Moderation > Punishment ladders.",
 	Ladder:      "chat_mute",

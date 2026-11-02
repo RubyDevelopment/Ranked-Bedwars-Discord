@@ -9,10 +9,10 @@ import (
 // saves a banner of its own for a command replaces the default of that command.
 
 const (
-	bnBackdrop = "#0d0b1a"
-	bnDeep     = "#1e0440"
-	bnCard     = "#151030"
-	bnBorder   = "#2d1f55"
+	bnBackdrop = "#1c1838"
+	bnDeep     = "#32146a"
+	bnCard     = "#251d4d"
+	bnBorder   = "#43347a"
 	bnFrame    = "#8b5cf6"
 	bnAccent   = "#a855f7"
 	bnMain     = "#e2d9f3"

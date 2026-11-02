@@ -580,22 +580,61 @@ func WithGuildFooterIcon(s *discordgo.Session, i *discordgo.InteractionCreate, e
 	WithGuildFooterIconForGuild(s, i.GuildID, embeds...)
 }
 
-// WithGuildFooterIconForGuild gives embeds with a footer the server's icon unless they already have one.
+// embedBranding is which default decorations a guild keeps on the bot's embeds; both are on until the guild turns
+// them off in the dashboard (discord_profile.hide_embed_footer / hide_embed_thumbnail).
+type embedBranding struct{ footer, thumbnail bool }
+
+var embedBrandingCache = newTTLCache[embedBranding](15 * time.Second)
+
+func guildEmbedBranding(guildID string) embedBranding {
+	b, _ := embedBrandingCache.get(guildID, func() (embedBranding, error) {
+		on := embedBranding{footer: true, thumbnail: true}
+		svc := database.Get()
+		if svc == nil {
+			return on, nil
+		}
+		raw, err := svc.GuildConfig.Field(guildID, "discord_profile")
+		if err != nil {
+			return on, nil
+		}
+		var p struct {
+			HideFooter    bool `json:"hide_embed_footer"`
+			HideThumbnail bool `json:"hide_embed_thumbnail"`
+		}
+		_ = json.Unmarshal(raw, &p)
+		return embedBranding{footer: !p.HideFooter, thumbnail: !p.HideThumbnail}, nil
+	})
+	return b
+}
+
+// WithGuildFooterIconForGuild brands embeds the way the guild chose: every embed gets a footer carrying the server's
+// icon and a thumbnail unless it already has one. Plain "blend" embeds (no colour bar) are left as they are.
 func WithGuildFooterIconForGuild(s *discordgo.Session, guildID string, embeds ...*discordgo.MessageEmbed) {
-	if s == nil || s.State == nil || guildID == "" {
+	if guildID == "" {
 		return
 	}
+	b := guildEmbedBranding(guildID)
 	var icon string
 	for _, emb := range embeds {
-		if emb == nil || emb.Footer == nil || emb.Footer.IconURL != "" {
+		if emb == nil || emb.Color == EmbedBlendColor || emb.Color == ColorTransparent {
 			continue
 		}
-		if icon == "" {
-			g, err := s.State.Guild(guildID)
-			if err != nil || g == nil || g.Icon == "" {
-				return
+		if b.thumbnail && emb.Thumbnail == nil {
+			emb.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: ThumbBot}
+		}
+		if !b.footer {
+			continue
+		}
+		if emb.Footer == nil {
+			emb.Footer = &discordgo.MessageEmbedFooter{Text: "Ranked Bedwars"}
+		}
+		if emb.Footer.IconURL != "" {
+			continue
+		}
+		if icon == "" && s != nil && s.State != nil {
+			if g, err := s.State.Guild(guildID); err == nil && g != nil && g.Icon != "" {
+				icon = g.IconURL("128")
 			}
-			icon = g.IconURL("128")
 		}
 		emb.Footer.IconURL = icon
 	}
@@ -4618,6 +4657,7 @@ func ModerationStrikeSuccessEmbed(i *discordgo.InteractionCreate, id uint, user 
 	if strikeType != "" {
 		description += fmt.Sprintf("\n> **Type:** `%s`", strikeType)
 	}
+	description += punishmentBy("Issued by", InteractionUserID(i))
 	return Preset("success", types.PresetOptions{
 		Title:       "Strike Issued",
 		Description: description,
@@ -5588,28 +5628,35 @@ func InvalidTimeFilterEmbed() *discordgo.MessageEmbed {
 
 // PunishmentExpiredLogEmbed is the line the moderation log gets when a punishment runs out.
 func PunishmentExpiredLogEmbed(userID string, p models.PlayerPunishmentsModel) *discordgo.MessageEmbed {
+	description := fmt.Sprintf("> **Player:** <@%s>\n> **Type:** `%s`\n> **Reason:** %s", userID, PunishmentTypeLabel(p.Type), p.Reason)
+	description += punishmentBy("Issued by", p.StaffID)
 	return &discordgo.MessageEmbed{
 		Title:       "Punishment Expired",
-		Description: fmt.Sprintf("> **Player:** <@%s>\n> **Type:** `%s`\n> **Reason:** %s", userID, p.Type, p.Reason),
+		Description: description,
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbHammer},
 	}
 }
 
 // PunishmentAlertEmbed is the alert a punishment that was applied, revoked or expired posts to the alerts channel.
-func PunishmentAlertEmbed(action string, user *discordgo.User, username, pType, duration, reason string) *discordgo.MessageEmbed {
-	title := "Punishment Applied"
-	if action == "revoked" {
-		title = "Punishment Revoked"
-	} else if action == "expired" {
+func PunishmentAlertEmbed(n PunishmentNotice) *discordgo.MessageEmbed {
+	title, byLabel := "Punishment Applied", "Issued by"
+	switch n.Action {
+	case "revoked":
+		title, byLabel = "Punishment Revoked", "Removed by"
+	case "expired":
 		title = "Punishment Expired"
 	}
 
-	description := fmt.Sprintf("> **Player:** <@%s> (**%s**)\n> **Type:** `%s`\n", user.ID, username, pType)
-	if duration != "" && duration != "removed" {
-		description += fmt.Sprintf("> **Duration:** `%s`\n", duration)
+	description := fmt.Sprintf("> **Player:** <@%s> (**%s**)\n> **Type:** `%s`", n.User.ID, n.Username, PunishmentTypeLabel(n.Type))
+	if n.Duration != "" {
+		description += fmt.Sprintf("\n> **Duration:** `%s`\n> **Expires:** %s", n.Duration, punishmentExpiry(n.Expires))
 	}
-	description += fmt.Sprintf("> **Reason:** %s", reason)
+	if n.Elo != "" {
+		description += "\n> **ELO removed:** " + n.Elo
+	}
+	description += "\n> **Reason:** " + n.Reason
+	description += punishmentBy(byLabel, n.By)
 
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -5780,15 +5827,16 @@ func punishmentMemberNotFoundEmbed(action string) *discordgo.MessageEmbed {
 	})
 }
 
-func punishmentAppliedEmbed(spec *ApplySpec, user *discordgo.User, username, duration, reason string, applied bool) *discordgo.MessageEmbed {
+func punishmentAppliedEmbed(spec *ApplySpec, user *discordgo.User, username, duration, expiresAt, reason, actor string, applied bool) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
-		"Successfully recorded %s. This action has been logged for staff review.\n\n> **Player:** <@%s> (**%s**)\n",
-		spec.Summary, user.ID, username,
+		"Successfully recorded %s. This action has been logged for staff review.\n\n> **Player:** <@%s> (**%s**)\n> **Type:** `%s`\n",
+		spec.Summary, user.ID, username, PunishmentTypeLabel(spec.Type),
 	)
 	if spec.Duration {
-		description += fmt.Sprintf("> **Duration:** `%s`\n", duration)
+		description += fmt.Sprintf("> **Duration:** `%s`\n> **Expires:** %s\n", duration, punishmentExpiry(expiresAt))
 	}
 	description += fmt.Sprintf("> **Reason:** %s", reason)
+	description += punishmentBy("Issued by", actor)
 
 	if applied && spec.AppliedNote != "" {
 		description += "\n\n" + spec.AppliedNote
@@ -5802,12 +5850,12 @@ func punishmentAppliedEmbed(spec *ApplySpec, user *discordgo.User, username, dur
 	})
 }
 
-func punishmentRevokedEmbed(action string, user *discordgo.User, reason string) *discordgo.MessageEmbed {
+func punishmentRevokedEmbed(action, pType string, user *discordgo.User, reason, actor string) *discordgo.MessageEmbed {
 	return Preset("success", types.PresetOptions{
 		Title: action + " Removed",
 		Description: fmt.Sprintf(
-			"Successfully removed the %s. This action has been logged for staff review.\n\n> **Player:** <@%s>\n> **Reason:** %s",
-			strings.ToLower(action), user.ID, reason,
+			"Successfully removed the %s. This action has been logged for staff review.\n\n> **Player:** <@%s>\n> **Type:** `%s`\n> **Reason:** %s%s",
+			strings.ToLower(action), user.ID, PunishmentTypeLabel(pType), reason, punishmentBy("Removed by", actor),
 		),
 		Thumbnail: ThumbHammer,
 	})

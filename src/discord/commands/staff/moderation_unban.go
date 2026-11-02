@@ -123,6 +123,6 @@ func executeModerationUnbanCommand(s *discordgo.Session, i *discordgo.Interactio
 	}
 	embed := helpers.ModerationUnbanSuccessEmbed(i, targetID, username, reason, unbanned)
 	helpers.LogCommandResult(s, i.GuildID, "unban", actor, embed)
-	helpers.SendPunishmentAlert(s, i.GuildID, "ban", "revoked", &discordgo.User{ID: targetID}, username, "server_ban", "removed", reason)
+	helpers.SendPunishmentAlert(s, i.GuildID, helpers.PunishmentNotice{Command: "ban", Action: "revoked", User: &discordgo.User{ID: targetID}, Username: username, Type: "server_ban", Reason: reason, By: actor})
 	return helpers.EditInteractionEmbed(s, i, embed)
 }

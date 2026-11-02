@@ -1110,6 +1110,7 @@ func LogCommandResult(s *discordgo.Session, guildID, cmdName, actorID string, em
 	}
 	logged := *embed
 	logged.Fields = append(append([]*discordgo.MessageEmbedField{}, embed.Fields...), &discordgo.MessageEmbedField{Name: "Moderator", Value: "<@" + actorID + ">", Inline: true})
+	WithGuildFooterIconForGuild(s, guildID, &logged)
 	for _, channelID := range CommandLogChannels(guildID, cmdName) {
 		_, _ = s.ChannelMessageSendEmbed(channelID, &logged)
 	}

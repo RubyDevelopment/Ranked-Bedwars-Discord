@@ -149,6 +149,10 @@ func executeModerationStrikeCommand(s *discordgo.Session, i *discordgo.Interacti
 	embed := helpers.ModerationStrikeSuccessEmbed(i, strike.ID, target, username, strikeType, reason)
 	embed.Description += notes
 	helpers.LogCommandResult(s, i.GuildID, "strike", actor, embed)
-	helpers.SendPunishmentAlert(s, i.GuildID, "strike", "applied", target, username, "strike", "", reason)
+	notice := helpers.PunishmentNotice{Command: "strike", Action: "applied", User: target, Username: username, Type: "strike", Reason: reason, By: actor}
+	if newStrike.EloChange < 0 {
+		notice.Elo = fmt.Sprintf("`%d` (`%d` → `%d`)", -newStrike.EloChange, newStrike.EloOld, newStrike.EloNew)
+	}
+	helpers.SendPunishmentAlert(s, i.GuildID, notice)
 	return helpers.EditInteractionEmbed(s, i, embed)
 }
