@@ -28,7 +28,6 @@ var ModerationUnstrikeCommand = &types.Command{
 	Name:         "unstrike",
 	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role"),
 	Description:  "Removes a specific strike entry from a player's record.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

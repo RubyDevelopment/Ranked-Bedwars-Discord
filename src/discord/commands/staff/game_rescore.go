@@ -3,9 +3,10 @@ package staff
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -25,7 +26,6 @@ var GameRescoreCommand = &types.Command{
 	Name:         "rescore",
 	Requirements: types.GameRequirements(),
 	Description:  "Recalculates ELO for a completed or voided game after a dispute or correction.",
-	Ephemeral:    true,
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),

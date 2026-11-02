@@ -26,7 +26,6 @@ var ModerationUnwarnCommand = &types.Command{
 	Name:         "unwarn",
 	Requirements: types.PunishmentRequirements("warn_logs"),
 	Description:  "Removes an active warning from a player's record.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to unwarn", "Reason for removing the warning", false, false, false),

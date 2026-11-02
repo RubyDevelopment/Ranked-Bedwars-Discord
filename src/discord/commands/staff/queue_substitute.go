@@ -3,9 +3,10 @@ package staff
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -25,7 +26,6 @@ var QueueSubstituteCommand = &types.Command{
 	Name:         "substitute",
 	Requirements: types.GameRequirements(),
 	Description:  "Swaps a player in a hosted game for a substitute on the same team.",
-	Ephemeral:    true,
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),

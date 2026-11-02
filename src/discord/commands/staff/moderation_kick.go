@@ -26,7 +26,6 @@ var ModerationKickCommand = &types.Command{
 	Name:         "kick",
 	Requirements: types.PunishmentRequirements("server_kick_logs"),
 	Description:  "Kicks a member from the Discord guild.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to kick", "Reason for the kick", true, false, false),

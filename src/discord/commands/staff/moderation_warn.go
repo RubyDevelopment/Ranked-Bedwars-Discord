@@ -27,7 +27,6 @@ var ModerationWarnCommand = &types.Command{
 	Name:         "warn",
 	Requirements: types.PunishmentRequirements("warn_logs"),
 	Description:  "Issues a formal warning to a player for breaking the rules.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to warn", "Reason for the warning", true, true, false),

@@ -26,7 +26,6 @@ var ModerationVcUnmuteCommand = &types.Command{
 	Name:         "vcunmute",
 	Requirements: types.PunishmentRequirements("vc_mute_logs", "vc_muted_role"),
 	Description:  "Removes a voice channel server-mute from a player.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to voice unmute", "Reason for the voice unmute", false, false, false),

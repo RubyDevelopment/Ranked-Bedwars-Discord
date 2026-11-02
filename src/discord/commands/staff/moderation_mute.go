@@ -27,7 +27,6 @@ var ModerationMuteCommand = &types.Command{
 	Name:         "mute",
 	Requirements: types.PunishmentRequirements("chat_mute_logs", "chat_muted_role"),
 	Description:  "Mutes a player in text chat across the guild.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to chat mute", "Reason for the chat mute", true, true, true),

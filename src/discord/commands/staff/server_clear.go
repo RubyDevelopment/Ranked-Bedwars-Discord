@@ -3,9 +3,10 @@ package staff
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -32,7 +33,6 @@ var ServerClearCommand = &types.Command{
 	Name:         "clear",
 	Requirements: types.StaffRequirements,
 	Description:  "Clears and purges messages from a channel based on specified filter criteria.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.ManageMessagesPermission(),

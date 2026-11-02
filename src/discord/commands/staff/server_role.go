@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -33,7 +34,6 @@ var ServerRoleCommand = &types.Command{
 	Name:         "role",
 	Requirements: types.StaffRequirements,
 	Description:  "Configures automated role assignments, permissions, and synchronization rules.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.ManageRolesPermission(),

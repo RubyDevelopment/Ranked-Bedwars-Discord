@@ -28,7 +28,6 @@ var PlayerRegisterCommand = &types.Command{
 	Name:         "register",
 	Requirements: types.RegistrationRequirements,
 	Description:  "Links your Minecraft account to your Discord account.",
-	Ephemeral:    true,
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

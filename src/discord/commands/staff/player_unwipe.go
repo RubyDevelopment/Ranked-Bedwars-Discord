@@ -29,7 +29,6 @@ var PlayerUnwipeCommand = &types.Command{
 	Name:         "unwipe",
 	Requirements: types.StaffRequirements,
 	Description:  "Undoes a wipe and restores the player's stats.",
-	Ephemeral:    true,
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),

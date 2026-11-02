@@ -27,7 +27,6 @@ var ModerationVcMuteCommand = &types.Command{
 	Name:         "vcmute",
 	Requirements: types.PunishmentRequirements("vc_mute_logs", "vc_muted_role"),
 	Description:  "Server-mutes a player in voice channels.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to voice mute", "Reason for the voice mute", true, true, true),

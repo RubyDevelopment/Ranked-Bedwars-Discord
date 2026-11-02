@@ -28,7 +28,6 @@ var ModerationClearPunishmentCommand = &types.Command{
 	Name:         "clearpunishment",
 	Requirements: types.StaffRequirements,
 	Description:  "Clears a punishment from a player's record.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
