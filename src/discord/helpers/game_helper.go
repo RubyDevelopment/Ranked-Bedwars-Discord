@@ -986,6 +986,12 @@ func (d *gameDiscord) postIntroduction(s *discordgo.Session, g Game) {
 	if !flowOf(g.GuildID).Announced["introduction"] {
 		return
 	}
+	d.mu.Lock()
+	already := d.introductions[g.ID] // a captain draft posts it before the picks
+	d.mu.Unlock()
+	if already {
+		return
+	}
 	if d.post(s, g, "introduction", embedData{}) {
 		d.mu.Lock()
 		d.introductions[g.ID] = true
