@@ -71,6 +71,11 @@ func (f guildFlow) alertOn(key string) bool {
 // StaffAlert posts a short embed in the guild's alerts channel when the profile asks for that kind of alert. It never blocks or fails
 // what raised it: an undeliverable alert is only logged.
 func StaffAlert(s *discordgo.Session, guildID, key, description string, fields ...*discordgo.MessageEmbedField) {
+	StaffAlertPinging(s, guildID, key, nil, description, fields...)
+}
+
+// StaffAlertPinging is StaffAlert that also pings the given users (the players the alert is about) in the message.
+func StaffAlertPinging(s *discordgo.Session, guildID, key string, pingUserIDs []string, description string, fields ...*discordgo.MessageEmbedField) {
 	if s == nil {
 		return
 	}
@@ -86,10 +91,20 @@ func StaffAlert(s *discordgo.Session, guildID, key, description string, fields .
 	if !flow.alertOn(key) {
 		return
 	}
+	WithGuildFooterIconForGuild(s, guildID, embed)
 	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}
+	mentions := &discordgo.MessageAllowedMentions{}
+	var content []string
 	if role := strings.TrimSpace(flow.Delivery.AlertRole); role != "" {
-		send.Content = "<@&" + role + ">"
-		send.AllowedMentions = &discordgo.MessageAllowedMentions{Roles: []string{role}}
+		content = append(content, "<@&"+role+">")
+		mentions.Roles = []string{role}
+	}
+	for _, id := range pingUserIDs {
+		content = append(content, "<@"+id+">")
+		mentions.Users = append(mentions.Users, id)
+	}
+	if len(content) > 0 {
+		send.Content, send.AllowedMentions = strings.Join(content, " "), mentions
 	}
 	if _, err := s.ChannelMessageSendComplex(flow.Delivery.AlertsChannel, send); err != nil {
 		log.Printf("staff alert %s for guild %s: %v", key, guildID, err)

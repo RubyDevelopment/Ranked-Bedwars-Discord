@@ -746,7 +746,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if g.Bot == "" {
 			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
 		}
-		StaffAlert(s, g.GuildID, "game_scored", scoreSummary(g))
+		StaffAlertPinging(s, g.GuildID, "game_scored", g.PlayerIDs(), scoreSummary(g))
 		d.forget(g.ID)
 	case EventChatVote:
 		n, _ := strconv.Atoi(ev.Vars["number"])
@@ -758,7 +758,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		}
 		// The same "Submit your win" message hosting by hand posts: players send their win to staff.
 		d.post(s, g, "matchStartedManual", embedData{Vars: map[string]string{"reason": reason}})
-		StaffAlert(s, g.GuildID, "tracking_lost", fmt.Sprintf("Game #%d is no longer tracked by the bot: %s", g.Number, reason))
+		StaffAlertPinging(s, g.GuildID, "tracking_lost", g.PlayerIDs(), fmt.Sprintf("Game #%d is no longer tracked by the bot: %s", g.Number, reason))
 		d.forget(g.ID)
 	case EventVoided:
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
@@ -768,7 +768,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 			}
 		}()
 		desc, fields := voidAlert(g, ev.Reason)
-		StaffAlert(s, g.GuildID, "game_voided", desc, fields...)
+		StaffAlertPinging(s, g.GuildID, "game_voided", g.PlayerIDs(), desc, fields...)
 		d.forget(g.ID)
 	}
 }
@@ -2009,14 +2009,14 @@ var embedKinds = map[string]embedKind{
 	"partyReady":      {Live: true, Message: "partyInvitation"},
 	"partyReminder":   {Plain: true},
 	// Match Joined, Team Selection and Teams Verified are one message that moves through the three states.
-	"matchJoined":     {Live: true, TeamLines: "tbd"},
-	"teamSelection":   {Live: true, Message: "matchJoined", TeamLines: "status"},
-	"teamsVerified":   {Live: true, Message: "matchJoined", TeamLines: "status"},
-	"matchStarted":    {TeamLines: "locked"},
-	"liveTracker":     {Live: true, TeamLines: "alive"},
-	"captainPicking":  {Live: true, TeamLines: "draft"},
-	"partySetup":      {TeamLines: "plain"},
-	"teamSetup":       {TeamLines: "plain"},
+	"matchJoined":    {Live: true, TeamLines: "tbd"},
+	"teamSelection":  {Live: true, Message: "matchJoined", TeamLines: "status"},
+	"teamsVerified":  {Live: true, Message: "matchJoined", TeamLines: "status"},
+	"matchStarted":   {TeamLines: "locked"},
+	"liveTracker":    {Live: true, TeamLines: "alive"},
+	"captainPicking": {Live: true, TeamLines: "draft"},
+	"partySetup":     {TeamLines: "plain"},
+	"teamSetup":      {TeamLines: "plain"},
 }
 
 func str(s string) *string { return &s }
@@ -3126,6 +3126,17 @@ func (g Game) clone() Game {
 }
 
 // Player returns the participant with the given Discord ID.
+// PlayerIDs lists the Discord IDs of everyone in the game, for alerts that ping the players.
+func (g Game) PlayerIDs() []string {
+	ids := make([]string, 0, len(g.Players))
+	for _, p := range g.Players {
+		if p.UserID != "" {
+			ids = append(ids, p.UserID)
+		}
+	}
+	return ids
+}
+
 func (g Game) Player(userID string) (GamePlayer, bool) {
 	for _, p := range g.Players {
 		if p.UserID == userID {
