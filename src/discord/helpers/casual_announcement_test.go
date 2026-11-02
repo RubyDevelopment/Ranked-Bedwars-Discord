@@ -30,13 +30,15 @@ func TestCasualGameWithAWinnerListsWinnersAndLosers(t *testing.T) {
 		t.Fatalf("loserMentions = %q, want %q (a player on no team is left out)", got, want)
 	}
 
-	emb := renderEmbed("scored", defaultEmbeds["scored"], embedData{Game: casualGame("Team B")})
-	if emb == nil {
-		t.Fatal("the scored embed rendered nothing")
+	tmpl := defaultEmbeds["scored"]
+	if tmpl.Content == nil || tmpl.Box == nil || *tmpl.Box {
+		t.Fatal("the scored announcement must be plain message text (no box) by default")
 	}
+	data := embedData{Game: casualGame("Team B")}
+	text := fill(*tmpl.Content, data.common())
 	for _, want := range []string{"Game #2", "**Winners:** <@22> <@33>", "**Losers:** <@11>"} {
-		if !strings.Contains(emb.Description, want) {
-			t.Fatalf("the announcement is missing %q:\n%s", want, emb.Description)
+		if !strings.Contains(text, want) {
+			t.Fatalf("the announcement is missing %q:\n%s", want, text)
 		}
 	}
 }

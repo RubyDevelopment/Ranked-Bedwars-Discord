@@ -5638,6 +5638,13 @@ func DecayAppliedEmbed(n DecayNotice) *discordgo.MessageEmbed {
 }
 func thumb(t embedTemplate, url string) embedTemplate { t.Thumbnail = &url; return t }
 
+// plainText makes the template a message of just this text (no embed box), the picture attached below it.
+func plainText(t embedTemplate, text string) embedTemplate {
+	box := false
+	t.Content, t.Box = &text, &box
+	return t
+}
+
 func colored(t embedTemplate, hex string) embedTemplate { t.Color = &hex; return t }
 
 // UnexpectedErrorGameEmbed is the fallback for a game action that failed for an unknown reason.
@@ -6109,7 +6116,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	// Post-game
 	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match. The result is being scored.",
 		embedField{Name: "Match stats", Value: "{statTable}"})),
-	"scored":     thumb(colored(tpl("default", "Match Finished", "**{gameLink}**\n\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), "#dc4d4d"), ThumbTada),
+	"scored":     plainText(tpl("default", "Match Finished", ""), "**{gameLink}**\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), // a plain message with the results card attached, not a box
 	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied · no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), ThumbTada),
 	"staffPending": thumb(colored(tpl("pending", "Win Submitted • Game #{game}",
 		"**Status:** Pending staff scoring\n**Claimed winner:** {winner}\n\nThe match was moved to the review category. Staff will score it shortly."), "#fee75c"), ThumbTimer),
