@@ -728,7 +728,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 			if g.Winner != "" && d.post(s, g, "scored", embedData{File: png}) {
 				return
 			}
-			d.sendResultsPNG(s, g, png)
+			d.sendResultsPNG(s, g, png, outcomeCasual)
 		}()
 		if g.Bot == "" {
 			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
@@ -740,7 +740,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		go func() {
 			png := d.resultsPNG(g, resultsOutcome(g, false))
 			if !d.post(s, g, "scored", embedData{File: png}) && len(png) > 0 {
-				d.sendResultsPNG(s, g, png)
+				d.sendResultsPNG(s, g, png, resultsOutcome(g, false))
 			}
 		}()
 		if g.Bot == "" {
@@ -764,7 +764,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
 		go func() { // a voided game is still a game entry: its card (the void variant) goes out when the mode's "Send results" is on
 			if png := d.resultsPNG(g, outcomeVoid); len(png) > 0 {
-				d.sendResultsPNG(s, g, png)
+				d.sendResultsPNG(s, g, png, outcomeVoid)
 			}
 		}()
 		desc, fields := voidAlert(g, ev.Reason)
@@ -964,6 +964,22 @@ func (d *gameDiscord) manualMapRows(g Game) []map[string]string {
 	return rows
 }
 
+// announceBeforeDraft posts the introduction (welcome to the mode, who is playing) unless it already went out for this game.
+func (d *gameDiscord) announceBeforeDraft(s *discordgo.Session, g Game) {
+	state := d.state(g.ID)
+	d.mu.Lock()
+	already := d.introductions[g.ID] || state.posted["introduction"]
+	d.mu.Unlock()
+	if already {
+		return
+	}
+	if d.post(s, g, "introduction", embedData{Force: flowOf(g.GuildID).Announced["introduction"]}) {
+		d.mu.Lock()
+		d.introductions[g.ID] = true
+		d.mu.Unlock()
+	}
+}
+
 // postIntroduction sends the pipeline's introduction once teams are known, but before the teams and map-vote
 // announcements. The engine's announce step still runs first in its own pipeline; its later echo is suppressed.
 func (d *gameDiscord) postIntroduction(s *discordgo.Session, g Game) {
@@ -1057,6 +1073,8 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	}
 	if content != nil { // the template says what goes above the embed, even nothing
 		send.Content = *content
+	} else if key == "scored" && len(data.File) > 0 { // no text set: say who won and who lost, as the old bot did
+		send.Content = resultsSummary(g, resultsOutcome(g, false))
 	}
 	if send.Content != "" {
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
@@ -1559,6 +1577,9 @@ func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
 	if err != nil {
 		return
 	}
+	// The welcome and the player list go out first, as they do for a game with automatic teams (which only posts them once
+	// the teams exist, after the draft would already be under way); then the draft starts.
+	d.announceBeforeDraft(s, g)
 	ui := &draftUI{channelID: g.Channels.Text}
 	ui.setTimer(Games.FlowSettings(g.GuildID).CaptainFor(g.Mode).PickTimeoutSeconds)
 	embed := d.draftEmbed(s, g, view, ui)
@@ -1662,10 +1683,26 @@ func (d *gameDiscord) refreshDraft(s *discordgo.Session, gameID uint, ui *draftU
 	d.mu.Unlock()
 	embed := d.draftEmbed(s, g, view, ui)
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
-	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
-		Channel: ui.channelID, ID: ui.messageID, Content: ptr(draftPing(view)),
-		Embeds: &[]*discordgo.MessageEmbed{embed}, Components: ptr(draftComponents(g, view)),
+	// The old picking message goes and a fresh one is posted below the pick line, so it is the newest message (and pings
+	// the next captain again).
+	d.mu.Lock()
+	oldID := ui.messageID
+	d.mu.Unlock()
+	msg, sendErr := s.ChannelMessageSendComplex(ui.channelID, &discordgo.MessageSend{
+		Content: draftPing(view), Embeds: []*discordgo.MessageEmbed{embed}, Components: draftComponents(g, view),
+		AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}},
 	})
+	if sendErr == nil {
+		_ = s.ChannelMessageDelete(ui.channelID, oldID)
+		d.mu.Lock()
+		ui.messageID = msg.ID
+		d.mu.Unlock()
+	} else { // could not repost: keep the old message up to date instead
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel: ui.channelID, ID: oldID, Content: ptr(draftPing(view)),
+			Embeds: &[]*discordgo.MessageEmbed{embed}, Components: ptr(draftComponents(g, view)),
+		})
+	}
 	d.announceAutoAssigned(s, g, before, view.Teams, true)
 	d.mu.Lock()
 	ui.prev = cloneTeams(view.Teams)

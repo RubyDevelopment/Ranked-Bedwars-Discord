@@ -49,9 +49,10 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 
 	// 2. Vote: three quarters of the players (rounded down) void the game; everyone in the channel sees the count
-	votes, needed, already := helpers.CastVoidVote(game.ID, actor, len(game.Players))
+	votes, needed, _ := helpers.CastVoidVote(game.ID, actor, len(game.Players))
 	if votes < needed {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidVoteEmbed(actor, votes, needed, already))
+		// The vote is a message with Agree and Disagree buttons: nobody has to run /void again.
+		return helpers.EditInteractionComponents(s, i, helpers.VoidVotePanel(game), helpers.VoidVoteButtons(game.ID))
 	}
 
 	// 3. Enough votes: void the game

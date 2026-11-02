@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"strings"
 
 	"ranked-bedwars/src/database"
 
@@ -155,13 +156,43 @@ func (d *gameDiscord) resultsPNG(g Game, outcome string) []byte {
 	return png
 }
 
-// sendResultsPNG posts the card on its own, where the server wants results (the profile's channel, else game_results, else the game's chat).
-func (d *gameDiscord) sendResultsPNG(s *discordgo.Session, g Game, png []byte) {
+// resultsSummary is the text that goes with the results card: who won and who lost (the players are pinged), or how the
+// game ended when nobody did.
+func resultsSummary(g Game, outcome string) string {
+	mentions := func(ids []string) string {
+		out := make([]string, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, "<@"+id+">")
+		}
+		return strings.Join(out, " ")
+	}
+	head := fmt.Sprintf("**Game #%d**", g.Number)
+	if outcome == outcomeWin {
+		var winners, losers []string
+		for _, r := range g.Results {
+			if r.Win {
+				winners = append(winners, r.UserID)
+			} else {
+				losers = append(losers, r.UserID)
+			}
+		}
+		return fmt.Sprintf("%s\n**Winners:** %s\n**Losers:** %s", head, mentions(winners), mentions(losers))
+	}
+	label := map[string]string{outcomeVoid: "was voided", outcomeTie: "ended in a tie", outcomeCasual: "has finished"}[outcome]
+	return fmt.Sprintf("%s %s\n**Players:** %s", head, label, mentions(g.PlayerIDs()))
+}
+
+// sendResultsPNG posts the card with its summary text, where the server wants results (the profile's channel, else game_results, else the game's chat).
+func (d *gameDiscord) sendResultsPNG(s *discordgo.Session, g Game, png []byte, outcome string) {
 	channel := ResultsChannelFor(g.GuildID, g.Channels.Text)
 	if channel == "" {
 		return
 	}
-	if _, err := s.ChannelMessageSendComplex(channel, &discordgo.MessageSend{Files: []*discordgo.File{{Name: "results.png", ContentType: "image/png", Reader: bytes.NewReader(png)}}}); err != nil {
+	if _, err := s.ChannelMessageSendComplex(channel, &discordgo.MessageSend{
+		Content:         resultsSummary(g, outcome),
+		AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}},
+		Files:           []*discordgo.File{{Name: "results.png", ContentType: "image/png", Reader: bytes.NewReader(png)}},
+	}); err != nil {
 		log.Printf("post results banner for game %d: %v", g.ID, err)
 	}
 }
