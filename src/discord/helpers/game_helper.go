@@ -718,10 +718,17 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventCasualDone:
 		d.post(s, g, "casualDone", embedData{})
-		go func() { // a casual game is a game entry too: its results banner goes out when the mode's "Send results" is on
-			if png := d.resultsPNG(g, outcomeCasual); len(png) > 0 {
-				d.sendResultsPNG(s, g, png)
+		go func() { // a casual game is a game entry too: its results go out when the mode's "Send results" is on
+			png := d.resultsPNG(g, outcomeCasual)
+			if len(png) == 0 {
+				return
 			}
+			// With a winning team it is announced like a scored game (the game, its winners and losers, the card attached); without
+			// one, or with that embed switched off, the card goes out alone.
+			if g.Winner != "" && d.post(s, g, "scored", embedData{File: png}) {
+				return
+			}
+			d.sendResultsPNG(s, g, png)
 		}()
 		if g.Bot == "" {
 			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
@@ -2390,6 +2397,9 @@ func (d embedData) common() map[string]string {
 	if len(g.Results) > 0 {
 		vars["winners"], vars["losers"] = resultLines(g)
 		vars["winnerMentions"], vars["loserMentions"] = resultMentions(g)
+	} else if g.Winner != "" {
+		// A casual game rates nobody, but the team that won is known: it is announced like a scored game.
+		vars["winnerMentions"], vars["loserMentions"] = teamMentions(g)
 	}
 	vars["mentions"] = pingsOf(g)
 	pending := make([]string, 0, len(d.Waiting)+len(d.Invited))
@@ -2464,6 +2474,23 @@ func resultLines(g Game) (winners, losers string) {
 		}
 	}
 	return strings.Join(w, "\n"), strings.Join(l, "\n")
+}
+
+// teamMentions lists the winning team's players and everyone else on a team as plain mentions, for a game that was not scored
+// (a casual match): there are no results to read them from, but the team that won is on the game.
+func teamMentions(g Game) (winners, losers string) {
+	var w, l []string
+	for _, p := range g.Players {
+		switch {
+		case p.Team == teamUnassigned:
+			continue
+		case strings.EqualFold(p.Team, g.Winner):
+			w = append(w, "<@"+p.UserID+">")
+		default:
+			l = append(l, "<@"+p.UserID+">")
+		}
+	}
+	return strings.Join(w, " "), strings.Join(l, " ")
 }
 
 // resultMentions lists the winners and the losers as plain mentions, the way the old bot did.
