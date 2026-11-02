@@ -49,6 +49,9 @@ var PlayerProfileCommand = &types.Command{
 func executePlayerProfileCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// 1. Validate Target User
 	target := helpers.ResolveUserOption(s, i, "user")
+	if target == nil && helpers.OptionUserUnresolved(i, "user") {
+		return helpers.EditInteractionEmbed(s, i, helpers.PlayerProfileNotRegisteredEmbed(i))
+	}
 	if target == nil || target.Bot {
 		return helpers.EditInteractionEmbed(s, i, helpers.PlayerProfileBotTargetEmbed(i))
 	}

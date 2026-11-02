@@ -25,10 +25,10 @@ import (
 // ============================================================================
 
 var (
-	prefixDurationPattern  = regexp.MustCompile(`(?i)^(\d+[smhdw]|perm|permanent|permanentban)$`)
+	prefixDurationPattern   = regexp.MustCompile(`(?i)^(\d+[smhdw]|perm|permanent|permanentban)$`)
 	prefixGameNumberPattern = regexp.MustCompile(`^\d{3,9}$`) // a game number among the words of =sr @player 27439 afk
-	prefixSnowflakePattern = regexp.MustCompile(`^\d{17,20}$`)
-	timeFilterPattern      = regexp.MustCompile(`^(\d+)([smhdw])$`)
+	prefixSnowflakePattern  = regexp.MustCompile(`^\d{17,20}$`)
+	timeFilterPattern       = regexp.MustCompile(`^(\d+)([smhdw])$`)
 )
 
 var (
@@ -802,6 +802,9 @@ func SubOptionBool(options []*discordgo.ApplicationCommandInteractionDataOption,
 func SubOptionUser(s *discordgo.Session, options []*discordgo.ApplicationCommandInteractionDataOption, name string) *discordgo.User {
 	for _, opt := range options {
 		if opt.Name == name && opt.Type == discordgo.ApplicationCommandOptionUser {
+			if raw, ok := opt.Value.(string); ok && !prefixSnowflakePattern.MatchString(raw) {
+				return nil // a name no registered player has: not an ID to hand to the database
+			}
 			return opt.UserValue(s)
 		}
 	}
@@ -981,6 +984,9 @@ func OptionUser(s *discordgo.Session, i *discordgo.InteractionCreate, name strin
 					return user
 				}
 			}
+			if raw, ok := opt.Value.(string); ok && !prefixSnowflakePattern.MatchString(raw) {
+				return nil // a name no registered player has: not an ID to hand to the database
+			}
 			return opt.UserValue(s)
 		}
 	}
@@ -1011,6 +1017,9 @@ func userByPlayerName(guildID, name string) *discordgo.User {
 func ResolveUserOption(s *discordgo.Session, i *discordgo.InteractionCreate, name string) *discordgo.User {
 	if user := OptionUser(s, i, name); user != nil {
 		return user
+	}
+	if OptionUserUnresolved(i, name) {
+		return nil // they named someone nobody is registered as: not themselves
 	}
 	if i.Member != nil && i.Member.User != nil {
 		return i.Member.User
@@ -1842,4 +1851,16 @@ func resolvePrefixUserNames(guildID string, options []*discordgo.ApplicationComm
 		}
 		resolvePrefixUserNames(guildID, opt.Options)
 	}
+}
+
+// OptionUserUnresolved reports whether a prefix command named a player (a Minecraft username or nickname) that no
+// registered player of the guild has, so the option holds no user.
+func OptionUserUnresolved(i *discordgo.InteractionCreate, name string) bool {
+	for _, opt := range i.ApplicationCommandData().Options {
+		if opt.Name == name && opt.Type == discordgo.ApplicationCommandOptionUser {
+			raw, ok := opt.Value.(string)
+			return ok && !prefixSnowflakePattern.MatchString(raw)
+		}
+	}
+	return false
 }
