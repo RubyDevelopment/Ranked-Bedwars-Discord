@@ -98,9 +98,10 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 		}
 	}
 
-	// 4. Remove the strike, then give back the ELO it took.
+	// 4. Void the strike (the row stays in history and stops counting toward the ladder), then give back the ELO it
+	// took. If the refund fails the strike is un-voided again so the record and the rating never disagree.
 	removed, _ := database.Must().Strikes.Get(i.GuildID, strikeID)
-	if err := database.Must().Strikes.Delete(actor, i.GuildID, strikeID); err != nil {
+	if err := database.Must().Strikes.Void(actor, i.GuildID, strikeID); err != nil {
 		if sdk.IsNotFound(err) {
 			return helpers.EditInteractionEmbed(s, i, helpers.ModerationUnstrikeNotFoundEmbed(i))
 		}
@@ -108,6 +109,7 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 	}
 	if removed != nil {
 		if err := helpers.Elo.RefundStrike(actor, i.GuildID, target.ID, removed); err != nil {
+			_ = database.Must().Strikes.Unvoid(actor, i.GuildID, strikeID)
 			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationUnstrikeEmbed(i))
 		}
 	}
