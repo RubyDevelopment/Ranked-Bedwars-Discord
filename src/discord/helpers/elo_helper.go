@@ -78,6 +78,10 @@ func syncRankRoles(guildID, userID, _, _ string) {
 	}
 }
 
+// RefreshRankRoles re-syncs the player's rank role and nickname with their stored rank, for changes (a wipe, an unwipe)
+// that write the rank themselves and so never trigger the sync that follows an ordinary rank change.
+func RefreshRankRoles(guildID, userID string) { syncRankRoles(guildID, userID, "", "") }
+
 // deliverDecayNotice tells the player, by direct message and/or in the guild's alert channel as configured. It
 // reports whether the notice got through, so a warning nobody received is tried again on the next sweep.
 func deliverDecayNotice(n DecayNotice) bool {
@@ -98,6 +102,9 @@ func deliverDecayNotice(n DecayNotice) bool {
 	via, channelID := n.Config.Via(), n.Config.AlertChannelID
 	if channelID == "" { // the queue sets none: the shared decay alerts channel (Events page, or any command that declares it)
 		channelID = EventRequirementID(n.GuildID, DecaySweeperEventName, types.ReqChannel, types.DecayAlertsKey)
+	}
+	if channelID == "" { // assigned on the /decays command instead
+		channelID, _ = RequirementSlotID(n.GuildID, "decays", types.ReqChannel, types.DecayAlertsKey)
 	}
 	sent := false
 	if via == "dm" || via == "both" {

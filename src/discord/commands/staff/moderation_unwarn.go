@@ -43,5 +43,6 @@ func executeModerationUnwarnCommand(s *discordgo.Session, i *discordgo.Interacti
 		Action:    "Warning",
 		Adjective: "warned",
 		Type:      "warn",
+		Latest:    true,
 	})
 }

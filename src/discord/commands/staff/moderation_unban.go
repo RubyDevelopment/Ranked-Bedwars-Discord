@@ -83,16 +83,13 @@ func executeModerationUnbanCommand(s *discordgo.Session, i *discordgo.Interactio
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationUnbanEmbed(i))
 	}
-	found := false
+	var held []uint
 	for _, entry := range active.Data {
-		if entry.Type != "server_ban" {
-			continue
-		}
-		found = true
-		if err := database.Must().Punishments.Delete(actor, i.GuildID, entry.ID); err != nil && !sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationUnbanEmbed(i))
+		if entry.Type == "server_ban" {
+			held = append(held, entry.ID)
 		}
 	}
+	found := len(held) > 0
 
 	// 4. Validation Checks
 	_, banErr := s.GuildBan(i.GuildID, targetID)
@@ -101,8 +98,19 @@ func executeModerationUnbanCommand(s *discordgo.Session, i *discordgo.Interactio
 		return helpers.EditInteractionEmbed(s, i, helpers.ModerationUnbanNotActiveEmbed(i))
 	}
 
-	// 5. Reverse Discord Ban & Record History
-	unbanned := !discordBanned || s.GuildBanDelete(i.GuildID, targetID) == nil
+	// 5. Lift the Discord ban first: if it cannot be lifted the ban stays recorded as active, so staff can fix the bot's
+	// permissions and run the command again. Then revoke (not delete) the rows and record the history entry.
+	if discordBanned {
+		if err := s.GuildBanDelete(i.GuildID, targetID); err != nil && !helpers.IsDiscordNotFound(err) {
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationUnbanEmbed(i))
+		}
+	}
+	unbanned := true
+	for _, id := range held {
+		if err := database.Must().Punishments.Revoke(actor, i.GuildID, id, actor, reason); err != nil && !sdk.IsNotFound(err) {
+			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationUnbanEmbed(i))
+		}
+	}
 	if found {
 		_, _ = database.Must().Punishments.Create(actor, i.GuildID, pid, sdk.NewPunishment{
 			StaffID: actor, Reason: reason, Type: "server_unban",

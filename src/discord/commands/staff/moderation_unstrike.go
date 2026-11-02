@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
@@ -26,7 +27,7 @@ func init() {
 // ModerationUnstrikeCommand voids a player's most recent strike, or a specific one by ID.
 var ModerationUnstrikeCommand = &types.Command{
 	Name:         "unstrike",
-	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role"),
+	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role", "chat_muted_role", "vc_muted_role"),
 	Description:  "Removes a specific strike entry from a player's record.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
@@ -97,7 +98,7 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 		}
 	}
 
-	// 4. Void Strike in Database, then give back the ELO it took (a lapsed strike keeps its penalty; a removed one does not)
+	// 4. Remove the strike, then give back the ELO it took.
 	removed, _ := database.Must().Strikes.Get(i.GuildID, strikeID)
 	if err := database.Must().Strikes.Delete(actor, i.GuildID, strikeID); err != nil {
 		if sdk.IsNotFound(err) {
@@ -111,11 +112,17 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 		}
 	}
 
+	// Lift the mute, queue ban... the strike applied, so removing the strike really removes its consequences.
+	ended := helpers.RevokeStrikePunishments(s, i.GuildID, actor, view.Player.ID, strikeID)
+
 	username := target.Username
 	if view.Config != nil && view.Config.Username != "" {
 		username = view.Config.Username
 	}
 	embed := helpers.ModerationUnstrikeSuccessEmbed(i, strikeID, target, username)
+	if ended > 0 {
+		embed.Description += fmt.Sprintf("\n> **Also lifted:** %d punishment(s) this strike applied", ended)
+	}
 	helpers.LogCommandResult(s, i.GuildID, "unstrike", actor, embed)
 	helpers.SendPunishmentAlert(s, i.GuildID, "strike", "revoked", target, username, "strike", "voided", "Strike voided by staff")
 	return helpers.EditInteractionEmbed(s, i, embed)

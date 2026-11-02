@@ -105,6 +105,9 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	// 5. Sync Rank (a partial wipe changes the ELO, so the rank and its role follow)
 	newRank, _ := helpers.Elo.SyncRank(actor, i.GuildID, target.ID)
+	// A wipe and an unwipe write the rank themselves, so SyncRank sees no change and leaves the rank role and nickname
+	// alone: refresh them explicitly.
+	helpers.RefreshRankRoles(i.GuildID, target.ID)
 	if newRank == "" {
 		newRank = result.Stats.Rank
 	}

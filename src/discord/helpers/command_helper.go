@@ -1105,20 +1105,31 @@ func SettingRole(guildID, cmdName, key string) string {
 // LogCommandResult posts embed, with the moderator who ran it, to every log channel assigned to cmdName (a pair like
 // chatmute/chatunmute shares the first command's channels). Nothing is posted when none is set.
 func LogCommandResult(s *discordgo.Session, guildID, cmdName, actorID string, embed *discordgo.MessageEmbed) {
-	slots, _, err := CommandRequirementSlots(guildID, cmdName, types.ReqChannel)
-	if err != nil || embed == nil {
+	if embed == nil {
 		return
 	}
 	logged := *embed
 	logged.Fields = append(append([]*discordgo.MessageEmbedField{}, embed.Fields...), &discordgo.MessageEmbedField{Name: "Moderator", Value: "<@" + actorID + ">", Inline: true})
-	sent := map[string]bool{}
+	for _, channelID := range CommandLogChannels(guildID, cmdName) {
+		_, _ = s.ChannelMessageSendEmbed(channelID, &logged)
+	}
+}
+
+// CommandLogChannels lists the distinct log channels assigned to cmdName (chat_mute_logs...). The shared command_logs
+// channel is skipped, and so are the *_alerts channels: those are where the punished player is pinged, not a staff log.
+func CommandLogChannels(guildID, cmdName string) []string {
+	slots, _, err := CommandRequirementSlots(guildID, cmdName, types.ReqChannel)
+	if err != nil {
+		return nil
+	}
+	var out []string
 	for key, slot := range slots {
-		if key == types.CommandLogsKey || slot.ID == "" || sent[slot.ID] {
+		if key == types.CommandLogsKey || strings.HasSuffix(key, "_alerts") || slot.ID == "" || slices.Contains(out, slot.ID) {
 			continue
 		}
-		sent[slot.ID] = true
-		_, _ = s.ChannelMessageSendEmbed(slot.ID, &logged)
+		out = append(out, slot.ID)
 	}
+	return out
 }
 
 // CommandRegistry holds every registered command.

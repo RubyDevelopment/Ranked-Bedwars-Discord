@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,6 +73,7 @@ type RevokeSpec struct {
 	Type        string   // punishment type to remove
 	ActiveTypes []string // types that count as active; defaults to Type
 	RecordType  string   // optional history entry written after a revoke
+	Latest      bool     // revoke only the newest active punishment (warnings), not all of them
 
 	// DiscordActive reports whether the Discord-side punishment is still in effect.
 	DiscordActive func(s *discordgo.Session, guildID, targetID string) bool
@@ -722,42 +724,63 @@ func RevokePunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec
 	}
 	pid := sdk.UintToString(view.Player.ID)
 
-	// 3. Remove Active Punishments
+	// 3. Find the active punishments of this kind (a warning is removed one at a time, the newest first)
 	active, err := database.Must().Punishments.ByPlayer(i.GuildID, pid, true, "", sdk.Page{})
 	if err != nil {
 		return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(strings.ToLower(spec.Action)))
 	}
-	found := false
+	var held []models.PlayerPunishmentsModel
 	for _, entry := range active.Data {
 		if !PunishmentTypeIn(entry.Type, spec.activeTypes()) {
 			continue
 		}
-		found = true
-		if err := database.Must().Punishments.Delete(actor, i.GuildID, entry.ID); err != nil && !sdk.IsNotFound(err) {
+		if spec.Latest && len(held) > 0 {
+			if entry.ID < held[0].ID {
+				continue
+			}
+			held = held[:0]
+		}
+		held = append(held, entry)
+	}
+
+	// 4. Validation Checks: something is recorded, or it is still in force on Discord (a voice mute, or the role - which
+	// also covers a punishment that ran out a moment ago and has not been swept yet)
+	roleID := ""
+	if spec.RoleKey != "" {
+		roleID = LadderRole(i.GuildID, spec.Ladder)
+	}
+	discordActive := spec.DiscordActive != nil && spec.DiscordActive(s, i.GuildID, target.ID)
+	if !discordActive && roleID != "" {
+		if member, _ := FetchGuildMember(s, i.GuildID, target.ID); member != nil && slices.Contains(member.Roles, roleID) {
+			discordActive = true
+		}
+	}
+	if len(held) == 0 && !discordActive {
+		return EditInteractionEmbed(s, i, punishmentNotActiveEmbed(spec.Adjective))
+	}
+
+	// 5. Reverse the Discord side first: if the role cannot be taken off the punishment stays recorded as active, so
+	// staff can fix the bot's permissions and run the command again.
+	if spec.Discord != nil {
+		spec.Discord(s, i.GuildID, target.ID, reason)
+	}
+	if roleID != "" {
+		if err := s.GuildMemberRoleRemove(i.GuildID, target.ID, roleID); err != nil && !IsDiscordNotFound(err) {
+			punishmentLogger.Warn(fmt.Sprintf("removing role %s from %s in %s: %v", roleID, target.ID, i.GuildID, err))
 			return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(strings.ToLower(spec.Action)))
 		}
 	}
 
-	// 4. Validation Checks
-	discordActive := spec.DiscordActive != nil && spec.DiscordActive(s, i.GuildID, target.ID)
-	if !found && !discordActive {
-		return EditInteractionEmbed(s, i, punishmentNotActiveEmbed(spec.Adjective))
-	}
-
-	// 5. Reverse Discord Action & Record History
-	if spec.Discord != nil {
-		spec.Discord(s, i.GuildID, target.ID, reason)
+	// 6. Revoke, don't delete: the rows stay in history and keep counting toward the ladder's offence count.
+	for _, entry := range held {
+		if err := database.Must().Punishments.Revoke(actor, i.GuildID, entry.ID, actor, reason); err != nil && !sdk.IsNotFound(err) {
+			return EditInteractionEmbed(s, i, unexpectedErrorPunishmentEmbed(strings.ToLower(spec.Action)))
+		}
 	}
 	if spec.RecordType != "" {
 		_, _ = database.Must().Punishments.Create(actor, i.GuildID, pid, sdk.NewPunishment{
 			StaffID: actor, Reason: reason, Type: spec.RecordType,
 		})
-	}
-
-	if spec.RoleKey != "" {
-		if roleID := LadderRole(i.GuildID, spec.Ladder); roleID != "" {
-			_ = s.GuildMemberRoleRemove(i.GuildID, target.ID, roleID)
-		}
 	}
 	embed := punishmentRevokedEmbed(spec.Action, target, reason)
 	LogCommandResult(s, i.GuildID, spec.Command, actor, embed)
@@ -887,12 +910,18 @@ func expireGuildPunishments(s *discordgo.Session, guildID string) {
 		}
 		revoked := 0
 		for _, p := range page.Data {
+			// Lift it on Discord first: a failed unban/role removal leaves the punishment on the expired list so the
+			// next sweep retries it, instead of revoking the row and leaving the player punished for good.
+			userID, ok := liftPunishment(s, guildID, p)
+			if !ok {
+				continue
+			}
 			if err := database.Must().Punishments.Revoke(sdk.SystemActor, guildID, p.ID, sdk.SystemActor, "Punishment expired"); err != nil {
 				punishmentLogger.Warn(fmt.Sprintf("revoking expired punishment %d in %s: %v", p.ID, guildID, err))
 				continue
 			}
 			revoked++
-			undoExpiredPunishment(s, guildID, p)
+			announceExpiredPunishment(s, guildID, userID, p)
 		}
 		if revoked == 0 || len(page.Data) < punishmentSweepBatch {
 			return
@@ -900,67 +929,154 @@ func expireGuildPunishments(s *discordgo.Session, guildID string) {
 	}
 }
 
-// undoExpiredPunishment lifts the Discord side of p, unless another active punishment of the same kind still holds it.
-func undoExpiredPunishment(s *discordgo.Session, guildID string, p models.PlayerPunishmentsModel) {
+// IsDiscordNotFound reports an error meaning the thing to undo is already gone (unknown member, role or ban).
+func IsDiscordNotFound(err error) bool {
+	var restErr *discordgo.RESTError
+	return errors.As(err, &restErr) && restErr.Response != nil && restErr.Response.StatusCode == 404
+}
+
+// liftPunishment lifts the Discord side of p, unless another active punishment of the same kind still holds it.
+// It returns the player's Discord ID, and false when the lift failed and should be retried on the next sweep.
+func liftPunishment(s *discordgo.Session, guildID string, p models.PlayerPunishmentsModel) (string, bool) {
 	view, err := database.Must().Player.Get(guildID, sdk.UintToString(p.PlayerID))
+	if sdk.IsNotFound(err) {
+		return "", true // the player is gone; nothing to lift, just close the row
+	}
 	if err != nil || view.Player == nil {
-		return
+		return "", false
 	}
 	userID := view.Player.SnowflakeID
 
 	active, err := database.Must().Punishments.ByPlayer(guildID, userID, true, "", sdk.Page{})
 	if err != nil {
-		return // can't tell whether it is still held; leave Discord as it is rather than lift a live punishment
+		return "", false // can't tell whether it is still held; leave Discord as it is rather than lift a live punishment
 	}
 	stillHeld := func(match func(typ string) bool) bool {
 		for _, a := range active.Data {
-			if match(a.Type) {
+			if a.ID != p.ID && match(a.Type) {
 				return true
 			}
 		}
 		return false
 	}
 
-	command := ""
-	switch rr, ok := restrictionRoles[p.Type]; {
-	case ok:
-		command = rr.command
+	ok := true
+	fail := func(what string, err error) {
+		if err != nil && !IsDiscordNotFound(err) {
+			punishmentLogger.Warn(fmt.Sprintf("%s for %s in %s after expiry: %v", what, userID, guildID, err))
+			ok = false
+		}
+	}
+	switch rr, isRole := restrictionRoles[p.Type]; {
+	case isRole:
 		sameRole := func(typ string) bool { return restrictionRoles[typ] == rr }
 		if !stillHeld(sameRole) {
 			if roleID := LadderRole(guildID, rr.name); roleID != "" {
-				_ = s.GuildMemberRoleRemove(guildID, userID, roleID)
+				fail("removing role", s.GuildMemberRoleRemove(guildID, userID, roleID))
 			}
 			if rr.name == "vc_mute" {
-				_ = s.GuildMemberMute(guildID, userID, false)
+				_ = s.GuildMemberMute(guildID, userID, false) // 400s when the member is not in voice; not worth retrying
 			}
 		}
 	case p.Type == "server_ban":
-		command = "unban"
 		if !stillHeld(func(typ string) bool { return typ == "server_ban" }) {
-			if err := s.GuildBanDelete(guildID, userID); err != nil {
-				punishmentLogger.Warn(fmt.Sprintf("unbanning %s in %s after expiry: %v", userID, guildID, err))
-			}
+			fail("unbanning", s.GuildBanDelete(guildID, userID))
 		}
+	}
+	return userID, ok
+}
+
+// announceExpiredPunishment posts the expiry to the moderation log and the player's alerts channel.
+func announceExpiredPunishment(s *discordgo.Session, guildID, userID string, p models.PlayerPunishmentsModel) {
+	if userID == "" {
+		return
+	}
+	command := ""
+	if rr, ok := restrictionRoles[p.Type]; ok {
+		command = rr.command
+	} else if p.Type == "server_ban" {
+		command = "unban"
 	}
 	logPunishmentExpiry(s, guildID, command, userID, p)
 	SendPunishmentAlert(s, guildID, command, "expired", &discordgo.User{ID: userID}, userID, p.Type, "expired", p.Reason)
+}
+
+// ReapplyPunishments gives a member who just (re)joined the roles of the punishments still in force on them, so leaving
+// and rejoining does not shake off a mute or a queue ban.
+func ReapplyPunishments(s *discordgo.Session, guildID, userID string) {
+	active, err := database.Must().Punishments.ByPlayer(guildID, userID, true, "", sdk.Page{})
+	if err != nil {
+		return // not a known player: nothing recorded against them
+	}
+	for _, p := range active.Data {
+		rr, ok := restrictionRoles[p.Type]
+		if !ok {
+			continue
+		}
+		if roleID := LadderRole(guildID, rr.name); roleID != "" {
+			if err := s.GuildMemberRoleAdd(guildID, userID, roleID); err != nil {
+				punishmentLogger.Warn(fmt.Sprintf("re-applying role %s to %s in %s: %v", roleID, userID, guildID, err))
+			}
+		}
+	}
+}
+
+// ReapplyVoiceMute server-mutes a member who joins a voice channel while a voice mute is in force; Discord only allows
+// the mute once they are in voice, so a mute given while they were elsewhere takes hold here.
+func ReapplyVoiceMute(s *discordgo.Session, guildID, userID string) {
+	active, err := database.Must().Punishments.ByPlayer(guildID, userID, true, "", sdk.Page{})
+	if err != nil {
+		return
+	}
+	for _, p := range active.Data {
+		if PunishmentTypeIn(p.Type, VoiceMutePunishmentTypes()) {
+			_ = s.GuildMemberMute(guildID, userID, true)
+			return
+		}
+	}
+}
+
+// RevokeStrikePunishments ends the punishments a strike applied (they carry the reason "Strike #<id>: ...") and lifts
+// them on Discord, so removing a strike also removes its mute, queue ban or ban. The rows stay in history. It returns how
+// many were ended.
+func RevokeStrikePunishments(s *discordgo.Session, guildID, actor string, playerID, strikeID uint) int {
+	active, err := database.Must().Punishments.ByPlayer(guildID, sdk.UintToString(playerID), true, "", sdk.Page{})
+	if err != nil {
+		return 0
+	}
+	prefix := "Strike #" + sdk.UintToString(strikeID) + ":"
+	ended := 0
+	for _, p := range active.Data {
+		if !strings.HasPrefix(p.Reason, prefix) {
+			continue
+		}
+		if _, ok := liftPunishment(s, guildID, p); !ok {
+			continue
+		}
+		if err := database.Must().Punishments.Revoke(actor, guildID, p.ID, actor, "Strike #"+sdk.UintToString(strikeID)+" removed"); err == nil {
+			ended++
+		}
+	}
+	return ended
 }
 
 // ============================================================================
 // Logs & alerts
 // ============================================================================
 
-// logPunishmentExpiry posts the expiry to the moderation log channel, when the command has one assigned.
+// logPunishmentExpiry posts the expiry to the same log channels the command's applications and revocations go to.
 func logPunishmentExpiry(s *discordgo.Session, guildID, command, userID string, p models.PlayerPunishmentsModel) {
 	if command == "" {
 		return
 	}
-	channelID, err := RequirementSlotID(guildID, command, types.ReqChannel, types.CommandLogsKey)
-	if err != nil || channelID == "" {
-		return
+	for _, channelID := range CommandLogChannels(guildID, command) {
+		_, _ = s.ChannelMessageSendEmbed(channelID, PunishmentExpiredLogEmbed(userID, p))
 	}
-	_, _ = s.ChannelMessageSendEmbed(channelID, PunishmentExpiredLogEmbed(userID, p))
 }
+
+// PunishmentExpiryEventName is the event that ends timed punishments; its moderation_alerts channel is the catch-all
+// alerts channel for punishments whose own alerts channel is not set.
+const PunishmentExpiryEventName = "Punishment Expiry"
 
 // punishmentAlertKeys is the optional alerts channel each punishment command (and its reversal) declares.
 var punishmentAlertKeys = map[string]string{
@@ -982,6 +1098,9 @@ func SendPunishmentAlert(s *discordgo.Session, guildID, command, action string, 
 	}
 	channelID, err := RequirementSlotID(guildID, command, types.ReqChannel, key)
 	if err != nil || channelID == "" {
+		channelID = EventRequirementID(guildID, PunishmentExpiryEventName, types.ReqChannel, types.ModerationAlertsKey)
+	}
+	if channelID == "" {
 		return
 	}
 	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{

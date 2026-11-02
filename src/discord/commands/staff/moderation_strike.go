@@ -29,7 +29,7 @@ func init() {
 // ModerationStrikeCommand issues an official strike to a player.
 var ModerationStrikeCommand = &types.Command{
 	Name:         "strike",
-	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role"),
+	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role", "chat_muted_role", "vc_muted_role"),
 	Description:  "Issues an official strike penalty to a player.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
@@ -69,6 +69,10 @@ func executeModerationStrikeCommand(s *discordgo.Session, i *discordgo.Interacti
 	}
 	if target.Bot {
 		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeBotTargetEmbed(i))
+	}
+
+	if target.ID == helpers.InteractionUserID(i) {
+		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeInvalidTargetEmbed(i))
 	}
 
 	// 2. Validate Reason

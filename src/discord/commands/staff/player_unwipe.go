@@ -108,6 +108,9 @@ func executePlayerUnwipeCommand(s *discordgo.Session, i *discordgo.InteractionCr
 
 	// 5. Sync Rank
 	newRank, _ := helpers.Elo.SyncRank(actor, i.GuildID, target.ID)
+	// A wipe and an unwipe write the rank themselves, so SyncRank sees no change and leaves the rank role and nickname
+	// alone: refresh them explicitly.
+	helpers.RefreshRankRoles(i.GuildID, target.ID)
 	if newRank == "" {
 		newRank = result.Stats.Rank
 	}
