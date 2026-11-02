@@ -31,7 +31,6 @@ var ModerationStrikeCommand = &types.Command{
 	Name:         "strike",
 	Requirements: types.PunishmentRequirements("strike_logs", "queue_banned_role"),
 	Description:  "Issues an official strike penalty to a player.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

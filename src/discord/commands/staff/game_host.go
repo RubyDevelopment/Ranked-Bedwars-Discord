@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -32,7 +33,6 @@ var GameHostCommand = &types.Command{
 	Name:         "host",
 	Requirements: types.GameRequirements(),
 	Description:  "Creates a custom game with a setup panel, or manages the hosted games that are running.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),

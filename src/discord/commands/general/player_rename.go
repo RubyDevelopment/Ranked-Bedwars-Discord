@@ -29,7 +29,6 @@ var PlayerRenameCommand = &types.Command{
 	Name:         "rename",
 	Requirements: types.GeneralRequirements,
 	Description:  "Updates your linked Minecraft username.",
-	Ephemeral:    true,
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

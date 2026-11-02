@@ -29,7 +29,6 @@ var PlayerVerifyCommand = &types.Command{
 	Name:         "verify",
 	Requirements: types.StaffRequirements,
 	Description:  "Checks a player's queue eligibility: registration, account age, restrictions, and game state.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

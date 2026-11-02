@@ -26,7 +26,6 @@ var ModerationUnmuteCommand = &types.Command{
 	Name:         "unmute",
 	Requirements: types.PunishmentRequirements("chat_mute_logs", "chat_muted_role"),
 	Description:  "Removes a player's text chat mute.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to chat unmute", "Reason for the chat unmute", false, false, false),

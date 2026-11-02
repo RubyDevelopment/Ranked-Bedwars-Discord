@@ -810,7 +810,7 @@ func buildGameHistoryDescriptions(guildID string, entries []sdk.GameHistory, pag
 
 		descriptions = append(descriptions, fmt.Sprintf(
 			"%s **%s | %s | %s | %s**\n%s",
-			resultEmoji, MatchLink(guildID, game.ID, fmt.Sprintf("Game #%d", game.GameNumber)), game.MapName, game.ModeName, DiscordRelativeTimestamp(gameWhen(*game)), strings.Join(valueLines, "\n"),
+			resultEmoji, MatchLink(guildID, game.GuildNumber, fmt.Sprintf("Game #%d", game.GameNumber)), game.MapName, game.ModeName, DiscordRelativeTimestamp(gameWhen(*game)), strings.Join(valueLines, "\n"),
 		))
 	}
 	return descriptions

@@ -27,7 +27,6 @@ var ModerationBanCommand = &types.Command{
 	Name:         "ban",
 	Requirements: types.PunishmentRequirements("server_ban_logs"),
 	Description:  "Bans a player from the Discord guild.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: helpers.PunishmentOptions("Discord user to ban", "Reason for the ban", true, true, true),

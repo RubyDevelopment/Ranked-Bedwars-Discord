@@ -29,7 +29,6 @@ var PlayerModifyCommand = &types.Command{
 	Name:         "modify",
 	Requirements: types.StaffRequirements,
 	Description:  "Manually adjusts a player's seasonal statistics.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),

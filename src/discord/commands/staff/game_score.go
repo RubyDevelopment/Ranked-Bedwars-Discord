@@ -3,9 +3,10 @@ package staff
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -25,7 +26,6 @@ var GameScoreCommand = &types.Command{
 	Name:         "score",
 	Requirements: types.GameRequirements(),
 	Description:  "Scores a game in progress by marking the winning team.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		DefaultMemberPermissions: helpers.AdministratorPermission(),

@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -31,7 +32,6 @@ var TicketManageCommand = &types.Command{
 	Name:         "ticket",
 	Requirements: types.StaffRequirements,
 	Description:  "Manages ticket panel publishing, claims, members, and logs.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{

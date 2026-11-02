@@ -32,7 +32,6 @@ var ModerationUnbanCommand = &types.Command{
 	Name:         "unban",
 	Requirements: types.PunishmentRequirements("server_ban_logs"),
 	Description:  "Revokes a guild-wide ban by user ID.",
-	Ephemeral:    true,
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
