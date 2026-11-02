@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"slices"
 	"sort"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -884,8 +885,11 @@ func (d *gameDiscord) manualVars(g Game) map[string]string {
 	flow := flowOf(g.GuildID)
 	var invite []string
 	for _, p := range g.Players {
-		if p.UserID != g.Host && strings.TrimSpace(p.Username) != "" {
-			invite = append(invite, p.Username)
+		if p.UserID == g.Host {
+			continue
+		}
+		if name := inviteName(g.GuildID, p); name != "" {
+			invite = append(invite, name)
 		}
 	}
 	command := fill(firstNonEmpty(flow.PartyInvite, "/party invite {players}"), map[string]string{"players": strings.Join(invite, " ")})
@@ -7016,4 +7020,18 @@ func (m *GameManager) CleanupFinishedGames(s *discordgo.Session, guildID string)
 		}
 	}
 	return deleted
+}
+
+// eloPrefix is the "[655] " a registered member's display name starts with.
+var eloPrefix = regexp.MustCompile(`^\[\d+\]\s*`)
+
+// inviteName is the Minecraft name to invite a player by: the one they registered, else their display name without the
+// ELO tag and without a "| nickname" suffix.
+func inviteName(guildID string, p GamePlayer) string {
+	if view, err := database.Must().Player.Get(guildID, p.UserID); err == nil && view.Config != nil && strings.TrimSpace(view.Config.Username) != "" {
+		return strings.TrimSpace(view.Config.Username)
+	}
+	name := eloPrefix.ReplaceAllString(strings.TrimSpace(p.Username), "")
+	name, _, _ = strings.Cut(name, " | ")
+	return strings.TrimSpace(name)
 }
