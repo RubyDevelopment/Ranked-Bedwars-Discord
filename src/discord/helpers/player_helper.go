@@ -1074,6 +1074,7 @@ func SyncRegisteredPlayerProfile(
 		}
 	}
 
+	go Engine.RefreshNames(guildID, discordUserID) // a game being hosted right now invites and tracks by the new name
 	return actions, nil
 }
 

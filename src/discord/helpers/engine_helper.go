@@ -612,6 +612,30 @@ func (b *EngineBridge) syncPlayers(gameID uint) {
 	}
 }
 
+// RefreshNames pushes the current Minecraft names to every game the engine hosts that the member plays in, as soon as they
+// register, rename or change their nickname. Without it the engine only asks every so often, so a player who fixed their
+// name while the party was being invited kept being invited under the old one.
+func (b *EngineBridge) RefreshNames(guildID, userID string) {
+	if !b.Connected() {
+		return
+	}
+	b.mu.Lock()
+	var ids []uint
+	for id, guild := range b.hosted {
+		if guild == guildID {
+			ids = append(ids, id)
+		}
+	}
+	b.mu.Unlock()
+	for _, id := range ids {
+		if g, ok := Games.Get(id); ok {
+			if _, plays := g.Player(userID); plays {
+				b.syncPlayers(id)
+			}
+		}
+	}
+}
+
 // HostActionResult is the engine's answer to a host button.
 type HostActionResult struct {
 	OK       bool
