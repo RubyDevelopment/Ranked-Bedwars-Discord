@@ -1033,7 +1033,26 @@ func HandleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if cmd == nil || cmd.Autocomplete == nil || cmd.Disabled {
 		return
 	}
-	cmd.Autocomplete(s, i)
+	// Discord waits three seconds for the choices and then shows an options list that never loads. Whatever the handler does, an
+	// answer goes out in time (empty choices when it is slow); the handler's own late answer is then ignored.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if r := recover(); r != nil {
+				apputil.DiscordLogger.Error(fmt.Sprintf("autocomplete of %s panicked: %v", cmd.Name, r))
+			}
+		}()
+		cmd.Autocomplete(s, i)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2500 * time.Millisecond):
+		_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+			Data: &discordgo.InteractionResponseData{},
+		})
+	}
 }
 
 // ErrRequirementNotConfigured means the channel a command posts to has not been assigned yet.

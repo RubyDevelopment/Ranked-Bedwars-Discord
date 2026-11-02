@@ -85,7 +85,7 @@ func executeQueuePickCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	// 3. Make the Pick
-	if err := helpers.Games.DraftPick(game.ID, actor, targetUserID); err != nil {
+	if err := helpers.PickForCaptain(game.ID, actor, targetUserID); err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("complete the pick", err))
 	}
 

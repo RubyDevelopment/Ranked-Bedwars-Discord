@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -1082,11 +1083,26 @@ func DateOf(t *time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+var (
+	nameRankPrefix = regexp.MustCompile(`^\s*\[[^\]]*\]\s*`) // "[575] " in front of a display name
+	minecraftName  = regexp.MustCompile(`^[A-Za-z0-9_]{1,16}$`)
+)
+
+// skinName is the Minecraft account a name stands for. A display name may carry the player's ELO ("[0] Steve"), which no account
+// has, and a name that is not a Minecraft username at all gets the default skin instead of a picture that cannot be found.
+func skinName(name string) string {
+	name = strings.TrimSpace(nameRankPrefix.ReplaceAllString(name, ""))
+	if !minecraftName.MatchString(name) {
+		return "MHF_Steve"
+	}
+	return name
+}
+
 // Minecraft heads and bodies come from mc-heads.net, by the player's registered username.
 func HeadURL(name string) string {
-	return "https://mc-heads.net/avatar/" + url.PathEscape(name)
+	return "https://mc-heads.net/avatar/" + url.PathEscape(skinName(name))
 }
-func BodyURL(name string) string { return "https://mc-heads.net/body/" + url.PathEscape(name) }
+func BodyURL(name string) string { return "https://mc-heads.net/body/" + url.PathEscape(skinName(name)) }
 
 // EntryVars are the fields of one leaderboard row ("lb.3.") or of the invoker's own row ("me."), as the
 // panel's Banner Builder lists them.

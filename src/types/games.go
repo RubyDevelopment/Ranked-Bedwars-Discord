@@ -226,11 +226,12 @@ type DraftConfig struct {
 
 // DraftView is the state of a running draft.
 type DraftView struct {
-	Teams    [][]string // Teams[i][0] is the captain
-	Pool     []string
-	Turn     int // team index, -1 when done
-	Type     string
-	Captains []string
+	Teams      [][]string // Teams[i][0] is the captain
+	Pool       []string
+	Turn       int // team index, -1 when done
+	Type       string
+	Captains   []string
+	AutoFilled []string
 }
 
 type Formation struct {

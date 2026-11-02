@@ -276,11 +276,7 @@ func FormatConfigurationErrorUser(cmdName string, missing []types.Requirement) s
 
 // MinecraftBustAvatarURL returns the bust render URL used for player thumbnails.
 func MinecraftBustAvatarURL(username string) string {
-	name := strings.TrimSpace(username)
-	if name == "" {
-		name = "Steve"
-	}
-	return "https://nmsr.nickac.dev/bust/" + url.PathEscape(name)
+	return "https://nmsr.nickac.dev/bust/" + url.PathEscape(skinName(username))
 }
 
 // The old bot's thumbnail icons that earn their place (white glyphs, made for Discord's dark theme). Its candle icons,
@@ -6111,7 +6107,7 @@ var defaultEmbeds = map[string]embedTemplate{
 		t.Thumbnail = str("{captainAvatar}")
 		return t
 	}(),
-	"partyMembersAutoAssigned": thumb(tpl("info", "Party Members Joined", "{names} {wasWere} placed on **{team}** to stay with `{captain}`."), ThumbPlayers),
+	"partyMembersAutoAssigned": thumb(tpl("info", "Party Members Joined", "{names} {wasWere} placed on **{team}** to stay with {captain}."), ThumbPlayers),
 	"matchJoined": thumb(tpl("pending", "Match Joined", "The bot joined the private game lobby and is waiting for the Team Selector to open. Teams will be checked once it does.",
 		embedField{Name: "Team TBD", Value: "{teamPlayers}", Inline: true, Each: "team"}), ThumbTimer),
 	// Hosted by hand: nobody joins the server for the players, so they are told how to set the game up.

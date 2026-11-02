@@ -11,8 +11,8 @@ func TestDeliverySettingsAreReadFromTheProfile(t *testing.T) {
 	if f.resultsChannel("999") != "111" || f.Delivery.ResultsMode != "builtin" {
 		t.Fatalf("results delivery: %+v", f.Delivery)
 	}
-	if !f.alertOn("queue_denied") || f.alertOn("game_voided") || !f.alertOn("game_scored") {
-		t.Fatalf("alerts: queue_denied=%v game_voided=%v game_scored(unlisted, on)=%v", f.alertOn("queue_denied"), f.alertOn("game_voided"), f.alertOn("game_scored"))
+	if !f.alertOn("queue_denied") || f.alertOn("game_voided") || !f.alertOn("tracking_lost") {
+		t.Fatalf("alerts: queue_denied=%v game_voided=%v tracking_lost(unlisted, on)=%v", f.alertOn("queue_denied"), f.alertOn("game_voided"), f.alertOn("tracking_lost"))
 	}
 }
 

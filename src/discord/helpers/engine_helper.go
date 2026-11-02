@@ -824,6 +824,19 @@ func (b *EngineBridge) handle(msg engineInbound) {
 			Phase: msg.Phase, PhaseName: msg.PhaseName, Stat: msg.Stat, Player: msg.StatPlayer, Amount: msg.StatAmount, Total: msg.StatTotal,
 		}})
 		b.persistTimelineEvent(msg.GameID, b.timelineInput(msg))
+		// Out of the match for good: free to queue again right away.
+		switch {
+		case msg.Kind == timelineKill && msg.Final && msg.Victim != "":
+			Games.ReleasePlayers(msg.GameID, msg.Victim)
+		case msg.Kind == timelineEliminated && msg.Team != "":
+			if g, ok := Games.Get(msg.GameID); ok {
+				var ids []string
+				for _, p := range g.TeamPlayers(msg.Team) {
+					ids = append(ids, p.UserID)
+				}
+				Games.ReleasePlayers(msg.GameID, ids...)
+			}
+		}
 
 	case "game.started":
 		if err := Games.BeginMatch(msg.GameID); err != nil && !errors.Is(err, ErrWrongState) {

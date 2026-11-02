@@ -37,7 +37,6 @@ var AlertKinds = map[string]struct {
 }{
 	"queue_denied":  {"Queue denied", 0xf59e0b},
 	"game_voided":   {"Game voided", 0xef4444},
-	"game_scored":   {"Game scored", 0x22c55e},
 	"tracking_lost": {"Match tracking lost", 0xf97316},
 }
 
@@ -164,19 +163,4 @@ func voidAlert(g Game, reason string) (string, []*discordgo.MessageEmbedField) {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: "Game channel", Value: "<#" + g.Channels.Text + ">", Inline: true})
 	}
 	return desc, fields
-}
-
-// scoreSummary is one line of who won and what the MVP got, for the "game scored" alert.
-func scoreSummary(g Game) string {
-	winners := []string{}
-	for _, r := range g.Results {
-		if r.Win {
-			winners = append(winners, "<@"+r.UserID+">")
-		}
-	}
-	text := fmt.Sprintf("Game #%d (%s on %s) was scored.", g.Number, g.Mode.Name, g.Map)
-	if len(winners) > 0 {
-		text += " Winners: " + strings.Join(winners, ", ")
-	}
-	return text
 }

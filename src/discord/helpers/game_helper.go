@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
@@ -34,9 +35,13 @@ const maxAutocompleteChoices = 25
 // games, limited to the given states (every state when none are given).
 func GameNumberAutocomplete(states ...GameState) func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		typed := focusedText(i)
 		choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, maxAutocompleteChoices)
 		for _, g := range Games.GuildGames(i.GuildID) {
 			if len(states) > 0 && !slices.Contains(states, g.State) {
+				continue
+			}
+			if typed != "" && !strings.Contains(strconv.Itoa(g.Number), typed) {
 				continue
 			}
 			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
@@ -55,26 +60,54 @@ func GameNumberAutocomplete(states ...GameState) func(s *discordgo.Session, i *d
 	}
 }
 
-// ForceVoidGameNumberAutocomplete includes persisted open games and completed
-// games from the active season, along with the current in-memory game snapshots.
+// focusedText is what the user has typed so far in the option being completed.
+func focusedText(i *discordgo.InteractionCreate) string {
+	for _, opt := range i.ApplicationCommandData().Options {
+		if opt.Focused {
+			return strings.ToLower(strings.TrimSpace(fmt.Sprint(opt.Value)))
+		}
+	}
+	return ""
+}
+
+// ForceVoidGameNumberAutocomplete suggests the guild's games that can be force-voided: the live ones, plus the most recent open
+// and completed games from the database. Discord gives an autocomplete three seconds, so it never reads a whole season: a
+// number typed in full is looked up on its own, and when the database is slow the live games are offered instead.
 func ForceVoidGameNumberAutocomplete() func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		games, err := Games.ForceVoidCandidates(i.GuildID)
-		if err != nil {
-			appLog.EngineLogger.Error("[forcevoid] autocomplete: " + err.Error())
-			respondGameNumberAutocomplete(s, i, nil)
-			return
+		typed := focusedText(i)
+		type result struct {
+			games []Game
+			err   error
+		}
+		done := make(chan result, 1)
+		go func() {
+			games, err := Games.ForceVoidSuggestions(i.GuildID, typed)
+			done <- result{games, err}
+		}()
+		var games []Game
+		select {
+		case r := <-done:
+			games = r.games
+			if r.err != nil {
+				appLog.EngineLogger.Error("[forcevoid] autocomplete: " + r.err.Error())
+				games = Games.GuildGames(i.GuildID)
+			}
+		case <-time.After(2 * time.Second):
+			games = Games.GuildGames(i.GuildID)
 		}
 
-		sort.Slice(games, func(i, j int) bool {
-			if games[i].Number == games[j].Number {
-				return games[i].ID > games[j].ID
+		sort.Slice(games, func(a, b int) bool {
+			if games[a].Number == games[b].Number {
+				return games[a].ID > games[b].ID
 			}
-			return games[i].Number > games[j].Number
+			return games[a].Number > games[b].Number
 		})
-
 		choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, maxAutocompleteChoices)
 		for _, game := range games {
+			if typed != "" && !strings.Contains(strconv.Itoa(game.Number), typed) {
+				continue
+			}
 			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
 				Name:  fmt.Sprintf("#%d | %s | %s", game.Number, game.Mode.Name, game.State),
 				Value: game.Number,
@@ -616,6 +649,7 @@ type GameDiscordEffects struct {
 func NewGameDiscordEffects(session func() *discordgo.Session) GameDiscordEffects {
 	d := &gameDiscord{session: session, votes: map[uint]*mapVote{}, closedVotes: map[uint]*closedVote{}, drafts: map[uint]*draftUI{}, live: map[uint]*embedState{}, introductions: map[uint]bool{}}
 	RegisterComponentHandler(d.handleComponent)
+	gameUI.Store(d)
 	return GameDiscordEffects{Notify: d.notify, ApplyTeams: d.applyTeams, SelectMap: d.selectMap}
 }
 
@@ -706,8 +740,10 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 			st.hasInvite = false // the invitation is done; a late reminder must not bring it back
 			d.mu.Unlock()
 		}
-		if posted := d.post(s, g, ev.Key, data); posted && ev.Key == "partyReminder" {
-			d.resendPartyInvitation(s, g, st)
+		if ev.Key == "partyReminder" {
+			d.postReminderWithInvitation(s, g, st, data)
+		} else {
+			d.post(s, g, ev.Key, data)
 		}
 	case EventMatch:
 		d.matchEvent(s, g, ev.Match)
@@ -746,7 +782,6 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if g.Bot == "" {
 			go d.runManual(s, g, flowOf(g.GuildID).Manual["post"])
 		}
-		StaffAlertPinging(s, g.GuildID, "game_scored", g.PlayerIDs(), scoreSummary(g))
 		d.forget(g.ID)
 	case EventChatVote:
 		n, _ := strconv.Atoi(ev.Vars["number"])
@@ -844,6 +879,34 @@ type embedState struct {
 	posted     map[string]bool // embeds already posted in this game, so a shared block never posts the welcome or the teams twice
 	invite     embedData       // the last Party Invitation, posted again under each reminder
 	hasInvite  bool
+}
+
+// postReminderWithInvitation is the party reminder: the Party Invitation moves to the bottom of the chat as one message that
+// carries the reminder text (pinging the players who have not joined) above the embed, with the latest lists. The old invitation
+// is deleted. With no invitation to resend, or a reminder the guild switched off, it falls back to the reminder on its own.
+func (d *gameDiscord) postReminderWithInvitation(s *discordgo.Session, g Game, st *embedState, reminder embedData) {
+	d.mu.Lock()
+	invite, ok := st.invite, st.hasInvite
+	d.mu.Unlock()
+	emb, t, built := d.build(g, "partyReminder", reminder)
+	if !built || emb == nil {
+		return // the guild switched the reminder off: nothing is said, and the invitation stays where it is
+	}
+	if !ok || t.Content == nil {
+		d.post(s, g, "partyReminder", reminder)
+		return
+	}
+	reminder.Game = g
+	// The invitation keeps its own lists (the host sends it again right before each reminder): the reminder only names who is
+	// still waiting, so copying its lists over would empty Joined and Invited.
+	invite.Content = strings.TrimSpace(fill(*t.Content, reminder.common()))
+	d.mu.Lock()
+	st.invite = invite
+	d.mu.Unlock()
+	d.resendPartyInvitation(s, g, st)
+	d.mu.Lock()
+	st.invite.Content = "" // only this resend carries the reminder
+	d.mu.Unlock()
 }
 
 // resendPartyInvitation moves the Party Invitation to the bottom of the chat after a reminder: the old message is deleted and the
@@ -1081,6 +1144,9 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 		send.Content = *content
 	} else if key == "scored" && len(data.File) > 0 { // no text set: say who won and who lost, as the old bot did
 		send.Content = resultsSummary(g, resultsOutcome(g, false))
+	}
+	if data.Content != "" {
+		send.Content = data.Content
 	}
 	if send.Content != "" {
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
@@ -1580,9 +1646,10 @@ func (c PerkContext) MapVoteWeight() float64 {
 type draftUI struct {
 	channelID string
 	messageID string
-	turnKey   string     // changes whenever someone picks, so a stale auto-pick timer does nothing
-	endsAt    int64      // when the current pick times out (Unix seconds), 0 without a time limit
-	prev      [][]string // the rosters as the message last showed them, to tell who a pick pulled along
+	turnKey   string            // changes whenever someone picks, so a stale auto-pick timer does nothing
+	endsAt    int64             // when the current pick times out (Unix seconds), 0 without a time limit
+	prev      [][]string        // the rosters as the message last showed them, to tell who a pick pulled along
+	ratios    map[string]string // user id -> "W/L 1.22 | K/D 0.74" for the pick menu, looked up once when the draft starts
 }
 
 // setTimer notes when the pick that starts now times out.
@@ -1591,6 +1658,33 @@ func (ui *draftUI) setTimer(seconds int) {
 	if seconds > 0 {
 		ui.endsAt = time.Now().Add(time.Duration(seconds) * time.Second).Unix()
 	}
+}
+
+// draftRatios looks up every player's win/loss and kill/death ratio for the season, side by side, for the pick menu. A player
+// with no stats yet reads 0.00; when the season or a lookup is unavailable the menu simply shows ELO alone.
+func draftRatios(g Game) map[string]string {
+	_, seasonID, err := ActiveSeasonKey(g.GuildID)
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(g.Players))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, p := range g.Players {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			text := "W/L 0.00 | K/D 0.00"
+			if st, err := database.Must().Stats.Get(g.GuildID, p.UserID, seasonID); err == nil {
+				text = "W/L " + Ratio(st.Wins, st.Losses) + " | K/D " + Ratio(st.Kills, st.Deaths)
+			}
+			mu.Lock()
+			out[p.UserID] = text
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return out
 }
 
 func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
@@ -1602,14 +1696,14 @@ func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
 	// the teams exist, after the draft would already be under way); then the draft starts.
 	d.announceBeforeDraft(s, g)
 	d.gatherForDraft(s, g)
-	ui := &draftUI{channelID: g.Channels.Text}
+	ui := &draftUI{channelID: g.Channels.Text, ratios: draftRatios(g)}
 	ui.setTimer(Games.FlowSettings(g.GuildID).CaptainFor(g.Mode).PickTimeoutSeconds)
 	embed := d.draftEmbed(s, g, view, ui)
 	WithGuildFooterIconForGuild(s, g.GuildID, embed)
 	msg, err := s.ChannelMessageSendComplex(g.Channels.Text, &discordgo.MessageSend{
 		Content:    draftPing(view),
 		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: draftComponents(g, view),
+		Components: draftComponents(g, view, ui.ratios),
 	})
 	if err != nil {
 		return
@@ -1696,7 +1790,8 @@ func (d *gameDiscord) refreshDraft(s *discordgo.Session, gameID uint, ui *draftU
 			_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{Channel: ui.channelID, ID: ui.messageID, Embeds: &[]*discordgo.MessageEmbed{done}, Components: &[]discordgo.MessageComponent{}})
 		}
 		if err == nil {
-			d.announceAutoAssigned(s, g, before, view.Teams, true)
+			d.announceAutoAssigned(s, g, before, withoutIDs(view.Teams, view.AutoFilled), true)
+			d.announceLastPlayer(s, g, view)
 		}
 		return
 	}
@@ -1711,7 +1806,7 @@ func (d *gameDiscord) refreshDraft(s *discordgo.Session, gameID uint, ui *draftU
 	oldID := ui.messageID
 	d.mu.Unlock()
 	msg, sendErr := s.ChannelMessageSendComplex(ui.channelID, &discordgo.MessageSend{
-		Content: draftPing(view), Embeds: []*discordgo.MessageEmbed{embed}, Components: draftComponents(g, view),
+		Content: draftPing(view), Embeds: []*discordgo.MessageEmbed{embed}, Components: draftComponents(g, view, ui.ratios),
 		AllowedMentions: &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}},
 	})
 	if sendErr == nil {
@@ -1722,7 +1817,7 @@ func (d *gameDiscord) refreshDraft(s *discordgo.Session, gameID uint, ui *draftU
 	} else { // could not repost: keep the old message up to date instead
 		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			Channel: ui.channelID, ID: oldID, Content: ptr(draftPing(view)),
-			Embeds: &[]*discordgo.MessageEmbed{embed}, Components: ptr(draftComponents(g, view)),
+			Embeds: &[]*discordgo.MessageEmbed{embed}, Components: ptr(draftComponents(g, view, ui.ratios)),
 		})
 	}
 	d.announceAutoAssigned(s, g, before, view.Teams, true)
@@ -1836,19 +1931,14 @@ func (d *gameDiscord) announceAutoAssigned(s *discordgo.Session, g Game, before,
 		}
 		names := make([]string, len(added))
 		for i, id := range added {
-			names[i] = id
-			if p, ok := g.Player(id); ok {
-				names[i] = "`" + p.Username + "`"
-			}
+			names[i] = "<@" + id + ">"
 		}
 		// "to stay with" the player the pick pulled them along with (the pick itself), or the captain for the first assignment.
 		captain := members[0]
 		if picked && from > 0 && from < len(members) {
 			captain = members[from]
 		}
-		if p, ok := g.Player(captain); ok {
-			captain = p.Username
-		}
+		captain = "<@" + captain + ">"
 		wasWere := "were"
 		if len(added) == 1 {
 			wasWere = "was"
@@ -1856,6 +1946,26 @@ func (d *gameDiscord) announceAutoAssigned(s *discordgo.Session, g Game, before,
 		d.post(s, g, "partyMembersAutoAssigned", embedData{Vars: map[string]string{
 			"names": strings.Join(names, ", "), "wasWere": wasWere, "team": TeamName(t), "captain": captain, "count": strconv.Itoa(len(added)),
 		}})
+	}
+}
+
+// withoutIDs is the teams without the given players.
+func withoutIDs(teams [][]string, ids []string) [][]string {
+	out := make([][]string, len(teams))
+	for t, members := range teams {
+		out[t] = slices.DeleteFunc(slices.Clone(members), func(id string) bool { return slices.Contains(ids, id) })
+	}
+	return out
+}
+
+// announceLastPlayer says who was put on the last open team because nobody was left to pick.
+func (d *gameDiscord) announceLastPlayer(s *discordgo.Session, g Game, view DraftView) {
+	for _, id := range view.AutoFilled {
+		for t, members := range view.Teams {
+			if slices.Contains(members, id) {
+				d.say(s, g.Channels.Text, "<@"+id+"> was the last player left, so they were placed on **"+TeamName(t)+"** automatically.")
+			}
+		}
 	}
 }
 
@@ -1867,7 +1977,7 @@ func cloneTeams(in [][]string) [][]string {
 	return out
 }
 
-func draftComponents(g Game, view DraftView) []discordgo.MessageComponent {
+func draftComponents(g Game, view DraftView, ratios map[string]string) []discordgo.MessageComponent {
 	if view.Turn < 0 || len(view.Pool) == 0 {
 		return nil
 	}
@@ -1876,6 +1986,9 @@ func draftComponents(g Game, view DraftView) []discordgo.MessageComponent {
 		label, desc := id, ""
 		if p, ok := g.Player(id); ok {
 			label, desc = p.Username, fmt.Sprintf("ELO: %d", p.EloBefore)
+			if r := ratios[id]; r != "" {
+				desc += " | " + r
+			}
 			if g.inParty(id) {
 				label += " (Party)"
 				desc += " | In a party"
@@ -1972,9 +2085,40 @@ func (d *gameDiscord) handleDraftPick(s *discordgo.Session, i *discordgo.Interac
 		ephemeral(s, i, draftErrorText(err))
 		return
 	}
-	d.say(s, ui.channelID, "<@"+user+"> has picked <@"+values[0]+"> for **"+teamName+"**")
 	_ = InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
-	d.refreshDraft(s, uint(gameID), ui)
+	d.afterPick(s, uint(gameID), ui, user, values[0], teamName)
+}
+
+// afterPick is what follows a pick, however it was made: the line in the game chat, then the draft message and its timer for the next turn.
+func (d *gameDiscord) afterPick(s *discordgo.Session, gameID uint, ui *draftUI, captainID, pickedID, teamName string) {
+	d.say(s, ui.channelID, "<@"+captainID+"> has picked <@"+pickedID+"> for **"+teamName+"**")
+	d.refreshDraft(s, gameID, ui)
+}
+
+// gameUI is the Discord side of games, kept so the =pick command can reach the draft message it has to update.
+var gameUI atomic.Pointer[gameDiscord]
+
+// PickForCaptain makes a captain's pick for the =pick command and updates what the menu would: the chat line, the picking
+// message (reposted for the next captain) and the pick timer. Without it the old timer would run on into the next turn.
+func PickForCaptain(gameID uint, captainID, pickedID string) error {
+	teamName := ""
+	if before, err := Games.Draft(gameID); err == nil && before.Turn >= 0 {
+		teamName = TeamName(before.Turn)
+	}
+	if err := Games.DraftPick(gameID, captainID, pickedID); err != nil {
+		return err
+	}
+	if d := gameUI.Load(); d != nil {
+		if s := d.session(); s != nil {
+			d.mu.Lock()
+			ui := d.drafts[gameID]
+			d.mu.Unlock()
+			if ui != nil {
+				d.afterPick(s, gameID, ui, captainID, pickedID, teamName)
+			}
+		}
+	}
+	return nil
 }
 
 // say posts a plain line in the game chat.
@@ -2400,6 +2544,7 @@ type embedData struct {
 	MapRows    []map[string]string // per-map values of the map vote ({mapName}, {mapIcon}, {mapScore}, {winnerTag})
 	Invited    []string            // ... invited to the party but not joined yet
 	Force      bool                // draw it even when the guild switched the embed off: the vote and the draft cannot be skipped
+	Content    string              // text above the embed that replaces the template's (the party reminder rides on the invitation)
 	File       []byte              // a picture (the results card) sent with the message: it is the embed's image, or the whole message when the embed has no text
 }
 
@@ -2485,18 +2630,14 @@ func (d embedData) common() map[string]string {
 	return vars
 }
 
-// namesList is who is in the list as the old party embeds wrote it: a line with the Minecraft name each, "None" when empty.
+// namesList is who is in the list: a line with a mention each (their Discord name, whoever they are), "None" when empty.
 func namesList(g Game, ids []string) (string, string) {
 	if len(ids) == 0 {
 		return "None", "0"
 	}
 	lines := make([]string, len(ids))
 	for i, id := range ids {
-		name := id
-		if p, ok := g.Player(id); ok && p.Username != "" {
-			name = p.Username
-		}
-		lines[i] = "- `" + name + "`"
+		lines[i] = "- <@" + id + ">"
 	}
 	return strings.Join(lines, "\n"), strconv.Itoa(len(ids))
 }
@@ -2590,7 +2731,7 @@ func statTable(g Game, f guildFlow) string {
 		for _, id := range ids {
 			parts = append(parts, fmt.Sprintf("%s %g", f.label(id), p.Custom[id]))
 		}
-		line := fmt.Sprintf("`%s` %s", p.Username, strings.Join(parts, " · "))
+		line := fmt.Sprintf("<@%s> %s", p.UserID, strings.Join(parts, " · "))
 		if size+len(line)+1 > 1000 {
 			break
 		}
@@ -2604,11 +2745,11 @@ func statTable(g Game, f guildFlow) string {
 // empty team, unless the guild's template says otherwise.
 var defaultPlayerLines = map[string]struct{ line, out, empty string }{
 	"plain":  {"- {mention}", "- {mention}", "`Empty`"},
-	"status": {"{dot} `{partyName}`", "{dot} `{partyName}`", "No players"},
-	"locked": {"{dot} `{partyName}`", "{dot} `{partyName}`", "No players"},
-	"tbd":    {"{dot} `{partyName}`", "{dot} `{partyName}`", ""},
-	"alive":  {"{dot} `{name}`", "{dot} ~~`{name}`~~", "No players"},
-	"draft":  {"{name} {captain}", "{name} {captain}", "No players"},
+	"status": {"{dot} {mention}{partyMark}", "{dot} {mention}{partyMark}", "No players"},
+	"locked": {"{dot} {mention}{partyMark}", "{dot} {mention}{partyMark}", "No players"},
+	"tbd":    {"{dot} {mention}{partyMark}", "{dot} {mention}{partyMark}", ""},
+	"alive":  {"{dot} {mention}", "{dot} ~~{mention}~~", "No players"},
+	"draft":  {"{mention} {captain}", "{mention} {captain}", "No players"},
 }
 
 func orDefault(v *string, def string) string {
@@ -2669,12 +2810,13 @@ func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 			if p.Captain {
 				captain = "👑"
 			}
-			partyName := p.Username
+			partyName, partyMark := p.Username, ""
 			if d.Game.inParty(p.UserID) {
 				partyName += " 👥"
+				partyMark = " 👥"
 			}
 			rows = append(rows, strings.TrimSpace(fill(tpl, map[string]string{
-				"mention": "<@" + p.UserID + ">", "name": p.Username, "partyName": partyName, "id": p.UserID, "dot": dot, "captain": captain, "team": team,
+				"mention": "<@" + p.UserID + ">", "name": p.Username, "partyName": partyName, "partyMark": partyMark, "id": p.UserID, "dot": dot, "captain": captain, "team": team,
 				"elo": strconv.Itoa(p.EloBefore), "kills": strconv.Itoa(p.Kills), "deaths": strconv.Itoa(p.Deaths),
 				"finalKills": strconv.Itoa(p.FinalKills), "beds": strconv.Itoa(p.BedsDestroyed), "assists": strconv.Itoa(p.Assists),
 			})))
@@ -3512,7 +3654,7 @@ func DefaultFlows() FlowSettings {
 	return FlowSettings{
 		Standard: StandardFlow{IsEnabled: true, RandomnessPercent: 100, KeepPartyTogether: true, BalancePartyGroups: true},
 		Captain: CaptainFlow{IsEnabled: true, PickTimeoutSeconds: 60, TopEloCaptainChance: 0.75, AutoAssignParties: true,
-			OneCaptainPerParty: true, DefaultPickingType: "one_per_person", AlternatingMinPlayers: 8},
+			OneCaptainPerParty: true, DefaultPickingType: "alternating", AlternatingMinPlayers: 8},
 	}
 }
 
@@ -3562,6 +3704,7 @@ type liveGame struct {
 	submitted bool
 	busy      bool // scoring in progress
 	syncMu    sync.Mutex
+	out       map[string]bool // players who are out of the match for good (final death): free to queue again
 }
 
 // GameManager: see the package comment above.
@@ -3704,6 +3847,9 @@ func (m *GameManager) indexLocked(lg *liveGame) {
 	defer m.mu.Unlock()
 	for _, p := range lg.g.Players {
 		k := playerKey(lg.g.GuildID, p.UserID)
+		if lg.out[p.UserID] {
+			continue // eliminated: another game may already hold them
+		}
 		if lg.g.State.active() {
 			m.byPlayer[k] = lg.g.ID
 		} else if m.byPlayer[k] == lg.g.ID {
@@ -3713,6 +3859,31 @@ func (m *GameManager) indexLocked(lg *liveGame) {
 	for _, c := range lg.g.Channels.ids() {
 		m.byChannel[c] = lg.g.ID
 	}
+}
+
+// ReleasePlayers frees players who are out of the match for good (a final death, or their team was eliminated): they no longer
+// count as being in a game, so they can queue again at once while the match goes on without them.
+func (m *GameManager) ReleasePlayers(gameID uint, userIDs ...string) {
+	lg := m.live(gameID)
+	if lg == nil || len(userIDs) == 0 {
+		return
+	}
+	lg.mu.Lock()
+	if lg.out == nil {
+		lg.out = map[string]bool{}
+	}
+	for _, id := range userIDs {
+		lg.out[id] = true
+	}
+	guildID := lg.g.GuildID
+	lg.mu.Unlock()
+	m.mu.Lock()
+	for _, id := range userIDs {
+		if k := playerKey(guildID, id); m.byPlayer[k] == gameID {
+			delete(m.byPlayer, k)
+		}
+	}
+	m.mu.Unlock()
 }
 
 func (m *GameManager) unregister(lg *liveGame) {
@@ -3797,6 +3968,21 @@ type forceVoidGamesAPI interface {
 	ListForceVoidGames(guildID string) ([]models.GamesModel, error)
 }
 
+// ForceVoidSuggestions is the short list the /forcevoid autocomplete offers: the live games, the 100 most recent open or completed
+// games, and (when a whole game number is typed) that game, however old. It makes at most two small database calls.
+func (m *GameManager) ForceVoidSuggestions(guildID, typed string) ([]Game, error) {
+	records, err := m.api().RecentGames(guildID, "waiting,in_progress,completed", 100)
+	if err != nil {
+		return nil, err
+	}
+	if n, convErr := strconv.Atoi(typed); convErr == nil && n > 0 {
+		if rec, err := m.api().GameByNumber(guildID, n); err == nil && rec != nil {
+			records = append(records, *rec)
+		}
+	}
+	return m.forceVoidGames(guildID, records), nil
+}
+
 // ForceVoidCandidates returns open or completed non-voided games in the active
 // season, preferring live snapshots when a game is also in the runtime registry.
 func (m *GameManager) ForceVoidCandidates(guildID string) ([]Game, error) {
@@ -3808,7 +3994,11 @@ func (m *GameManager) ForceVoidCandidates(guildID string) ([]Game, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list games for forcevoid: %w", err)
 	}
+	return m.forceVoidGames(guildID, records), nil
+}
 
+// forceVoidGames turns game records into the games /forcevoid can act on (open or completed ones), preferring a live snapshot.
+func (m *GameManager) forceVoidGames(guildID string, records []models.GamesModel) []Game {
 	liveByID := make(map[uint]Game)
 	for _, game := range m.GuildGames(guildID) {
 		liveByID[game.ID] = game
@@ -3848,7 +4038,7 @@ func (m *GameManager) ForceVoidCandidates(guildID string) ([]Game, error) {
 		}
 		candidates = append(candidates, game)
 	}
-	return candidates, nil
+	return candidates
 }
 
 // ---- persistence ------------------------------------------------------------
@@ -4438,6 +4628,7 @@ func (m *GameManager) Draft(id uint) (DraftView, error) {
 	d := lg.draft
 	view := DraftView{Pool: d.Pool(), Type: d.Type, Captains: d.Captains()}
 	view.Turn = d.Turn()
+	view.AutoFilled = slices.Clone(d.filled)
 	for _, t := range d.Teams {
 		view.Teams = append(view.Teams, slices.Clone(t))
 	}
@@ -4843,12 +5034,18 @@ func (m *GameManager) scheduleChannelCleanup(g Game) {
 		go m.archiveLogs(g)
 		return
 	}
+	// The team voice channels go at once; the game chat stays for the cleanup delay (so the result and the chat can be read), then goes too.
+	voice, text := g.Channels, g.Channels
+	voice.Text, text.Voice = "", nil
+	if len(voice.Voice) > 0 {
+		go fn(g.GuildID, voice)
+	}
 	cancel := m.deps.After(m.deps.CleanupDelay, func() {
 		m.cleanupMu.Lock()
 		delete(m.cleanups, g.ID)
 		m.cleanupMu.Unlock()
-		m.archiveLogs(g) // the chat is read while the channels still exist
-		fn(g.GuildID, g.Channels)
+		m.archiveLogs(g) // the chat is read while the channel still exists
+		fn(g.GuildID, text)
 	})
 	m.cleanupMu.Lock()
 	if old := m.cleanups[g.ID]; old != nil {
@@ -5828,6 +6025,8 @@ type Draft struct {
 	order   []int // team indexes, weakest team first
 	auto    bool
 	rng     *rand.Rand
+	filled  []string // the players who were put on the last open team without a pick
+	picks   int      // picks the captains have made (party mates and the last player placed for them do not count)
 }
 
 // NewDraft elects captains and returns the draft. Captains come from the top
@@ -5933,11 +6132,13 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 			d.pull(t, d.Teams[t][0])
 		}
 	}
+	// The team that picks first (the weakest, by the ELO of its captain and the players who came with them) is always Team A, so
+	// the first captain shown is the first to pick.
+	sort.SliceStable(d.Teams, func(a, b int) bool { return d.teamElo(a) < d.teamElo(b) })
 	d.order = make([]int, teams)
 	for i := range d.order {
 		d.order[i] = i
 	}
-	sort.SliceStable(d.order, func(a, b int) bool { return d.teamElo(d.order[a]) < d.teamElo(d.order[b]) })
 	return d, nil
 }
 
@@ -6020,14 +6221,26 @@ func (d *Draft) Turn() int {
 			}
 		}
 		if len(open) == 1 {
+			// Only one team has room, so whoever is left in the pool goes there: nobody has to pick the last player.
+			if len(d.pool) > 0 {
+				d.filled = append(d.filled, d.pool...)
+				for len(d.pool) > 0 && len(d.Teams[open[0]]) < d.PerTeam {
+					d.take(open[0], d.pool[0])
+				}
+				continue
+			}
 			return open[0]
 		}
 		if d.Type == "alternating" && len(d.Teams) == 2 {
+			// 1-2-2-1: the weaker team picks once, then the other picks twice, then the weaker twice, and so on in pairs. It is
+			// counted in picks, not in players, so a party mate who came along with a pick does not cost a captain a turn.
 			lo, hi := d.order[0], d.order[1]
-			pick := hi
-			switch ls, hs := len(d.Teams[lo]), len(d.Teams[hi]); {
-			case ls == hs && ls%2 != 0, ls < hs:
-				pick = lo
+			pick := lo
+			if d.picks > 0 {
+				pick = hi
+				if ((d.picks-1)/2)%2 == 1 {
+					pick = lo
+				}
 			}
 			if isOpen(pick) {
 				return pick
@@ -6071,6 +6284,7 @@ func (d *Draft) Pick(captain, player string) (team int, err error) {
 		return -1, ErrNotInPool
 	}
 	d.take(t, player)
+	d.picks++
 	return t, nil
 }
 
@@ -6085,6 +6299,7 @@ func (d *Draft) AutoPick() (captain, player string, err error) {
 	}
 	player = d.pool[d.rng.IntN(len(d.pool))]
 	d.take(t, player)
+	d.picks++
 	return d.Teams[t][0], player, nil
 }
 

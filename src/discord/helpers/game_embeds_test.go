@@ -44,9 +44,9 @@ func renderDefault(t *testing.T, key string, d embedData) (title, description st
 func TestPartyInvitationListsWaitingInvitedAndJoinedByName(t *testing.T) {
 	_, _, fields := renderDefault(t, "partyInvitation", embedData{Vars: map[string]string{"endsAt": "100"}, Joined: []string{"1"}, Invited: []string{"2"}, Waiting: []string{"3"}})
 	want := map[string]string{
-		DotRed + " Waiting (1)":    "- `Cara`",
-		DotYellow + " Invited (1)": "- `Bob`",
-		DotGreen + " Joined (1/3)": "- `Alice`",
+		DotRed + " Waiting (1)":    "- <@3>",
+		DotYellow + " Invited (1)": "- <@2>",
+		DotGreen + " Joined (1/3)": "- <@1>",
 	}
 	for name, value := range want {
 		if fields[name] != value {
@@ -68,10 +68,10 @@ func TestPartyListsSayNoneWhenEmpty(t *testing.T) {
 
 func TestTeamsShowTheDotAndTheOldPartyMark(t *testing.T) {
 	_, _, fields := renderDefault(t, "teamSelection", embedData{Vars: map[string]string{"endsAt": "100"}, Joined: []string{"1", "3"}, Waiting: []string{"2"}})
-	if got, want := fields["Team A"], DotGreen+" `Alice 👥`\n"+DotRed+" `Bob 👥`"; got != want {
+	if got, want := fields["Team A"], DotGreen+" <@1> 👥\n"+DotRed+" <@2> 👥"; got != want {
 		t.Errorf("Team A = %q, want %q", got, want)
 	}
-	if got, want := fields["Team B"], DotGreen+" `Cara`"; got != want {
+	if got, want := fields["Team B"], DotGreen+" <@3>"; got != want {
 		t.Errorf("Team B = %q, want %q", got, want)
 	}
 }
@@ -85,7 +85,7 @@ func TestMatchJoinedListsEveryoneAsTeamTBDWithGrayDots(t *testing.T) {
 			tbd = append(tbd, f.Value)
 		}
 	}
-	if len(tbd) != 2 || !strings.Contains(tbd[0], DotGray+" `Alice 👥`") {
+	if len(tbd) != 2 || !strings.Contains(tbd[0], DotGray+" <@1> 👥") {
 		t.Errorf("Team TBD fields = %q", tbd)
 	}
 }
