@@ -333,6 +333,7 @@ func BuildPrefixInteraction(s *discordgo.Session, message *discordgo.Message, cm
 		}
 	}
 
+	resolvePrefixUserNames(message.GuildID, data.Options)
 	user := message.Author
 	if user == nil {
 		user = &discordgo.User{}
@@ -1825,4 +1826,20 @@ func updateRequirementFixMessage(s *discordgo.Session, i *discordgo.InteractionC
 	WithGuildFooterIcon(s, i, emb)
 	embeds := []*discordgo.MessageEmbed{emb}
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
+}
+
+// resolvePrefixUserNames turns a user option typed as a player's Minecraft username or nickname (=call nexus720) into
+// their Discord ID, in every command and subcommand alike. Mentions and IDs are left as they are; a name that matches
+// no registered player is left too, so the command reports no such player.
+func resolvePrefixUserNames(guildID string, options []*discordgo.ApplicationCommandInteractionDataOption) {
+	for _, opt := range options {
+		if opt.Type == discordgo.ApplicationCommandOptionUser {
+			if raw, ok := opt.Value.(string); ok && !prefixSnowflakePattern.MatchString(raw) {
+				if user := userByPlayerName(guildID, raw); user != nil {
+					opt.Value = user.ID
+				}
+			}
+		}
+		resolvePrefixUserNames(guildID, opt.Options)
+	}
 }
