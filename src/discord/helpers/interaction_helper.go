@@ -972,10 +972,35 @@ func OptionBool(i *discordgo.InteractionCreate, name string) (bool, bool) {
 func OptionUser(s *discordgo.Session, i *discordgo.InteractionCreate, name string) *discordgo.User {
 	for _, opt := range i.ApplicationCommandData().Options {
 		if opt.Name == name && opt.Type == discordgo.ApplicationCommandOptionUser {
+			// A prefix command can name a player instead of mentioning them (=stats nexus720): look the name up.
+			if raw, ok := opt.Value.(string); ok && !prefixSnowflakePattern.MatchString(raw) {
+				if user := userByPlayerName(i.GuildID, raw); user != nil {
+					return user
+				}
+			}
 			return opt.UserValue(s)
 		}
 	}
 	return nil
+}
+
+// userByPlayerName finds the registered player of the guild whose Minecraft username (or nickname) is name.
+func userByPlayerName(guildID, name string) *discordgo.User {
+	svc := database.Get()
+	if svc == nil || guildID == "" || strings.TrimSpace(name) == "" {
+		return nil
+	}
+	config, err := svc.Player.GetByUsername(guildID, name)
+	if err != nil {
+		if config, err = svc.Player.GetByNickname(guildID, name); err != nil {
+			return nil
+		}
+	}
+	player, err := svc.Player.GetGlobal(sdk.UintToString(config.PlayerID))
+	if err != nil || player.SnowflakeID == "" {
+		return nil
+	}
+	return &discordgo.User{ID: player.SnowflakeID, Username: config.Username}
 }
 
 // ResolveUserOption reads a slash user option and falls back to the invoking user when
