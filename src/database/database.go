@@ -186,23 +186,6 @@ func (m *Manager) Stop() error {
 	return nil
 }
 
-// Instance returns the initialized SDK services or an error if not yet initialized.
-func (m *Manager) Instance() (*sdk.Services, error) {
-	if m.Services == nil {
-		m.Logger.Error("Database SDK is not initialized. Please call Initialize() first.")
-		return nil, fmt.Errorf("database sdk is not initialized; call Initialize() first")
-	}
-	return m.Services, nil
-}
-
-// New creates an isolated SDK client instance without assigning it process-wide.
-func New(baseURL, apiKey string) *sdk.Services { return sdk.NewServices(baseURL, apiKey) }
-
-// NewWithAPILogger creates an isolated SDK client instance with request tracing.
-func NewWithAPILogger(baseURL, apiKey string, logger utility.AppLogger) *sdk.Services {
-	return sdk.NewWithLogger(baseURL, apiKey, &apiLoggerAdapter{logger: logger})
-}
-
 // Set replaces or clears (nil) the process-wide SDK instance.
 func Set(svc *sdk.Services) { global.Store(svc) }
 

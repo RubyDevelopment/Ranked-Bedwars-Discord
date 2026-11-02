@@ -19,6 +19,8 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/banner"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 	baseutility "ranked-bedwars/src/utility"
 )
@@ -113,7 +115,7 @@ func name(u *discordgo.User, m *discordgo.Member) string {
 
 // eventVars are the {{variables}} an event's messages can use: the member, the guild, the time, the channel, then the event's own.
 func eventVars(s *discordgo.Session, guildID string, ev CustomEvent, c types.EventCtx) map[string]string {
-	v := map[string]string(helpers.GuildVars(s, guildID, nil))
+	v := map[string]string(banner.GuildVars(s, guildID, nil))
 	now := time.Now().UTC()
 	v["time.date"], v["time.time"] = now.Format("2006-01-02"), now.Format("15:04")
 	v["time.unix"], v["time.relative"] = fmt.Sprint(now.Unix()), fmt.Sprintf("<t:%d:R>", now.Unix())
@@ -122,7 +124,7 @@ func eventVars(s *discordgo.Session, guildID string, ev CustomEvent, c types.Eve
 
 	if u := c.User; u != nil {
 		v["member.name"], v["member.mention"], v["member.id"], v["member.tag"] = name(u, c.Member), u.Mention(), u.ID, u.Username
-		v["member.avatar"] = helpers.AvatarOf(u)
+		v["member.avatar"] = banner.AvatarOf(u)
 		v["member.created"] = fmt.Sprintf("<t:%d:R>", helpers.AccountCreatedAt(u.ID).Unix())
 		v["user.name"], v["user.mention"], v["user.avatar"] = v["member.name"], u.Mention(), v["member.avatar"]
 		if c.Member != nil && !c.Member.JoinedAt.IsZero() {
@@ -670,7 +672,7 @@ func runCustomCommand(s *discordgo.Session, i *discordgo.InteractionCreate, name
 func (r *runner) fill(text string) string { return helpers.FillVars(text, r.vars) }
 
 func (r *runner) baseVars(sub string) map[string]string {
-	v := map[string]string(helpers.GuildVars(r.s, r.i.GuildID, r.invoker))
+	v := map[string]string(banner.GuildVars(r.s, r.i.GuildID, r.invoker))
 	now := time.Now().UTC()
 	v["time.date"], v["time.time"] = now.Format("2006-01-02"), now.Format("15:04")
 	v["time.unix"], v["time.relative"] = itoa(int(now.Unix())), fmt.Sprintf("<t:%d:R>", now.Unix())
@@ -803,7 +805,7 @@ func (r *runner) exec(st step) (string, bool) {
 			return stop("Something went wrong. Please try again later.")
 		}
 		r.vars["player.name"], r.vars["player.id"], r.vars["player.mention"] = view.Config.Username, u.ID, u.Mention()
-		r.vars["player.avatar"], r.vars["player.head"], r.vars["player.body"] = helpers.AvatarOf(u), helpers.HeadURL(view.Config.Username), helpers.BodyURL(view.Config.Username)
+		r.vars["player.avatar"], r.vars["player.head"], r.vars["player.body"] = banner.AvatarOf(u), banner.HeadURL(view.Config.Username), banner.BodyURL(view.Config.Username)
 		r.vars["player.joined"] = view.Config.CreatedAt.Format("2006-01-02")
 		if st.Type == "load_stats" {
 			seasonKey, seasonID, err := helpers.ActiveSeasonKey(guildID)
@@ -819,7 +821,7 @@ func (r *runner) exec(st step) (string, bool) {
 			if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
 				position = rank.Position
 			}
-			for k, v := range helpers.StatsVars(u, view.Config, stats, position, seasonKey, seasonID) {
+			for k, v := range banner.StatsVars(u, view.Config, stats, position, seasonKey, seasonID) {
 				r.vars[k] = v
 			}
 		}
@@ -834,8 +836,8 @@ func (r *runner) exec(st step) (string, bool) {
 		if err != nil {
 			return stop("Something went wrong. Please try again later.")
 		}
-		vars := helpers.Vars{}
-		helpers.LeaderboardRowVars(r.s, guildID, rows.Data, vars)
+		vars := banner.Vars{}
+		banner.LeaderboardRowVars(r.s, guildID, rows.Data, vars)
 		for k, v := range vars {
 			r.vars[k] = v
 		}
@@ -843,7 +845,7 @@ func (r *runner) exec(st step) (string, bool) {
 
 	case "load_game":
 		number := atoi(strings.TrimSpace(r.fill(st.Left)))
-		game, ok := helpers.Games.ByNumber(guildID, number)
+		game, ok := match.Games.ByNumber(guildID, number)
 		if !ok {
 			return stop(fmt.Sprintf("Game #%d was not found.", number))
 		}
@@ -853,7 +855,7 @@ func (r *runner) exec(st step) (string, bool) {
 		if !game.StartedAt.IsZero() {
 			r.vars["game.started_at"] = fmt.Sprintf("<t:%d:R>", game.StartedAt.Unix())
 		}
-		if (game.State == helpers.GameCleanup || game.State == helpers.GameVoided) && !game.StateAt.IsZero() {
+		if (game.State == match.GameCleanup || game.State == match.GameVoided) && !game.StateAt.IsZero() {
 			r.vars["game.ended_at"] = fmt.Sprintf("<t:%d:R>", game.StateAt.Unix())
 		}
 
@@ -1244,16 +1246,16 @@ func (r *runner) send(rep reply) error {
 
 // banner draws the guild's banner style for this command, or nil when there is none or drawing fails.
 func (r *runner) banner() []byte {
-	doc := helpers.LoadBanners(r.i.GuildID)
+	doc := banner.LoadBanners(r.i.GuildID)
 	if doc == nil {
 		return nil
 	}
-	viewer := helpers.BannerViewer(r.invoker.ID, r.i.Member)
+	viewer := banner.BannerViewer(r.invoker.ID, r.i.Member)
 	b := doc.Choose("custom:"+r.name, viewer, "")
 	if b == nil {
 		return nil
 	}
-	img, err := helpers.RenderBanner(b, helpers.Vars(r.vars))
+	img, err := banner.RenderBanner(b, banner.Vars(r.vars))
 	if err != nil {
 		logger.Warn(fmt.Sprintf("banner of /%s in %s: %v", r.name, r.i.GuildID, err))
 		return nil

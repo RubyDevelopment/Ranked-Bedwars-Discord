@@ -42,16 +42,16 @@ var GameRanksCommand = &types.Command{
 func executeGameRanksCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	ranks, err := helpers.GuildMetaRanks(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorRanksEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorRanksEmbed(i))
 	}
 
 	sorted := helpers.SortedRanks(ranks)
 	if len(sorted) == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.EmptyRanksEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, EmptyRanksEmbed(i))
 	}
 
 	content := buildRanksContent(i, sorted)
-	return helpers.EditInteractionEmbed(s, i, helpers.RanksOverviewEmbed(i, content))
+	return helpers.EditInteractionEmbed(s, i, RanksOverviewEmbed(i, content))
 }
 
 // ============================================================================
@@ -123,4 +123,39 @@ func absInt(value int) int {
 		return -value
 	}
 	return value
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorRanksEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while trying to fetch the registered ranks for this guild. Please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func EmptyRanksEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "No Configured Ranks",
+		Description: "This guild has no configured rank tiers. If you think this is an error, please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func RanksOverviewEmbed(i *discordgo.InteractionCreate, content string) *discordgo.MessageEmbed {
+	header := "View the status of all registered game ranks for this guild.\n\n"
+	fullDescription := header + content
+
+	if len(fullDescription) > 2000 {
+		fullDescription = fullDescription[:1997] + "..."
+	}
+
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Registered Ranks",
+		Description: fullDescription,
+		Thumbnail:   helpers.ThumbGuild,
+	})
 }

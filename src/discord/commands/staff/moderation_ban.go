@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -15,7 +16,7 @@ import (
 
 func init() {
 	helpers.Register(ModerationBanCommand)
-	helpers.RegisterLadderAction("server_ban", serverBanSpec)
+	punish.RegisterLadderAction("server_ban", serverBanSpec)
 }
 
 // ============================================================================
@@ -29,9 +30,9 @@ var ModerationBanCommand = &types.Command{
 	Description:  "Bans a player from the Discord guild.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to ban", "Reason for the ban", true, true, true),
+		Options: punish.PunishmentOptions("Discord user to ban", "Reason for the ban", true, true, true),
 	},
-	Autocomplete: helpers.PunishmentLevelAutocomplete("server_ban"),
+	Autocomplete: punish.PunishmentLevelAutocomplete("server_ban"),
 	Execute:      executeModerationBanCommand,
 }
 
@@ -39,7 +40,7 @@ var ModerationBanCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
-var serverBanSpec = &helpers.ApplySpec{
+var serverBanSpec = &punish.ApplySpec{
 	Command:     "serverban",
 	Action:      "server ban",
 	Adjective:   "server banned",
@@ -55,7 +56,7 @@ var serverBanSpec = &helpers.ApplySpec{
 }
 
 func executeModerationBanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, serverBanSpec)
+	return punish.ApplyPunishment(s, i, serverBanSpec)
 }
 
 // ============================================================================

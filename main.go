@@ -11,7 +11,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord"
-	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/engine"
 	"ranked-bedwars/src/utility"
 )
 
@@ -71,7 +71,7 @@ func (app *Application) Start() error {
 	// The engine bridge: the Minecraft side of games (Ranked-Bedwars-Engine) connects here.
 	if addr := os.Getenv("ENGINE_BRIDGE_ADDR"); addr != "" {
 		go func() {
-			if err := helpers.Engine.Listen(context.Background(), addr, os.Getenv("ENGINE_BRIDGE_SECRET")); err != nil {
+			if err := engine.Engine.Listen(context.Background(), addr, os.Getenv("ENGINE_BRIDGE_SECRET")); err != nil {
 				app.Logger.Error(fmt.Sprintf("Engine bridge stopped: %v", err))
 			}
 		}()

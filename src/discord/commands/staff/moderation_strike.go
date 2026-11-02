@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 )
 
@@ -61,25 +62,53 @@ func executeModerationStrikeCommand(s *discordgo.Session, i *discordgo.Interacti
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeBotTargetEmbed(i))
 	}
 
 	if target.ID == helpers.InteractionUserID(i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeInvalidTargetEmbed(i))
 	}
 
 	// 2. Validate Reason
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
 	if reason == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeReasonRequiredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeReasonRequiredEmbed(i))
 	}
 	strikeType := strings.TrimSpace(helpers.OptionString(i, "type"))
 	actor := helpers.InteractionUserID(i)
 
 	// 3. The ladder picks the step, the ELO is taken, the strike is recorded and the step's punishment applied
-	embed, _ := helpers.IssueStrike(s, i.GuildID, actor, target, reason, strikeType)
+	embed, _ := match.IssueStrike(s, i.GuildID, actor, target, reason, strikeType)
 	return helpers.EditInteractionEmbed(s, i, embed)
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func ModerationStrikeInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "You must specify a player to strike. Select a registered player from the command options.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikeBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "Automated bot accounts cannot receive strikes. Target a registered player instead.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikeReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Reason Required",
+		Description: "You must provide a reason when issuing a strike. Include a clear explanation in the reason field.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
 }

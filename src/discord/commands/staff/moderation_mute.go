@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -15,7 +16,7 @@ import (
 
 func init() {
 	helpers.Register(ModerationMuteCommand)
-	helpers.RegisterLadderAction("chat_mute", muteSpec)
+	punish.RegisterLadderAction("chat_mute", muteSpec)
 }
 
 // ============================================================================
@@ -29,9 +30,9 @@ var ModerationMuteCommand = &types.Command{
 	Description:  "Mutes a player in text chat across the guild.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to chat mute", "Reason for the chat mute", false, true, true),
+		Options: punish.PunishmentOptions("Discord user to chat mute", "Reason for the chat mute", false, true, true),
 	},
-	Autocomplete: helpers.PunishmentLevelAutocomplete("chat_mute"),
+	Autocomplete: punish.PunishmentLevelAutocomplete("chat_mute"),
 	Execute:      executeModerationMuteCommand,
 }
 
@@ -39,23 +40,23 @@ var ModerationMuteCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
-var muteSpec = &helpers.ApplySpec{
-	Command:     "mute",
-	RoleKey:     "chat_muted_role",
-	Action:      "chat mute",
-	Adjective:   "chat muted",
-	Summary:     "the chat mute",
-	Title:       "Chat Mute Applied",
-	Type:        "mute",
-	Duration:    true,
-	Duplicates:  true,
+var muteSpec = &punish.ApplySpec{
+	Command:    "mute",
+	RoleKey:    "chat_muted_role",
+	Action:     "chat mute",
+	Adjective:  "chat muted",
+	Summary:    "the chat mute",
+	Title:      "Chat Mute Applied",
+	Type:       "mute",
+	Duration:   true,
+	Duplicates: true,
 
 	ReasonOptional: true,
-	AppliedNote: "The chat muted role was given to the member.",
-	FailedNote:  "The punishment was recorded, but no chat muted role is set (or it could not be given). Choose one in the dashboard under Moderation > Punishment ladders.",
-	Ladder:      "chat_mute",
+	AppliedNote:    "The chat muted role was given to the member.",
+	FailedNote:     "The punishment was recorded, but no chat muted role is set (or it could not be given). Choose one in the dashboard under Moderation > Punishment ladders.",
+	Ladder:         "chat_mute",
 }
 
 func executeModerationMuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, muteSpec)
+	return punish.ApplyPunishment(s, i, muteSpec)
 }

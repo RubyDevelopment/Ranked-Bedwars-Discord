@@ -1,11 +1,15 @@
 package staff
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -46,7 +50,7 @@ var GamePartialVoidCommand = &types.Command{
 			},
 		},
 	},
-	Autocomplete: helpers.GameNumberAutocomplete(helpers.GameCleanup, helpers.GameVoided),
+	Autocomplete: match.GameNumberAutocomplete(match.GameCleanup, match.GameVoided),
 	Execute:      executeGamePartialVoidCommand,
 }
 
@@ -63,19 +67,44 @@ func executeGamePartialVoidCommand(s *discordgo.Session, i *discordgo.Interactio
 	winningTeam := helpers.SubOptionString(opts, "winning_team")
 
 	// 2. Fetch the Game
-	game, ok, err := helpers.Games.ByNumberOrStored(i.GuildID, gameNumber)
+	game, ok, err := match.Games.ByNumberOrStored(i.GuildID, gameNumber)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("look up the game", err))
+		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("look up the game", err))
 	}
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.GamePartialVoidNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, GamePartialVoidNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Partially Void the Game
-	loserIDs, err := helpers.Games.PartialVoid(actor, i.GuildID, game.ID, winningTeam)
+	loserIDs, err := match.Games.PartialVoid(actor, i.GuildID, game.ID, winningTeam)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("partially void the game", err))
+		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("partially void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.GamePartialVoidSuccessEmbed(i, gameNumber, loserIDs))
+	return helpers.EditInteractionEmbed(s, i, GamePartialVoidSuccessEmbed(i, gameNumber, loserIDs))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func GamePartialVoidNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Game Not Found",
+		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func GamePartialVoidSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int, loserIDs []string) *discordgo.MessageEmbed {
+	mentions := make([]string, len(loserIDs))
+	for idx, id := range loserIDs {
+		mentions[idx] = fmt.Sprintf("<@%s>", id)
+	}
+
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Game Partially Voided",
+		Description: fmt.Sprintf("Game **#%d** has been partially voided. The winning team's stats are preserved. This action has been logged for staff review.\n\n> **Affected Players:** %s", gameNumber, strings.Join(mentions, " ")),
+		Thumbnail:   helpers.ThumbTrashCan,
+	})
 }

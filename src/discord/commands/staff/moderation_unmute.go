@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -28,7 +29,7 @@ var ModerationUnmuteCommand = &types.Command{
 	Description:  "Removes a player's text chat mute.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to chat unmute", "Reason for the chat unmute", false, false, false),
+		Options: punish.PunishmentOptions("Discord user to chat unmute", "Reason for the chat unmute", false, false, false),
 	},
 	Execute: executeModerationUnmuteCommand,
 }
@@ -38,7 +39,7 @@ var ModerationUnmuteCommand = &types.Command{
 // ============================================================================
 
 func executeModerationUnmuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
+	return punish.RevokePunishment(s, i, &punish.RevokeSpec{
 		Command:   "mute",
 		Ladder:    "chat_mute",
 		RoleKey:   "chat_muted_role",

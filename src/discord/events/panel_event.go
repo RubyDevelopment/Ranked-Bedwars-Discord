@@ -4,6 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/panels"
 	"ranked-bedwars/src/types"
 )
 
@@ -19,7 +20,7 @@ var GiveawayEntryEvent = &types.Event{
 	Type:        "interaction_create",
 	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.Type == discordgo.InteractionMessageComponent && i.GuildID != "" {
-			helpers.HandleGiveawayEntry(s, i, i.MessageComponentData().CustomID)
+			panels.HandleGiveawayEntry(s, i, i.MessageComponentData().CustomID)
 		}
 	},
 }
@@ -34,7 +35,7 @@ var GiveawaySweepEvent = &types.Event{
 	System:      true,
 	Description: "Posts the dashboard's giveaways, and draws and announces the winners when they end.",
 	Type:        "ready",
-	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { helpers.StartGiveaways(s) },
+	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { panels.StartGiveaways(s) },
 }
 
 func init() {
@@ -49,7 +50,7 @@ var PanelPressEvent = &types.Event{
 	Type:        "interaction_create",
 	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.Type == discordgo.InteractionMessageComponent && i.GuildID != "" {
-			helpers.HandlePanelPress(s, i, i.MessageComponentData().CustomID)
+			panels.HandlePanelPress(s, i, i.MessageComponentData().CustomID)
 		}
 	},
 }
@@ -64,7 +65,7 @@ var PanelSyncEvent = &types.Event{
 	System:      true,
 	Description: "Posts the dashboard's custom panels in their channels and keeps them up to date.",
 	Type:        "ready",
-	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { helpers.StartPanelSync(s) },
+	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { panels.StartPanelSync(s) },
 }
 
 func init() {
@@ -77,7 +78,7 @@ var ReactionRoleAddEvent = &types.Event{
 	System:      true,
 	Description: "Gives roles when members add the reactions bound on the dashboard.",
 	Type:        "reaction_add",
-	Execute:     helpers.HandleReactionAdd,
+	Execute:     panels.HandleReactionAdd,
 }
 
 func init() {
@@ -90,5 +91,5 @@ var ReactionRoleRemoveEvent = &types.Event{
 	System:      true,
 	Description: "Takes a reaction role away when the member removes their reaction.",
 	Type:        "reaction_remove",
-	Execute:     helpers.HandleReactionRemove,
+	Execute:     panels.HandleReactionRemove,
 }

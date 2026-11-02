@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"fmt"
 	"time"
 
 	"ranked-bedwars/src/discord/helpers"
@@ -99,7 +100,7 @@ func executeServerClearCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	override, _ := helpers.OptionBool(i, "override_14days")
 
 	// 2. Resolve Target Channel
-	channelID := helpers.OptionChannelID(i, "channel")
+	channelID := OptionChannelID(i, "channel")
 	if channelID == "" {
 		channelID = i.ChannelID
 	}
@@ -107,22 +108,22 @@ func executeServerClearCommand(s *discordgo.Session, i *discordgo.InteractionCre
 	// 3. Verify Bot Permissions
 	perms, err := s.UserChannelPermissions(s.State.User.ID, channelID)
 	if err != nil || perms&discordgo.PermissionManageMessages == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.ClearMissingPermissionsEmbed(i, channelID))
+		return helpers.EditInteractionEmbed(s, i, ClearMissingPermissionsEmbed(i, channelID))
 	}
 
 	// 4. Delete Messages with Filters
 	deleted, skipped, err := clearChannelMessagesFiltered(s, channelID, amount, targetUser, contentType, override)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorClearEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorClearEmbed(i))
 	}
 
 	if deleted == 0 && skipped == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.ClearNoMessagesEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ClearNoMessagesEmbed(i))
 	}
 	if skipped > 0 && !override {
-		return helpers.EditInteractionEmbed(s, i, helpers.ClearPartialEmbed(i, channelID, deleted, skipped))
+		return helpers.EditInteractionEmbed(s, i, ClearPartialEmbed(i, channelID, deleted, skipped))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.ClearSuccessEmbed(i, channelID, deleted))
+	return helpers.EditInteractionEmbed(s, i, ClearSuccessEmbed(i, channelID, deleted))
 }
 
 // ============================================================================
@@ -240,4 +241,61 @@ func searchString(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorClearEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while clearing messages. Please try again later or contact support.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ClearMissingPermissionsEmbed(i *discordgo.InteractionCreate, channelID string) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Missing Permissions",
+		Description: fmt.Sprintf("I do not have permission to manage messages in <#%s>. Grant **Manage Messages** to the bot role and try again.", channelID),
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ClearNoMessagesEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "No Messages Found",
+		Description: "No messages matched your filters in that channel. Adjust the filters or clear a different channel.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ClearPartialEmbed(i *discordgo.InteractionCreate, channelID string, deleted, skipped int) *discordgo.MessageEmbed {
+	return helpers.Preset("caution", types.PresetOptions{
+		Title: "Messages Partially Cleared",
+		Description: fmt.Sprintf(
+			"Successfully removed **%d** message(s) from <#%s>. **%d** message(s) older than 14 days were skipped. Re-run with `override_14days: True` to delete them individually.",
+			deleted, channelID, skipped,
+		),
+		Thumbnail: helpers.ThumbTrashCan,
+	})
+}
+
+func ClearSuccessEmbed(i *discordgo.InteractionCreate, channelID string, deleted int) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Messages Cleared",
+		Description: fmt.Sprintf("Successfully removed **%d** message(s) from <#%s>. Deleted messages cannot be recovered.", deleted, channelID),
+		Thumbnail:   helpers.ThumbTrashCan,
+	})
+}
+
+// OptionChannelID reads a top-level slash channel option ID.
+func OptionChannelID(i *discordgo.InteractionCreate, name string) string {
+	for _, opt := range i.ApplicationCommandData().Options {
+		if opt.Name == name && opt.Type == discordgo.ApplicationCommandOptionChannel {
+			return opt.ChannelValue(nil).ID
+		}
+	}
+	return ""
 }

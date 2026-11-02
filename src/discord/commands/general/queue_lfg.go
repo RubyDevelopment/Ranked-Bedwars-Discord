@@ -1,6 +1,7 @@
 package general
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
@@ -41,30 +42,30 @@ func executeQueueLfgCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	// Identify the user invoking the command
 	target := helpers.InteractionUserID(i)
 	if target == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgInvalidUserEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, QueueLfgInvalidUserEmbed(i))
 	}
 
 	// Load the LFG configuration for this guild
 	lfgConfig, err := helpers.LoadLFGConfig(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueLfgEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorQueueLfgEmbed(i))
 	}
 
 	// Validate LFG configuration
 	if lfgConfig.LFGChannelID == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgNotConfiguredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, QueueLfgNotConfiguredEmbed(i))
 	}
 	if lfgConfig.QueuesPaused {
-		return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgQueuesPausedEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, QueueLfgQueuesPausedEmbed(i))
 	}
 
 	// Verify the user is registered in the ranked system
 	view, err := database.Must().Player.Get(i.GuildID, target)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, QueueLfgNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueLfgEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorQueueLfgEmbed(i))
 	}
 
 	// Use the configured username if available, otherwise use the user ID
@@ -74,10 +75,10 @@ func executeQueueLfgCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 
 	// Send the LFG post to the configured channel
-	if _, err := s.ChannelMessageSendComplex(lfgConfig.LFGChannelID, &discordgo.MessageSend{
-		Embeds: []*discordgo.MessageEmbed{helpers.QueueLfgPostEmbed(i, username, target)},
+	if _, err := helpers.SendChannelMessage(s, i.GuildID, lfgConfig.LFGChannelID, &discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{QueueLfgPostEmbed(i, username, target)},
 	}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorQueueLfgEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorQueueLfgEmbed(i))
 	}
 
 	// Assign the LFG role if configured
@@ -85,5 +86,65 @@ func executeQueueLfgCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		_ = s.GuildMemberRoleAdd(i.GuildID, target, lfgConfig.LFGRoleID)
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.QueueLfgSuccessEmbed(i, username, lfgConfig.LFGChannelID))
+	return helpers.EditInteractionEmbed(s, i, QueueLfgSuccessEmbed(i, username, lfgConfig.LFGChannelID))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorQueueLfgEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while trying to post your looking-for-group request. Please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func QueueLfgInvalidUserEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid User",
+		Description: "Your user account could not be identified. Please try again later or contact an administrator for assistance.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func QueueLfgNotConfiguredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "LFG Not Configured",
+		Description: "The looking-for-group system is not configured in this guild. Please contact an administrator for assistance to configure the LFG channel and role settings.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func QueueLfgQueuesPausedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Queues Paused",
+		Description: "Looking-for-group posting is currently paused by an administrator. Please try again later when queues are reopened.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func QueueLfgNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Registration Required",
+		Description: "You must register with the ranked system to use the looking-for-group feature. Use `/register` to link your account and track your seasonal progress.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func QueueLfgSuccessEmbed(i *discordgo.InteractionCreate, username, channelID string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "LFG Posted",
+		Description: fmt.Sprintf("Your looking-for-group post has been sent. Good luck finding a game!\n\n> **Player:** `%s`\n> **Channel:** <#%s>", username, channelID),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func QueueLfgPostEmbed(i *discordgo.InteractionCreate, username, userID string) *discordgo.MessageEmbed {
+	return helpers.Preset("info", types.PresetOptions{
+		Title:       "Looking for Group",
+		Description: fmt.Sprintf("<@%s> (**%s**) is looking for a ranked game! React or message them to join their party.", userID, username),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
 }

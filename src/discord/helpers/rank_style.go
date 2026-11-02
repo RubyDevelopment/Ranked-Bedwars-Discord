@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"ranked-bedwars/src/discord/helpers/banner"
+	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
 )
 
@@ -13,7 +15,7 @@ import (
 // also gets <name>_color, <name>_bg and <name>_border: the rank's colour from Rank thresholds, toned the way the PRBW cards tone it
 // (readable text, a soft fill, a soft outline), ready for a badge: style="color: {rank_color}; background: {rank_bg}; border: 1px solid {rank_border}".
 
-var rankCache = newTTLCache[[]types.Rank](eloConfigCacheTTL)
+var rankCache = base.NewTTLCache[[]types.Rank](base.ConfigCacheTTL)
 
 const unrankedColor = "#9ca3af"
 
@@ -91,12 +93,12 @@ func tonedRank(hex string) (text, bg, border string) {
 }
 
 // withRankStyles returns vars plus the colour variables of every rank variable in it. A rank the server does not list gets a neutral grey.
-func withRankStyles(guildID string, vars Vars) Vars {
+func withRankStyles(guildID string, vars banner.Vars) banner.Vars {
 	if guildID == "" {
 		return vars // a banner drawn outside a server (a preview) has no ranks to look up
 	}
 	var colors map[string]string
-	extra := Vars{}
+	extra := banner.Vars{}
 	for key := range vars {
 		base := ""
 		for _, suffix := range []string{"rank_before", "rank_after", "rank"} {
@@ -110,7 +112,7 @@ func withRankStyles(guildID string, vars Vars) Vars {
 		}
 		if colors == nil {
 			colors = map[string]string{}
-			if ranks, err := rankCache.get(guildID, func() ([]types.Rank, error) { return GuildMetaRanks(guildID) }); err == nil {
+			if ranks, err := rankCache.Get(guildID, func() ([]types.Rank, error) { return GuildMetaRanks(guildID) }); err == nil {
 				for _, r := range ranks {
 					colors[strings.ToLower(r.RankName)] = r.Color
 				}
@@ -126,3 +128,5 @@ func withRankStyles(guildID string, vars Vars) Vars {
 	}
 	return vars
 }
+
+func init() { banner.ExtraVars = withRankStyles }

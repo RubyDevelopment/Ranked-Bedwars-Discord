@@ -4,6 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/pagination"
 	"ranked-bedwars/src/types"
 )
 
@@ -36,7 +37,7 @@ var PaginationEvent = &types.Event{
 	Type:        "interaction_create",
 	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.GuildID != "" && i.Type == discordgo.InteractionMessageComponent {
-			helpers.HandleHistoryPageClick(s, i, i.MessageComponentData().CustomID)
+			pagination.HandleHistoryPageClick(s, i, i.MessageComponentData().CustomID)
 		}
 	},
 }

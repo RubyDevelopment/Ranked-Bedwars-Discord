@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/tickets"
 	"ranked-bedwars/src/types"
 
 	"github.com/bwmarrin/discordgo"
@@ -124,29 +125,29 @@ func executeTicketManageCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	case "remove":
 		return changeTicketMember(s, i, false)
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketManageInvalidSubcommandEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, TicketManageInvalidSubcommandEmbed(i))
 }
 
 // executeTicketPanel opens the panel publishing flow for administrators.
 func executeTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	if !helpers.InteractionIsAdmin(i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only administrators can publish ticket panels. Create and edit panels in the dashboard."))
+	if !tickets.InteractionIsAdmin(i) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only administrators can publish ticket panels. Create and edit panels in the dashboard."))
 	}
 
-	ip, err := helpers.Tickets.LoadOpen(i.GuildID)
+	ip, err := tickets.Tickets.LoadOpen(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 	}
-	return helpers.EditInteractionV2(s, i, helpers.TicketPublishPanelScreen(helpers.SortedTicketPanels(ip))...)
+	return EditInteractionV2(s, i, tickets.TicketPublishPanelScreen(tickets.SortedTicketPanels(ip))...)
 }
 
 // executeTicketLeaderboard ranks staff by claimed tickets.
 func executeTicketLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ip, err := helpers.Tickets.LoadOpen(i.GuildID)
+	ip, err := tickets.Tickets.LoadOpen(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketLeaderboardMessage(helpers.TicketLeaderboard(ip), helpers.InteractionUserID(i)))
+	return helpers.EditInteractionEmbed(s, i, TicketLeaderboardMessage(TicketLeaderboard(ip), helpers.InteractionUserID(i)))
 }
 
 // executeTicketStats shows one staff member's numbers.
@@ -157,19 +158,19 @@ func executeTicketStats(s *discordgo.Session, i *discordgo.InteractionCreate) er
 		target = i.Member.User
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketBotTargetEmbed())
 	}
 
-	ip, err := helpers.Tickets.LoadOpen(i.GuildID)
+	ip, err := tickets.Tickets.LoadOpen(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 	}
 
 	stats := types.TicketStaffStats{}
 	if row, ok := ip.Tickets.Stats[target.ID]; ok && row != nil {
 		stats = *row
 	}
-	board := helpers.TicketLeaderboard(ip)
+	board := TicketLeaderboard(ip)
 	rank := 0
 	for idx, row := range board {
 		if row.StaffID == target.ID {
@@ -183,17 +184,17 @@ func executeTicketStats(s *discordgo.Session, i *discordgo.InteractionCreate) er
 			activeClaims++
 		}
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketStatsMessage(target.ID, stats, rank, len(board), activeClaims))
+	return helpers.EditInteractionEmbed(s, i, TicketStatsMessage(target.ID, stats, rank, len(board), activeClaims))
 }
 
 // executeTicketLogs lists recently closed tickets for staff.
 func executeTicketLogs(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ip, err := helpers.Tickets.Load(i.GuildID)
+	ip, err := tickets.Tickets.Load(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 	}
-	if !helpers.IsStaffOfAnyPanel(i, ip) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can browse ticket logs."))
+	if !IsStaffOfAnyPanel(i, ip) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can browse ticket logs."))
 	}
 
 	_, options := types.SelectedSubcommand(i)
@@ -214,77 +215,77 @@ func executeTicketLogs(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	if target != nil {
 		filter = "Tickets opened by <@" + target.ID + ">"
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketLogsMessage(entries, filter))
+	return helpers.EditInteractionEmbed(s, i, tickets.TicketLogsMessage(entries, filter))
 }
 
 // executeTicketClaim claims the ticket the command is run in.
 func executeTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
-	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can claim tickets."))
+	if !tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can claim tickets."))
 	}
 
-	if _, err := helpers.ClaimTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i)); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+	if _, err := tickets.ClaimTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i)); err != nil {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketActionErrorEmbed(err))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketClaimedEmbed(helpers.InteractionUserID(i)))
+	return helpers.EditInteractionEmbed(s, i, TicketClaimedEmbed(helpers.InteractionUserID(i)))
 }
 
 // executeTicketRename renames the ticket the command is run in.
 func executeTicketRename(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
-	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can rename tickets."))
+	if !tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can rename tickets."))
 	}
 	_, options := types.SelectedSubcommand(i)
 	name := helpers.SubOptionString(options, "name")
 	if name == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Give the ticket a name."))
+		return helpers.EditInteractionEmbed(s, i, TicketAccessResultEmbed(false, "Give the ticket a name."))
 	}
-	applied, _, err := helpers.RenameTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), name)
+	applied, _, err := tickets.RenameTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), name)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketActionErrorEmbed(err))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Renamed", "This ticket is now called **"+applied+"**."))
+	return helpers.EditInteractionEmbed(s, i, tickets.TicketNoticeEmbed("Ticket Renamed", "This ticket is now called **"+applied+"**."))
 }
 
 // executeTicketTransfer forwards the ticket the command is run in to another category of its panel.
 func executeTicketTransfer(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
-	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can transfer tickets."))
+	if !tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can transfer tickets."))
 	}
 	_, options := types.SelectedSubcommand(i)
 	category := helpers.SubOptionString(options, "category")
 	reason := strings.TrimSpace(helpers.SubOptionString(options, "reason"))
 	if category == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Choose the category to forward this ticket to."))
+		return helpers.EditInteractionEmbed(s, i, TicketAccessResultEmbed(false, "Choose the category to forward this ticket to."))
 	}
 	// The option's value is the category's id (from the suggestions); typing its name works too.
-	for _, c := range helpers.TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
+	for _, c := range TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
 		if strings.EqualFold(c.Label, category) {
 			category = c.ID
 		}
 	}
-	ticket, _, err := helpers.TransferTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), category, reason)
+	ticket, _, err := tickets.TransferTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), category, reason)
 	switch {
-	case errors.Is(err, helpers.ErrTicketSameCategory):
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "This ticket is already in that category."))
-	case errors.Is(err, helpers.ErrTicketCategoryNotFound):
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "That category does not exist on this ticket's panel. Pick one from the suggestions."))
+	case errors.Is(err, tickets.ErrTicketSameCategory):
+		return helpers.EditInteractionEmbed(s, i, TicketAccessResultEmbed(false, "This ticket is already in that category."))
+	case errors.Is(err, tickets.ErrTicketCategoryNotFound):
+		return helpers.EditInteractionEmbed(s, i, TicketAccessResultEmbed(false, "That category does not exist on this ticket's panel. Pick one from the suggestions."))
 	case err != nil:
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketActionErrorEmbed(err))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Transferred", "This ticket now belongs to **"+ticket.CategoryLabel+"**."))
+	return helpers.EditInteractionEmbed(s, i, tickets.TicketNoticeEmbed("Ticket Transferred", "This ticket now belongs to **"+ticket.CategoryLabel+"**."))
 }
 
 // autocompleteTicketCategory suggests the panel categories the ticket of the channel can be forwarded to.
@@ -297,8 +298,8 @@ func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCr
 		}
 	}
 	var choices []*discordgo.ApplicationCommandOptionChoice
-	if ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID); err == nil && helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
-		for _, c := range helpers.TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
+	if ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID); err == nil && tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		for _, c := range TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
 			if strings.Contains(strings.ToLower(c.Label), typed) && len(choices) < 25 {
 				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: c.Label, Value: c.ID})
 			}
@@ -312,43 +313,43 @@ func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCr
 
 // executeTicketLock locks or unlocks the ticket the command is run in.
 func executeTicketLock(s *discordgo.Session, i *discordgo.InteractionCreate, locked bool) error {
-	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
-	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can lock or unlock tickets."))
+	if !tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can lock or unlock tickets."))
 	}
-	if _, err := helpers.SetTicketLocked(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), locked); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketActionErrorEmbed(err))
+	if _, err := tickets.SetTicketLocked(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), locked); err != nil {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketActionErrorEmbed(err))
 	}
 	if locked {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Locked", "The owner can no longer write here until it is unlocked."))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketNoticeEmbed("Ticket Locked", "The owner can no longer write here until it is unlocked."))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketNoticeEmbed("Ticket Unlocked", "The owner can write in this ticket again."))
+	return helpers.EditInteractionEmbed(s, i, tickets.TicketNoticeEmbed("Ticket Unlocked", "The owner can write in this ticket again."))
 }
 
 // executeTicketClose asks for confirmation before closing the ticket the command is run in.
 func executeTicketClose(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
-	if !helpers.CanCloseTicket(i, ctx) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can close this ticket."))
+	if !tickets.CanCloseTicket(i, ctx) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can close this ticket."))
 	}
 
 	_, options := types.SelectedSubcommand(i)
 	if reason := strings.TrimSpace(helpers.SubOptionString(options, "reason")); reason != "" {
-		if err := helpers.SetPendingCloseReason(helpers.InteractionUserID(i), i.GuildID, i.ChannelID, reason); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+		if err := tickets.SetPendingCloseReason(helpers.InteractionUserID(i), i.GuildID, i.ChannelID, reason); err != nil {
+			return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 		}
 	}
-	confirm := helpers.TicketCloseConfirmMessage(ctx.Panel.Ticket.Settings.DeleteOnClose)
+	confirm := tickets.TicketCloseConfirmMessage(ctx.Panel.Ticket.Settings.DeleteOnClose)
 	if helpers.IsPrefixInteraction(i) {
 		_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
 			Embeds:     []*discordgo.MessageEmbed{confirm},
-			Components: helpers.TicketCloseConfirmButtons(),
+			Components: tickets.TicketCloseConfirmButtons(),
 			Reference: &discordgo.MessageReference{
 				MessageID: helpers.PrefixSourceMessageID(i),
 				ChannelID: i.ChannelID,
@@ -356,11 +357,11 @@ func executeTicketClose(s *discordgo.Session, i *discordgo.InteractionCreate) er
 			},
 		})
 		if err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+			return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 		}
 		return nil
 	}
-	return helpers.EditInteractionComponents(s, i, confirm, helpers.TicketCloseConfirmButtons())
+	return helpers.EditInteractionComponents(s, i, confirm, tickets.TicketCloseConfirmButtons())
 }
 
 // ============================================================================
@@ -370,25 +371,25 @@ func executeTicketClose(s *discordgo.Session, i *discordgo.InteractionCreate) er
 // changeTicketMember adds or removes a user and/or a role of the ticket thread or channel. At least one of the two
 // options is needed; when both are given both are changed.
 func changeTicketMember(s *discordgo.Session, i *discordgo.InteractionCreate, add bool) error {
-	ctx, err := helpers.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketContextErrorEmbed(err))
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
-	if !helpers.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketPermissionDeniedEmbed("Only support staff can change who is in a ticket."))
+	if !tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketPermissionDeniedEmbed("Only support staff can change who is in a ticket."))
 	}
 
 	_, options := types.SelectedSubcommand(i)
 	target := helpers.SubOptionUser(s, options, "user")
 	roleID := helpers.SubOptionRoleID(s, options, "role")
 	if target == nil && roleID == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(false, "Choose a user, a role, or both."))
+		return helpers.EditInteractionEmbed(s, i, TicketAccessResultEmbed(false, "Choose a user, a role, or both."))
 	}
 	if target != nil && target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketBotTargetEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.TicketBotTargetEmbed())
 	}
 	if target != nil && !add && target.ID == ctx.Ticket.OwnerID {
-		return helpers.EditInteractionEmbed(s, i, helpers.TicketRemoveOwnerEmbed())
+		return helpers.EditInteractionEmbed(s, i, TicketRemoveOwnerEmbed())
 	}
 
 	verb, prep := "Added", "to"
@@ -416,13 +417,13 @@ func changeTicketMember(s *discordgo.Session, i *discordgo.InteractionCreate, ad
 		}
 	}
 	if len(done) == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorTicketEmbed())
+		return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 	}
 	msg := fmt.Sprintf("%s %s %s this ticket.", verb, strings.Join(done, ", "), prep)
 	if len(failed) > 0 {
 		msg += "\n\nCould not change: " + strings.Join(failed, ", ")
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.TicketAccessResultEmbed(true, msg))
+	return helpers.EditInteractionEmbed(s, i, TicketAccessResultEmbed(true, msg))
 }
 
 // changeTicketAccess gives or takes ticket access for one user (member) or role (overwrite type). Channel tickets use
@@ -478,4 +479,179 @@ func changeTicketRoleAccess(s *discordgo.Session, guildID string, ctx *types.Tic
 		}
 	}
 	return changed, nil
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func TicketManageInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Subcommand",
+		Description: "That is not a valid ticket action. Choose one of `panel`, `leaderboard`, `stats`, `logs`, `claim`, `close`, `add`, or `remove`.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+// TicketLeaderboardMessage ranks the staff who have claimed the most tickets.
+func TicketLeaderboardMessage(rows []tickets.TicketLeaderboardRow, viewerID string) *discordgo.MessageEmbed {
+	if len(rows) == 0 {
+		return &discordgo.MessageEmbed{
+			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: helpers.ThumbGuild},
+			Title:       "Ticket Leaderboard",
+			Description: "No tickets have been claimed yet. Claim a ticket to get on the board.",
+			Color:       helpers.ColorInfo,
+		}
+	}
+
+	medals := []string{"🥇", "🥈", "🥉"}
+	var board strings.Builder
+	shown := rows
+	if len(shown) > 10 {
+		shown = shown[:10]
+	}
+	for idx, row := range shown {
+		place := fmt.Sprintf("`#%d`", idx+1)
+		if idx < len(medals) {
+			place = medals[idx]
+		}
+		fmt.Fprintf(&board, "%s <@%s> - **%d** claimed, **%d** closed\n", place, row.StaffID, row.Stats.Claimed, row.Stats.Closed)
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: helpers.ThumbGuild},
+		Title:       "Ticket Leaderboard",
+		Description: "The staff members who have claimed the most tickets.\n\n" + board.String(),
+		Color:       helpers.ColorDefault,
+	}
+	for idx, row := range rows {
+		if row.StaffID == viewerID && idx >= len(shown) {
+			embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Your rank: #%d with %d claimed", idx+1, row.Stats.Claimed)}
+			break
+		}
+	}
+	return embed
+}
+
+// TicketStatsMessage shows one staff member's ticket numbers.
+func TicketStatsMessage(staffID string, stats types.TicketStaffStats, rank, total, activeClaims int) *discordgo.MessageEmbed {
+	rankText := "Unranked"
+	if rank > 0 {
+		rankText = fmt.Sprintf("#%d of %d", rank, total)
+	}
+	return &discordgo.MessageEmbed{
+		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: helpers.ThumbGuild},
+		Title:     "Ticket Stats",
+		Description: fmt.Sprintf(
+			"<@%s>\n\n- **Claimed:** %d\n- **Closed:** %d\n- **Currently Claimed:** %d\n- **Leaderboard Rank:** %s",
+			staffID, stats.Claimed, stats.Closed, activeClaims, rankText,
+		),
+		Color: helpers.ColorDefault,
+	}
+}
+
+func TicketClaimedEmbed(staffID string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Ticket Claimed",
+		Description: fmt.Sprintf("Successfully claimed this ticket.\n\n> **Claimed By:** <@%s>", staffID),
+		Thumbnail:   helpers.ThumbGuild,
+	})
+}
+
+// TicketAccessResultEmbed reports the outcome of /ticket add or /ticket remove.
+func TicketAccessResultEmbed(ok bool, description string) *discordgo.MessageEmbed {
+	kind, title := "success", "Ticket Access Updated"
+	if !ok {
+		kind, title = "error", "Nothing To Change"
+	}
+	return helpers.Preset(kind, types.PresetOptions{Title: title, Description: description, Thumbnail: helpers.ThumbGuild})
+}
+
+func TicketRemoveOwnerEmbed() *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "The ticket owner cannot be removed from their own ticket. Close the ticket instead.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+// EditInteractionV2 fills a slash command's deferred reply with a V2 message.
+// Prefix invocations have no interaction token, so they get a normal message.
+func EditInteractionV2(s *discordgo.Session, i *discordgo.InteractionCreate, components ...discordgo.MessageComponent) error {
+	if helpers.IsPrefixInteraction(i) {
+		_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+			Flags:      discordgo.MessageFlagsIsComponentsV2,
+			Components: components,
+			Reference: &discordgo.MessageReference{
+				MessageID: helpers.PrefixSourceMessageID(i),
+				ChannelID: i.ChannelID,
+				GuildID:   i.GuildID,
+			},
+		})
+		return err
+	}
+	body := map[string]any{
+		"flags":      discordgo.MessageFlagsIsComponentsV2,
+		"components": components,
+	}
+	_, err := s.RequestWithBucketID(
+		"PATCH",
+		discordgo.EndpointInteractionResponseActions(s.State.User.ID, i.Interaction.Token),
+		body,
+		discordgo.EndpointInteractionResponseActions(s.State.User.ID, ""),
+	)
+	return err
+}
+
+// IsStaffOfAnyPanel reports whether the member is staff for at least one ticket panel.
+func IsStaffOfAnyPanel(i *discordgo.InteractionCreate, ip *types.InteractivePanels) bool {
+	if tickets.InteractionIsAdmin(i) {
+		return true
+	}
+	for _, panel := range tickets.SortedTicketPanels(ip) {
+		if tickets.IsTicketStaff(i.Member, panel, nil) {
+			return true
+		}
+		for _, category := range panel.Ticket.Categories {
+			if tickets.IsTicketStaff(i.Member, panel, category) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TicketLeaderboard ranks staff by claimed tickets, then closed tickets.
+func TicketLeaderboard(ip *types.InteractivePanels) []tickets.TicketLeaderboardRow {
+	rows := make([]tickets.TicketLeaderboardRow, 0, len(ip.Tickets.Stats))
+	for staffID, stats := range ip.Tickets.Stats {
+		if stats == nil || (stats.Claimed == 0 && stats.Closed == 0) {
+			continue
+		}
+		rows = append(rows, tickets.TicketLeaderboardRow{StaffID: staffID, Stats: *stats})
+	}
+	sort.Slice(rows, func(a, b int) bool {
+		if rows[a].Stats.Claimed != rows[b].Stats.Claimed {
+			return rows[a].Stats.Claimed > rows[b].Stats.Claimed
+		}
+		if rows[a].Stats.Closed != rows[b].Stats.Closed {
+			return rows[a].Stats.Closed > rows[b].Stats.Closed
+		}
+		return rows[a].StaffID < rows[b].StaffID
+	})
+	return rows
+}
+
+// TicketTransferTargets are the categories a ticket can be forwarded to: the other categories of its panel.
+func TicketTransferTargets(panel *types.InteractivePanel, current string) []*types.TicketCategory {
+	var out []*types.TicketCategory
+	if panel == nil || panel.Ticket == nil {
+		return nil
+	}
+	for i := range panel.Ticket.Categories {
+		if c := panel.Ticket.Categories[i]; c != nil && c.ID != current {
+			out = append(out, c)
+		}
+	}
+	return out
 }

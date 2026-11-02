@@ -1,8 +1,10 @@
 package general
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
@@ -89,7 +91,7 @@ func executePlayerSettingsCommand(s *discordgo.Session, i *discordgo.Interaction
 	case "toggle":
 		return executePlayerSettingsToggle(s, i)
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsInvalidSubcommandEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, PlayerSettingsInvalidSubcommandEmbed(i))
 }
 
 func executePlayerSettingsView(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -97,12 +99,12 @@ func executePlayerSettingsView(s *discordgo.Session, i *discordgo.InteractionCre
 	view, err := database.Must().Player.Get(i.GuildID, helpers.InteractionUserID(i))
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, PlayerSettingsRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSettingsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerSettingsEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsOverviewEmbed(i, view.Config))
+	return helpers.EditInteractionEmbed(s, i, PlayerSettingsOverviewEmbed(i, view.Config))
 }
 
 func executePlayerSettingsToggle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
@@ -112,7 +114,7 @@ func executePlayerSettingsToggle(s *discordgo.Session, i *discordgo.InteractionC
 	// 1. Validate Setting
 	toggle := findSettingsToggle(helpers.SubOptionString(options, "option"))
 	if toggle == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsUnknownOptionEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, PlayerSettingsUnknownOptionEmbed(i))
 	}
 	enabled := helpers.SubOptionBool(options, "enabled")
 
@@ -120,17 +122,17 @@ func executePlayerSettingsToggle(s *discordgo.Session, i *discordgo.InteractionC
 	view, err := database.Must().Player.Get(i.GuildID, userID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsRegistrationRequiredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, PlayerSettingsRegistrationRequiredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSettingsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerSettingsEmbed(i))
 	}
 
 	// 3. Update Setting in Database
 	if _, err := database.Must().Player.UpdateConfig(userID, i.GuildID, userID, map[string]any{toggle.key: enabled}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerSettingsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerSettingsEmbed(i))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerSettingsToggledEmbed(i, view.Config.Username, toggle.label, enabled))
+	return helpers.EditInteractionEmbed(s, i, PlayerSettingsToggledEmbed(i, view.Config.Username, toggle.label, enabled))
 }
 
 // ============================================================================
@@ -152,4 +154,71 @@ func findSettingsToggle(key string) *settingsToggle {
 		}
 	}
 	return nil
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorPlayerSettingsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while updating your settings. Please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerSettingsInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Subcommand",
+		Description: "Use `/settings view` or `/settings toggle`.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerSettingsRegistrationRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Registration Required",
+		Description: "You must register before you can manage your settings. Run `/register` to link your Minecraft account first.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerSettingsUnknownOptionEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unknown Setting",
+		Description: "That is not a setting you can change. Pick one of the options listed in the command.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerSettingsOverviewEmbed(i *discordgo.InteractionCreate, config *models.PlayerConfigsModel) *discordgo.MessageEmbed {
+	return helpers.Preset("info", types.PresetOptions{
+		Title:       fmt.Sprintf("Player Settings · %s", config.Username),
+		Description: "Your current ranked profile preferences. Use `/settings toggle` to change one.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(config.Username),
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "ELO Visibility", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsEloVisible)), Inline: true},
+			{Name: "Stats Visibility", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsStatsVisible)), Inline: true},
+			{Name: "Party Invites", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsPartyInvitesEnabled)), Inline: true},
+			{Name: "Party Autowarp", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsPartyAutowarpEnabled)), Inline: true},
+			{Name: "Ping On Results", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsPingOnResultsEnabled)), Inline: true},
+			{Name: "Ping On Alerts", Value: fmt.Sprintf("**%s**", SettingsStateLabel(config.IsPingOnAlertsEnabled)), Inline: true},
+		},
+	})
+}
+
+func PlayerSettingsToggledEmbed(i *discordgo.InteractionCreate, username, label string, enabled bool) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Setting Updated",
+		Description: fmt.Sprintf("Successfully updated your settings.\n\n> **Setting:** `%s`\n> **State:** `%s`", label, SettingsStateLabel(enabled)),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func SettingsStateLabel(enabled bool) string {
+	if enabled {
+		return "Enabled"
+	}
+	return "Disabled"
 }

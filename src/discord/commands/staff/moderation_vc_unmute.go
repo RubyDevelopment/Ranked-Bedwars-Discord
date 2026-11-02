@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -28,7 +29,7 @@ var ModerationVcUnmuteCommand = &types.Command{
 	Description:  "Removes a voice channel server-mute from a player.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to voice unmute", "Reason for the voice unmute", false, false, false),
+		Options: punish.PunishmentOptions("Discord user to voice unmute", "Reason for the voice unmute", false, false, false),
 	},
 	Execute: executeModerationVcUnmuteCommand,
 }
@@ -38,14 +39,14 @@ var ModerationVcUnmuteCommand = &types.Command{
 // ============================================================================
 
 func executeModerationVcUnmuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
+	return punish.RevokePunishment(s, i, &punish.RevokeSpec{
 		Command:       "vcmute",
 		Ladder:        "vc_mute",
 		RoleKey:       "vc_muted_role",
 		Action:        "Voice Mute",
 		Adjective:     "voice muted",
 		Type:          "vc_mute",
-		ActiveTypes:   helpers.VoiceMutePunishmentTypes(),
+		ActiveTypes:   punish.VoiceMutePunishmentTypes(),
 		RecordType:    "vc_unmute",
 		DiscordActive: isVoiceMuted,
 		Discord:       voiceUnmuteMember,

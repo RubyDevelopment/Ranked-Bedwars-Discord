@@ -4,6 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/tickets"
 	"ranked-bedwars/src/types"
 )
 
@@ -19,7 +20,7 @@ var TicketsEvent = &types.Event{
 	Type:        "interaction_create",
 	Once:        false,
 	Disabled:    false,
-	Execute:     helpers.HandleTickets,
+	Execute:     tickets.HandleTickets,
 }
 
 func init() {
@@ -33,7 +34,7 @@ var TicketActivityEvent = &types.Event{
 	Once:        false,
 	Disabled:    false,
 	System:      true,
-	Execute:     helpers.HandleTicketMessage,
+	Execute:     tickets.HandleTicketMessage,
 }
 
 func init() {
@@ -47,5 +48,5 @@ var TicketInactivitySweepEvent = &types.Event{
 	Once:        false,
 	Disabled:    false,
 	System:      true,
-	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { helpers.StartTicketInactivitySweeper(s) },
+	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { tickets.StartTicketInactivitySweeper(s) },
 }

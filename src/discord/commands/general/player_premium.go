@@ -36,5 +36,17 @@ var PlayerPremiumCommand = &types.Command{
 
 func executePlayerPremiumCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// TODO: Implement premium management logic and status overview embed
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerPremiumUnavailableEmbed(i))
+	return helpers.EditInteractionEmbed(s, i, PlayerPremiumUnavailableEmbed(i))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func PlayerPremiumUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("info", types.PresetOptions{
+		Title:       "Premium Features",
+		Description: "Premium management features are currently under development. Check back soon for subscription benefits, perk overrides, and custom styling options.",
+		Thumbnail:   helpers.ThumbSprout,
+	})
 }

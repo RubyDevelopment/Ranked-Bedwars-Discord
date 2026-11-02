@@ -60,14 +60,50 @@ func executeQueuePugsCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	switch sub {
 	case "list":
-		return helpers.EditInteractionEmbed(s, i, helpers.PugsListUnavailableEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, PugsListUnavailableEmbed(i))
 	case "vote":
 		target := helpers.SubOptionUser(s, opts, "user")
 		if target == nil || target.Bot {
-			return helpers.EditInteractionEmbed(s, i, helpers.PugsInvalidTargetEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, PugsInvalidTargetEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.PugsVoteUnavailableEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, PugsVoteUnavailableEmbed(i))
 	default:
-		return helpers.EditInteractionEmbed(s, i, helpers.PugsInvalidSubcommandEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, PugsInvalidSubcommandEmbed(i))
 	}
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func PugsListUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Not Yet Implemented",
+		Description: "The PUGS division list requires additional infrastructure (snapshot system, role management) and is not available yet.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PugsVoteUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Not Yet Implemented",
+		Description: "The PUGS voting system requires additional infrastructure (voting channels, role management) and is not available yet.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PugsInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "You must specify a real player to vote for. Select a member from the command options.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PugsInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Subcommand",
+		Description: "Use `/pugs list` or `/pugs vote`.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
 }

@@ -38,12 +38,12 @@ func executeBotStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Fetch the registered bots for this guild
 	bots, err := helpers.GuildMetaBots(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorBotsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorBotsEmbed(i))
 	}
 
 	// If no bots are registered, return an error embed
 	if len(bots) == 0 {
-		return helpers.EditInteractionEmbed(s, i, helpers.EmptyBotsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, EmptyBotsEmbed(i))
 	}
 
 	return helpers.EditInteractionEmbed(s, i, helpers.BotsOverviewEmbed(i.GuildID, bots))
@@ -52,3 +52,23 @@ func executeBotStatusCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 // ============================================================================
 // Embed Builders
 // ============================================================================
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorBotsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while trying to fetch the registered game bots for this guild. Please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func EmptyBotsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "No Registered Bots",
+		Description: "This guild has no registered game bots. If you think this is an error, please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}

@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -28,7 +29,7 @@ var ModerationUnwarnCommand = &types.Command{
 	Description:  "Removes an active warning from a player's record.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to unwarn", "Reason for removing the warning", false, false, false),
+		Options: punish.PunishmentOptions("Discord user to unwarn", "Reason for removing the warning", false, false, false),
 	},
 	Execute: executeModerationUnwarnCommand,
 }
@@ -38,7 +39,7 @@ var ModerationUnwarnCommand = &types.Command{
 // ============================================================================
 
 func executeModerationUnwarnCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
+	return punish.RevokePunishment(s, i, &punish.RevokeSpec{
 		Command:   "warn",
 		Action:    "Warning",
 		Adjective: "warned",

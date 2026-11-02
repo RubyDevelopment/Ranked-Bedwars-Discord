@@ -102,6 +102,7 @@ type CommandResponse struct {
 type RequirementSlot struct {
 	ID       string `json:"id"`
 	Required bool   `json:"required"`
+	Label    string `json:"label,omitempty"` // how the dashboard names it, written by the bot (see RequirementLabel)
 }
 
 // CommandOption is a parameter of a CommandConfig.

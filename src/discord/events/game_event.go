@@ -4,6 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 )
 
@@ -25,9 +26,9 @@ var HostButtonsEvent = &types.Event{
 		}
 		switch i.Type {
 		case discordgo.InteractionMessageComponent:
-			helpers.HandleHostButton(s, i, i.MessageComponentData().CustomID)
+			match.HandleHostButton(s, i, i.MessageComponentData().CustomID)
 		case discordgo.InteractionModalSubmit:
-			helpers.HandleHostButtonModal(s, i)
+			match.HandleHostButtonModal(s, i)
 		}
 	},
 }
@@ -41,7 +42,7 @@ var HostGameInteractionEvent = &types.Event{
 	Type:         "interaction_create",
 	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.GuildID != "" && i.Type == discordgo.InteractionMessageComponent {
-			helpers.HandleHostGameComponent(s, i, i.MessageComponentData().CustomID)
+			match.HandleHostGameComponent(s, i, i.MessageComponentData().CustomID)
 		}
 	},
 }
@@ -58,6 +59,6 @@ var GameRecoveryEvent = &types.Event{
 		for _, g := range r.Guilds {
 			ids = append(ids, g.ID)
 		}
-		go helpers.RecoverGamesOnStartup(s, ids) // listing every guild takes a while: the ready event does not wait for it
+		go match.RecoverGamesOnStartup(s, ids) // listing every guild takes a while: the ready event does not wait for it
 	},
 }

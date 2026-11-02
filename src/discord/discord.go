@@ -89,11 +89,6 @@ func (manager *Manager) Initialize() error {
 	return nil
 }
 
-// Start serves as a placeholder for lifecycle completeness. Open() in Initialize() starts listening.
-func (manager *Manager) Start() error {
-	return nil
-}
-
 // Stop safely closes the active Discord session and cleans up resources.
 func (manager *Manager) Stop() error {
 	if manager.Session != nil {
@@ -104,15 +99,6 @@ func (manager *Manager) Stop() error {
 		manager.Logger.Info("Discord session closed successfully.")
 	}
 	return nil
-}
-
-// Instance returns the underlying active discordgo.Session.
-func (manager *Manager) Instance() (*discordgo.Session, error) {
-	if manager.Session == nil {
-		manager.Logger.Error("Discord session is not initialized. Please call Initialize() first.")
-		return nil, fmt.Errorf("discord session is not initialized; call Initialize() first")
-	}
-	return manager.Session, nil
 }
 
 // ============================================================================

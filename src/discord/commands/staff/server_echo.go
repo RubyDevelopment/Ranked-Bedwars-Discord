@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -94,9 +95,9 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 
 		if _, err := s.ChannelMessageSend(targetChannelID, content); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorEchoEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, UnexpectedErrorEchoEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.EchoSuccessEmbed(i, targetChannelID))
+		return helpers.EditInteractionEmbed(s, i, EchoSuccessEmbed(i, targetChannelID))
 
 	case "link":
 		link := helpers.SubOptionString(options, "url")
@@ -104,10 +105,10 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		parsed := parseDiscordMessageLink(link)
 		if parsed == nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.EchoInvalidLinkEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, EchoInvalidLinkEmbed(i))
 		}
 		if i.GuildID != "" && parsed.guildID != i.GuildID {
-			return helpers.EditInteractionEmbed(s, i, helpers.EchoRestrictedDestinationEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, EchoRestrictedDestinationEmbed(i))
 		}
 
 		if embedErr := ensureEchoChannelAccess(s, i, targetChannelID); embedErr != nil {
@@ -116,7 +117,7 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 		sourceMessage, err := s.ChannelMessage(parsed.channelID, parsed.messageID)
 		if err != nil || sourceMessage == nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.EchoInvalidLinkEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, EchoInvalidLinkEmbed(i))
 		}
 
 		send := &discordgo.MessageSend{
@@ -124,10 +125,10 @@ func executeServerEchoCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			Embeds:  sourceMessage.Embeds,
 		}
 		if _, err := s.ChannelMessageSendComplex(targetChannelID, send); err != nil {
-			return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorEchoEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, UnexpectedErrorEchoEmbed(i))
 		}
 
-		return helpers.EditInteractionEmbed(s, i, helpers.EchoSuccessEmbed(i, targetChannelID))
+		return helpers.EditInteractionEmbed(s, i, EchoSuccessEmbed(i, targetChannelID))
 	}
 
 	return nil
@@ -148,16 +149,16 @@ func ensureEchoChannelAccess(s *discordgo.Session, i *discordgo.InteractionCreat
 	if i.GuildID != "" {
 		channel, err := s.Channel(channelID)
 		if err != nil {
-			return helpers.EchoInvalidChannelEmbed(i)
+			return EchoInvalidChannelEmbed(i)
 		}
 		if channel.GuildID != "" && channel.GuildID != i.GuildID {
-			return helpers.EchoRestrictedDestinationEmbed(i)
+			return EchoRestrictedDestinationEmbed(i)
 		}
 	}
 
 	perms, err := s.UserChannelPermissions(s.State.User.ID, channelID)
 	if err != nil || perms&(discordgo.PermissionViewChannel|discordgo.PermissionSendMessages) != (discordgo.PermissionViewChannel|discordgo.PermissionSendMessages) {
-		return helpers.EchoInsufficientPermissionsEmbed(i)
+		return EchoInsufficientPermissionsEmbed(i)
 	}
 	return nil
 }
@@ -178,4 +179,59 @@ func parseDiscordMessageLink(value string) *discordMessageLink {
 		channelID: matches[2],
 		messageID: matches[3],
 	}
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorEchoEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while processing the echo command. Please try again later or contact support.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func EchoSuccessEmbed(i *discordgo.InteractionCreate, channelID string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title: "Message Dispatched",
+		Description: fmt.Sprintf(
+			"Your message was sent successfully. The message is now visible in the target channel <#%s>.",
+			channelID,
+		),
+		Thumbnail: helpers.ThumbGuild,
+	})
+}
+
+func EchoInvalidLinkEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Link",
+		Description: "That does not look like a valid Discord message link. Right-click a message and choose **Copy Message Link**.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func EchoRestrictedDestinationEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Restricted Destination",
+		Description: "That message link points outside this guild. Only links from this guild can be used.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func EchoInvalidChannelEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Channel",
+		Description: "The selected channel could not be used. Choose a text channel the bot can access.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func EchoInsufficientPermissionsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Insufficient Permissions",
+		Description: "The bot does not have permission to send messages in that channel. Grant **Send Messages** to the bot role and try again.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
 }

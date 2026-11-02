@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
@@ -11,6 +12,8 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/engine"
+	"ranked-bedwars/src/discord/helpers/tickets"
 	"ranked-bedwars/src/types"
 )
 
@@ -53,10 +56,10 @@ var PlayerRegisterVerifyEvent = &types.Event{
 // startPartyCodeRegistration sends the code to the player's party chat and offers the button to enter it.
 func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, userID, username string, cfg *types.InGameCode) error {
 	if helpers.IsPrefixInteraction(i) {
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterUseSlashEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, RegisterUseSlashEmbed(i))
 	}
-	if !helpers.Engine.Connected() {
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterVerifyUnavailableEmbed(i))
+	if !engine.Engine.Connected() {
+		return helpers.EditInteractionEmbed(s, i, RegisterVerifyUnavailableEmbed(i))
 	}
 
 	// A name somebody already has can never be registered, so don't invite anyone for it.
@@ -69,22 +72,22 @@ func startPartyCodeRegistration(s *discordgo.Session, i *discordgo.InteractionCr
 	code, err := helpers.RegistrationVerifier.Begin(i.GuildID, userID, username, cfg)
 	var limited *helpers.RateLimitError
 	if errors.As(err, &limited) {
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterRateLimitedEmbed(i, limited.Wait))
+		return helpers.EditInteractionEmbed(s, i, RegisterRateLimitedEmbed(i, limited.Wait))
 	} else if err != nil {
 		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
 	}
 
-	_ = helpers.EditInteractionEmbed(s, i, helpers.RegisterContactingEmbed(i, username))
+	_ = helpers.EditInteractionEmbed(s, i, RegisterContactingEmbed(i, username))
 	ctx, cancel := context.WithTimeout(context.Background(), engineVerifyTimeout)
 	defer cancel()
 	message := fmt.Sprintf("Your Ranked Bedwars verification code is %s. Enter it in Discord to finish registering. Never share it.", code)
-	res, err := helpers.Engine.Verify(ctx, i.GuildID, username, code, message)
+	res, err := engine.Engine.Verify(ctx, i.GuildID, username, code, message)
 	if err != nil || res.Status != "sent" {
 		helpers.RegistrationVerifier.Discard(i.GuildID, userID)
-		return helpers.EditInteractionEmbed(s, i, helpers.RegisterVerifyFailedEmbed(i, username, res.Status))
+		return helpers.EditInteractionEmbed(s, i, RegisterVerifyFailedEmbed(i, username, res.Status))
 	}
 
-	return helpers.EditInteractionComponents(s, i, helpers.RegisterCodePromptEmbed(i, username, len(code), cfg), []discordgo.MessageComponent{
+	return helpers.EditInteractionComponents(s, i, RegisterCodePromptEmbed(i, username, len(code), cfg), []discordgo.MessageComponent{
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 			discordgo.Button{Label: "Enter code", Style: discordgo.PrimaryButton, CustomID: helpers.RegVerifyOpenID},
 		}},
@@ -109,20 +112,20 @@ func handlePlayerRegisterVerify(s *discordgo.Session, i *discordgo.InteractionCr
 
 func openRegisterCodeModal(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !helpers.RegistrationVerifier.Pending(i.GuildID, helpers.InteractionUserID(i)) {
-		respondEphemeral(s, i, helpers.RegisterNoPendingEmbed(i))
+		respondEphemeral(s, i, RegisterNoPendingEmbed(i))
 		return
 	}
 	_ = helpers.RespondModal(s, i, helpers.RegVerifyModalID, "Verify your Minecraft account",
-		helpers.ModalTextInput(helpers.RegVerifyCodeField, "Code from the party chat", "", "", false, true, 12))
+		tickets.ModalTextInput(helpers.RegVerifyCodeField, "Code from the party chat", "", "", false, true, 12))
 }
 
 func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	userID := helpers.InteractionUserID(i)
-	input := helpers.ModalValues(i)[helpers.RegVerifyCodeField]
+	input := tickets.ModalValues(i)[helpers.RegVerifyCodeField]
 
 	username, result, left := helpers.RegistrationVerifier.Check(i.GuildID, userID, input)
 	if result != helpers.CodeOK {
-		respondEphemeral(s, i, helpers.RegisterCodeRejectedEmbed(i, result, left))
+		respondEphemeral(s, i, RegisterCodeRejectedEmbed(i, result, left))
 		return
 	}
 
@@ -132,11 +135,11 @@ func submitRegisterCode(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	var embed *discordgo.MessageEmbed
 	if existing, err := database.Must().Player.Get(i.GuildID, userID); err == nil && existing != nil {
-		embed = helpers.PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username)
+		embed = PlayerRegisterAlreadyRegisteredEmbed(i, existing.Config.Username)
 	} else {
 		embed = registerNewPlayer(i, s, i.GuildID, userID, username)
 	}
-	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+	_ = helpers.EditInteractionResponse(s, i, &discordgo.WebhookEdit{
 		Embeds:     &[]*discordgo.MessageEmbed{embed},
 		Components: &[]discordgo.MessageComponent{},
 	})
@@ -147,4 +150,115 @@ func respondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, emb 
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{emb}, Flags: discordgo.MessageFlagsEphemeral},
 	})
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func RegisterContactingEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+	return helpers.Preset("info", types.PresetOptions{
+		Title:       "Searching For Player",
+		Description: fmt.Sprintf("A bot is inviting **%s** to a party on the Minecraft server. Make sure you are online and **accept the party invite**. This can take up to a minute or two.", username),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func RegisterCodePromptEmbed(i *discordgo.InteractionCreate, username string, length int, cfg *types.InGameCode) *discordgo.MessageEmbed {
+	minutes := 10
+	if cfg != nil && cfg.ExpiresMinutes >= 1 && cfg.ExpiresMinutes <= 60 {
+		minutes = cfg.ExpiresMinutes
+	}
+	return helpers.Preset("info", types.PresetOptions{
+		Title:       "Check Your Party Chat",
+		Description: fmt.Sprintf("A %d-character code was sent to **%s** in the Minecraft party chat. Press **Enter code** and type it in to finish registering. The code expires in %d minute%s.", length, username, minutes, Plural(minutes)),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func RegisterUseSlashEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Slash Command Required",
+		Description: "This guild verifies Minecraft accounts with a code, which needs buttons. Please use `/register` instead of the prefix command.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func RegisterVerifyUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Verification Unavailable",
+		Description: "Account verification is not available right now. Please try again in a few minutes, or contact an administrator if it keeps happening.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func RegisterRateLimitedEmbed(i *discordgo.InteractionCreate, wait time.Duration) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Slow Down",
+		Description: fmt.Sprintf("A verification code was requested very recently. Please try again in **%s**.", wait.Round(time.Second)),
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func RegisterNoPendingEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Nothing To Verify",
+		Description: "You have no registration waiting for a code, or it expired. Run `/register` to start again.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func RegisterCodeRejectedEmbed(i *discordgo.InteractionCreate, result helpers.CodeResult, attemptsLeft int) *discordgo.MessageEmbed {
+	switch result {
+	case helpers.CodeWrong:
+		return helpers.Preset("error", types.PresetOptions{
+			Title:       "Invalid Code",
+			Description: fmt.Sprintf("That code is not correct. You have **%d** attempt%s left.", attemptsLeft, Plural(attemptsLeft)),
+			Thumbnail:   helpers.ThumbFlag,
+		})
+	case helpers.CodeInvalid:
+		return helpers.Preset("error", types.PresetOptions{
+			Title:       "Invalid Code",
+			Description: "That is not the code format. Check the Minecraft party chat and try again.",
+			Thumbnail:   helpers.ThumbFlag,
+		})
+	case helpers.CodeLocked:
+		return helpers.Preset("error", types.PresetOptions{
+			Title:       "Too Many Attempts",
+			Description: "That was the last attempt. Run `/register` again to get a new code.",
+			Thumbnail:   helpers.ThumbFlag,
+		})
+	}
+	return RegisterNoPendingEmbed(i)
+}
+
+func RegisterVerifyFailedEmbed(i *discordgo.InteractionCreate, username, status string) *discordgo.MessageEmbed {
+	title, description := "Verification Unavailable", "Account verification is not available right now. Please try again in a few minutes, or contact an administrator if it keeps happening."
+	switch status {
+	case "offline":
+		title = "Join The Server First"
+		description = fmt.Sprintf("**%s** does not appear to be online on the Minecraft server. Join the server, then run `/register` again.", username)
+	case "not_joined":
+		title = "Party Invite Not Accepted"
+		description = fmt.Sprintf("A party invite was sent to **%s**, but you did not join it in time. Make sure you are on the server and accept the invite, then run `/register` again.", username)
+	case "no_bot":
+		title = "Verification Busy"
+		description = "Every verification bot is busy right now. Please try again in a minute."
+	}
+	return helpers.Preset("error", types.PresetOptions{Title: title, Description: strings.TrimSpace(description), Thumbnail: helpers.ThumbFlag})
+}
+
+func PlayerRegisterAlreadyRegisteredEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Already Registered",
+		Description: fmt.Sprintf("You are already registered as **%s**. Use `/rename` to change your username.", username),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func Plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }

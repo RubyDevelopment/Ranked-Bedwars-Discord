@@ -1,6 +1,7 @@
 package general
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
@@ -8,6 +9,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/pagination"
 	"ranked-bedwars/src/types"
 )
 
@@ -79,33 +81,33 @@ func executeModerationPunishmentsCommand(s *discordgo.Session, i *discordgo.Inte
 		return helpers.EditInteractionEmbed(s, i, helpers.PlayerProfileNotRegisteredEmbed(i))
 	}
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationPunishmentsBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationPunishmentsBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.ModerationPunishmentsNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, ModerationPunishmentsNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationPunishmentsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationPunishmentsEmbed(i))
 	}
 
 	// 4. Fetch & Filter Punishment History
 	entries, err := database.Must().Punishments.ByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), false, "", sdk.Page{})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationPunishmentsEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationPunishmentsEmbed(i))
 	}
 
 	filtered := helpers.FilterPunishmentHistoryEntries(entries.Data, activeOnly, filterDuration)
 	if len(filtered) == 0 {
 		if activeOnly {
-			return helpers.EditInteractionEmbed(s, i, helpers.ModerationPunishmentsEmptyActiveEmbed(i, view.Config.Username))
+			return helpers.EditInteractionEmbed(s, i, ModerationPunishmentsEmptyActiveEmbed(i, view.Config.Username))
 		}
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.ModerationPunishmentsEmptyFilteredEmbed(i, view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, ModerationPunishmentsEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationPunishmentsEmptyEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, ModerationPunishmentsEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 5. Render First Page
@@ -115,6 +117,58 @@ func executeModerationPunishmentsCommand(s *discordgo.Session, i *discordgo.Inte
 	}
 	totalPages := helpers.HistoryTotalPages(len(filtered))
 	embed := helpers.BuildPunishmentHistoryEmbed(view.Config.Username, filtered, 0, activeOnly)
-	components := helpers.BuildHistoryPageComponents(helpers.HistoryPagePunishments, target.ID, 1, totalPages, []string{activeFlag, filterInput})
+	components := pagination.BuildHistoryPageComponents(pagination.HistoryPagePunishments, target.ID, 1, totalPages, []string{activeFlag, filterInput})
 	return helpers.EditInteractionComponents(s, i, embed, components)
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorModerationPunishmentsEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while loading the punishment history. Please try again later or contact support.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationPunishmentsBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "Automated bot accounts do not have a punishment history. Target a registered player instead.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationPunishmentsNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Player Not Registered",
+		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
+	})
+}
+
+func ModerationPunishmentsEmptyEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "History Clear",
+		Description: "No punishment history was found for this player. This player maintains a clean record.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func ModerationPunishmentsEmptyActiveEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "No Active Punishments",
+		Description: "No active punishments were found for this player. This player maintains a clean record.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func ModerationPunishmentsEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filter string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "History Empty",
+		Description: fmt.Sprintf("No punishment history was found for this player in the last **%s**. Try a longer filter or remove it.", filter),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
 }

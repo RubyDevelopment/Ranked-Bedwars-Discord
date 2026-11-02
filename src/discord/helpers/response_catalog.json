@@ -1,49 +1,49 @@
 {
 	"commands": [
 		{
-			"name": "serverban",
+			"name": "ban",
 			"responses": [
 				{
-					"key": "serverban.invalid-target",
+					"key": "ban.invalid-target",
 					"slug": "invalid-target",
 					"title": "Invalid Target",
 					"look": "error",
 					"description": "You cannot … yourself. Select a different member to moderate."
 				},
 				{
-					"key": "serverban.reason-required",
+					"key": "ban.reason-required",
 					"slug": "reason-required",
 					"title": "Reason Required",
 					"look": "error",
 					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
 				},
 				{
-					"key": "serverban.unexpected-error",
+					"key": "ban.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
 					"look": "error",
 					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
 				},
 				{
-					"key": "serverban.punishment-already-active",
+					"key": "ban.punishment-already-active",
 					"slug": "punishment-already-active",
 					"title": "Punishment Already Active",
 					"look": "error",
 					"description": "That player is already **…**. Check `/punishments` for details."
 				},
 				{
-					"key": "serverban.hierarchy-error",
+					"key": "ban.hierarchy-error",
 					"slug": "hierarchy-error",
 					"title": "Hierarchy Error",
 					"look": "error",
 					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
 				},
 				{
-					"key": "serverban.server-ban-applied",
-					"slug": "server-ban-applied",
-					"title": "Server Ban Applied",
+					"key": "ban.queue-ban-applied",
+					"slug": "queue-ban-applied",
+					"title": "Queue Ban Applied",
 					"look": "success",
-					"description": "Successfully recorded the server ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe member was banned from the Discord guild."
+					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe queue banned role was given to the member."
 				}
 			]
 		},
@@ -172,6 +172,12 @@
 					"look": "success",
 					"description": "**…** received **…** starting ELO.",
 					"has_fields": true
+				},
+				{
+					"key": "claim.already-claimed",
+					"slug": "already-claimed",
+					"title": "Already Claimed",
+					"look": "error"
 				}
 			]
 		},
@@ -259,13 +265,6 @@
 			"name": "compare",
 			"responses": [
 				{
-					"key": "compare.unexpected-error",
-					"slug": "unexpected-error",
-					"title": "Unexpected Error",
-					"look": "error",
-					"description": "An unexpected error occurred while trying to compare these players. Please contact an administrator for assistance or try again later."
-				},
-				{
 					"key": "compare.invalid-target",
 					"slug": "invalid-target",
 					"title": "Invalid Target",
@@ -278,6 +277,35 @@
 					"title": "No Active Season",
 					"look": "error",
 					"description": "This guild does not have an active season configured. If you think this is an error, please contact an administrator for assistance."
+				},
+				{
+					"key": "compare.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to compare these players. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "compare.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "\u003c@…\u003e is not registered in this guild. They must run `/register` before they can be compared."
+				},
+				{
+					"key": "compare.stats-hidden",
+					"slug": "stats-hidden",
+					"title": "Stats Hidden",
+					"look": "error",
+					"description": "\u003c@…\u003e has chosen to hide their stats from other players, so they cannot be compared."
+				},
+				{
+					"key": "compare.player-comparison",
+					"slug": "player-comparison",
+					"title": "Player Comparison",
+					"look": "success",
+					"description": "Comparing **…** and **…** for season `…`.",
+					"has_fields": true
 				}
 			]
 		},
@@ -1494,18 +1522,11 @@
 					"description": "Your party is ready! Invite players with `/party invite` to build your team.\n\n\u003e **Leader:** You\n\u003e **Members:** 1/4\n\u003e **Invites:** Open\n\u003e **Disbands After:** … minutes of inactivity"
 				},
 				{
-					"key": "party.invitation-declined",
-					"slug": "invitation-declined",
-					"title": "Invitation Declined",
+					"key": "party.party-invitation",
+					"slug": "party-invitation",
+					"title": "Party Invitation",
 					"look": "info",
-					"description": "You declined the party invitation. If you change your mind, ask the leader to send you a new invitation."
-				},
-				{
-					"key": "party.party-joined",
-					"slug": "party-joined",
-					"title": "Party Joined",
-					"look": "success",
-					"description": "You successfully joined \u003c@…\u003e's party!\n\n\u003e **Party Size:** …/…\n\u003e **Leader:** \u003c@…\u003e\n\nYou can now queue together for matches."
+					"description": "\u003c@…\u003e, \u003c@…\u003e invited you to join their party!\n\n\u003e **Party Size:** …/…\n\u003e **Leader:** \u003c@…\u003e\n\u003e **Expires:** …\n\nClick **Accept** to join or **Deny** to decline the invitation."
 				},
 				{
 					"key": "party.left-party",
@@ -1515,11 +1536,25 @@
 					"description": "You have successfully left the party. You can create a new party with `/party create` or join another party by accepting an invitation."
 				},
 				{
+					"key": "party.player-left",
+					"slug": "player-left",
+					"title": "Player Left",
+					"look": "info",
+					"description": "\u003c@…\u003e has left your party. You can invite a new player to fill the slot with `/party invite`."
+				},
+				{
 					"key": "party.player-removed",
 					"slug": "player-removed",
 					"title": "Player Removed",
 					"look": "success",
 					"description": "\u003c@…\u003e has been removed from your party. You can invite a new player to fill the slot with `/party invite`."
+				},
+				{
+					"key": "party.you-are-the-party-leader",
+					"slug": "you-are-the-party-leader",
+					"title": "You Are the Party Leader",
+					"look": "success",
+					"description": "\u003c@…\u003e has transferred party leadership to you. You can now manage the party, invite members, kick players, and disband the party."
 				},
 				{
 					"key": "party.leadership-transferred",
@@ -1563,6 +1598,20 @@
 					"look": "info",
 					"description": "View the current party details for \u003c@…\u003e.",
 					"has_fields": true
+				},
+				{
+					"key": "party.invitation-declined",
+					"slug": "invitation-declined",
+					"title": "Invitation Declined",
+					"look": "info",
+					"description": "You declined the party invitation. If you change your mind, ask the leader to send you a new invitation."
+				},
+				{
+					"key": "party.party-joined",
+					"slug": "party-joined",
+					"title": "Party Joined",
+					"look": "success",
+					"description": "You successfully joined \u003c@…\u003e's party!\n\n\u003e **Party Size:** …/…\n\u003e **Leader:** \u003c@…\u003e\n\nYou can now queue together for matches."
 				}
 			]
 		},
@@ -1741,13 +1790,6 @@
 					"description": "Automated bot accounts do not have ranked profiles. Target a registered player instead."
 				},
 				{
-					"key": "profile.player-not-registered",
-					"slug": "player-not-registered",
-					"title": "Player Not Registered",
-					"look": "error",
-					"description": "That player is not registered in this guild. They must run `/register` before a profile is available."
-				},
-				{
 					"key": "profile.profile-hidden",
 					"slug": "profile-hidden",
 					"title": "Profile Hidden",
@@ -1760,6 +1802,13 @@
 					"title": "Player Profile · …",
 					"look": "info",
 					"description": "…\n\nUse `/stats` for a full seasonal breakdown."
+				},
+				{
+					"key": "profile.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must run `/register` before a profile is available."
 				}
 			]
 		},
@@ -1837,53 +1886,6 @@
 			]
 		},
 		{
-			"name": "ban",
-			"responses": [
-				{
-					"key": "ban.invalid-target",
-					"slug": "invalid-target",
-					"title": "Invalid Target",
-					"look": "error",
-					"description": "You cannot … yourself. Select a different member to moderate."
-				},
-				{
-					"key": "ban.reason-required",
-					"slug": "reason-required",
-					"title": "Reason Required",
-					"look": "error",
-					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
-				},
-				{
-					"key": "ban.unexpected-error",
-					"slug": "unexpected-error",
-					"title": "Unexpected Error",
-					"look": "error",
-					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
-				},
-				{
-					"key": "ban.punishment-already-active",
-					"slug": "punishment-already-active",
-					"title": "Punishment Already Active",
-					"look": "error",
-					"description": "That player is already **…**. Check `/punishments` for details."
-				},
-				{
-					"key": "ban.hierarchy-error",
-					"slug": "hierarchy-error",
-					"title": "Hierarchy Error",
-					"look": "error",
-					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
-				},
-				{
-					"key": "ban.queue-ban-applied",
-					"slug": "queue-ban-applied",
-					"title": "Queue Ban Applied",
-					"look": "success",
-					"description": "Successfully recorded the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe queue banned role was given to the member."
-				}
-			]
-		},
-		{
 			"name": "queues",
 			"responses": [
 				{
@@ -1939,46 +1941,6 @@
 			]
 		},
 		{
-			"name": "unban",
-			"responses": [
-				{
-					"key": "unban.invalid-target",
-					"slug": "invalid-target",
-					"title": "Invalid Target",
-					"look": "error",
-					"description": "You must specify a player to …. Select a member from the command options."
-				},
-				{
-					"key": "unban.player-not-found",
-					"slug": "player-not-found",
-					"title": "Player Not Found",
-					"look": "error",
-					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
-				},
-				{
-					"key": "unban.unexpected-error",
-					"slug": "unexpected-error",
-					"title": "Unexpected Error",
-					"look": "error",
-					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
-				},
-				{
-					"key": "unban.punishment-not-active",
-					"slug": "punishment-not-active",
-					"title": "Punishment Not Active",
-					"look": "error",
-					"description": "That player is not currently **…**. Verify their status with `/punishments`."
-				},
-				{
-					"key": "unban.queue-ban-removed",
-					"slug": "queue-ban-removed",
-					"title": "Queue Ban Removed",
-					"look": "success",
-					"description": "Successfully removed the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Removed by:** \u003c@…\u003e"
-				}
-			]
-		},
-		{
 			"name": "ranks",
 			"responses": [
 				{
@@ -2007,32 +1969,11 @@
 			"name": "register",
 			"responses": [
 				{
-					"key": "register.unexpected-error",
-					"slug": "unexpected-error",
-					"title": "Unexpected Error",
-					"look": "error",
-					"description": "An unexpected error occurred while trying to process your registration. Please contact an administrator for assistance or try again later."
-				},
-				{
 					"key": "register.registration-unavailable",
 					"slug": "registration-unavailable",
 					"title": "Registration Unavailable",
 					"look": "error",
 					"description": "No ranks have been configured for this guild yet, so you cannot be registered. Please ask an administrator to set up at least one rank."
-				},
-				{
-					"key": "register.username-taken",
-					"slug": "username-taken",
-					"title": "Username Taken",
-					"look": "error",
-					"description": "The username **…** is already linked to another player in this guild. Try a different username or contact staff if this is your account."
-				},
-				{
-					"key": "register.already-registered",
-					"slug": "already-registered",
-					"title": "Already Registered",
-					"look": "error",
-					"description": "You are already registered as **…**. Use `/rename` to change your username."
 				},
 				{
 					"key": "register.verification-unavailable",
@@ -2061,6 +2002,20 @@
 					"title": "Registration Complete",
 					"look": "success",
 					"description": "Your Discord account has been successfully linked. Please wait a moment for your roles and display name to update.\n\n\u003e **Username:** `…`"
+				},
+				{
+					"key": "register.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while trying to process your registration. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "register.username-taken",
+					"slug": "username-taken",
+					"title": "Username Taken",
+					"look": "error",
+					"description": "The username **…** is already linked to another player in this guild. Try a different username or contact staff if this is your account."
 				}
 			]
 		},
@@ -2140,7 +2095,7 @@
 					"slug": "invalid-mvp",
 					"title": "Invalid MVP",
 					"look": "error",
-					"description": "You must specify the MVP of the game. Select a player from the command options."
+					"description": "Automated bot accounts cannot be the MVP. Select a real player instead."
 				},
 				{
 					"key": "rescore.game-not-found",
@@ -2349,6 +2304,13 @@
 					"title": "Role Not Manageable",
 					"look": "error",
 					"description": "… Adjust the role hierarchy to resolve this."
+				},
+				{
+					"key": "role.hierarchy-error",
+					"slug": "hierarchy-error",
+					"title": "Hierarchy Error",
+					"look": "error",
+					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
 				}
 			]
 		},
@@ -2502,6 +2464,85 @@
 			]
 		},
 		{
+			"name": "serverban",
+			"responses": [
+				{
+					"key": "serverban.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You cannot … yourself. Select a different member to moderate."
+				},
+				{
+					"key": "serverban.reason-required",
+					"slug": "reason-required",
+					"title": "Reason Required",
+					"look": "error",
+					"description": "You must provide a reason when issuing a punishment. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "serverban.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
+				},
+				{
+					"key": "serverban.punishment-already-active",
+					"slug": "punishment-already-active",
+					"title": "Punishment Already Active",
+					"look": "error",
+					"description": "That player is already **…**. Check `/punishments` for details."
+				},
+				{
+					"key": "serverban.hierarchy-error",
+					"slug": "hierarchy-error",
+					"title": "Hierarchy Error",
+					"look": "error",
+					"description": "That member cannot be moderated because their highest role is above or equal to mine. Adjust the role hierarchy or ask a higher-ranked moderator."
+				},
+				{
+					"key": "serverban.server-ban-applied",
+					"slug": "server-ban-applied",
+					"title": "Server Ban Applied",
+					"look": "success",
+					"description": "Successfully recorded the server ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Type:** `…`\n\u003e **Duration:** `…`\n\u003e **Expires:** …\n\u003e **Reason:** …\n\u003e **Issued by:** \u003c@…\u003e\n\nThe member was banned from the Discord guild."
+				}
+			]
+		},
+		{
+			"name": "serverunban",
+			"responses": [
+				{
+					"key": "serverunban.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the server unban. Please try again later or contact support."
+				},
+				{
+					"key": "serverunban.invalid-user-id",
+					"slug": "invalid-user-id",
+					"title": "Invalid User ID",
+					"look": "error",
+					"description": "That is not a valid Discord user ID. Provide the 17-20 digit ID of the user to unban."
+				},
+				{
+					"key": "serverunban.punishment-not-active",
+					"slug": "punishment-not-active",
+					"title": "Punishment Not Active",
+					"look": "error",
+					"description": "That player is not currently **server banned**. Verify their status with `/punishments`."
+				},
+				{
+					"key": "serverunban.server-unban-applied",
+					"slug": "server-unban-applied",
+					"title": "Server Unban Applied",
+					"look": "success"
+				}
+			]
+		},
+		{
 			"name": "settings",
 			"responses": [
 				{
@@ -2637,13 +2678,6 @@
 			"name": "strike",
 			"responses": [
 				{
-					"key": "strike.unexpected-error",
-					"slug": "unexpected-error",
-					"title": "Unexpected Error",
-					"look": "error",
-					"description": "An unexpected error occurred while issuing the strike. Please try again later or contact support."
-				},
-				{
 					"key": "strike.invalid-target",
 					"slug": "invalid-target",
 					"title": "Invalid Target",
@@ -2656,6 +2690,13 @@
 					"title": "Reason Required",
 					"look": "error",
 					"description": "You must provide a reason when issuing a strike. Include a clear explanation in the reason field."
+				},
+				{
+					"key": "strike.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while issuing the strike. Please try again later or contact support."
 				},
 				{
 					"key": "strike.strike-issued",
@@ -2695,13 +2736,6 @@
 					"title": "Player Not Registered",
 					"look": "error",
 					"description": "That player is not registered in this guild. Only registered players can have a strike review requested."
-				},
-				{
-					"key": "strikerequest.strike-review-requested",
-					"slug": "strike-review-requested",
-					"title": "Strike Review Requested",
-					"look": "success",
-					"description": "Your strike review request has been submitted. Staff will review the strike and respond on this ticket.\n\n\u003e **Player:** \u003c@…\u003e (**…**)\n\u003e **Reason:** …"
 				}
 			]
 		},
@@ -3100,6 +3134,34 @@
 					"description": "That is not a valid ticket action. Choose one of `panel`, `leaderboard`, `stats`, `logs`, `claim`, `close`, `add`, or `remove`."
 				},
 				{
+					"key": "ticket.ticket-leaderboard",
+					"slug": "ticket-leaderboard",
+					"title": "Ticket Leaderboard",
+					"look": "default",
+					"description": "No tickets have been claimed yet. Claim a ticket to get on the board."
+				},
+				{
+					"key": "ticket.ticket-stats",
+					"slug": "ticket-stats",
+					"title": "Ticket Stats",
+					"look": "default",
+					"description": "\u003c@…\u003e\n\n- **Claimed:** …\n- **Closed:** …\n- **Currently Claimed:** …\n- **Leaderboard Rank:** …"
+				},
+				{
+					"key": "ticket.ticket-claimed",
+					"slug": "ticket-claimed",
+					"title": "Ticket Claimed",
+					"look": "success",
+					"description": "Successfully claimed this ticket.\n\n\u003e **Claimed By:** \u003c@…\u003e"
+				},
+				{
+					"key": "ticket.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "The ticket owner cannot be removed from their own ticket. Close the ticket instead."
+				},
+				{
 					"key": "ticket.not-a-ticket",
 					"slug": "not-a-ticket",
 					"title": "Not A Ticket",
@@ -3123,34 +3185,42 @@
 			]
 		},
 		{
-			"name": "serverunban",
+			"name": "unban",
 			"responses": [
 				{
-					"key": "serverunban.unexpected-error",
+					"key": "unban.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "You must specify a player to …. Select a member from the command options."
+				},
+				{
+					"key": "unban.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "That player is not registered in this guild. They must register first before punishments can be managed."
+				},
+				{
+					"key": "unban.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
 					"look": "error",
-					"description": "An unexpected error occurred while processing the server unban. Please try again later or contact support."
+					"description": "An unexpected error occurred while processing the …. Please try again later or contact support."
 				},
 				{
-					"key": "serverunban.invalid-user-id",
-					"slug": "invalid-user-id",
-					"title": "Invalid User ID",
-					"look": "error",
-					"description": "That is not a valid Discord user ID. Provide the 17-20 digit ID of the user to unban."
-				},
-				{
-					"key": "serverunban.punishment-not-active",
+					"key": "unban.punishment-not-active",
 					"slug": "punishment-not-active",
 					"title": "Punishment Not Active",
 					"look": "error",
-					"description": "That player is not currently **server banned**. Verify their status with `/punishments`."
+					"description": "That player is not currently **…**. Verify their status with `/punishments`."
 				},
 				{
-					"key": "serverunban.server-unban-applied",
-					"slug": "server-unban-applied",
-					"title": "Server Unban Applied",
-					"look": "success"
+					"key": "unban.queue-ban-removed",
+					"slug": "queue-ban-removed",
+					"title": "Queue Ban Removed",
+					"look": "success",
+					"description": "Successfully removed the queue ban. This action has been logged for staff review.\n\n\u003e **Player:** \u003c@…\u003e\n\u003e **Type:** `…`\n\u003e **Reason:** …\n\u003e **Removed by:** \u003c@…\u003e"
 				}
 			]
 		},
@@ -3645,7 +3715,8 @@
 					"key": "viewgame.game-information",
 					"slug": "game-information",
 					"title": "Game Information · #…",
-					"look": "info"
+					"look": "info",
+					"has_fields": true
 				},
 				{
 					"key": "viewgame.invalid-game-state",
@@ -3770,13 +3841,6 @@
 					"title": "Not in Match",
 					"look": "error",
 					"description": "You must be a participant in this game to void it."
-				},
-				{
-					"key": "void.void-vote",
-					"slug": "void-vote",
-					"title": "Void Vote",
-					"look": "info",
-					"description": "…\n\nThe game is voided at **…** votes (three quarters of the players). Use `/void` to vote."
 				},
 				{
 					"key": "void.void-vote-passed",
@@ -3996,13 +4060,6 @@
 					"description": "That player is not registered in this guild. Only registered players have seasonal stats to wipe."
 				},
 				{
-					"key": "wipe.no-active-season",
-					"slug": "no-active-season",
-					"title": "No Active Season",
-					"look": "error",
-					"description": "This guild does not have an active season configured. An administrator should configure a season first."
-				},
-				{
 					"key": "wipe.no-stats-found",
 					"slug": "no-stats-found",
 					"title": "No Stats Found",
@@ -4022,6 +4079,13 @@
 					"title": "Stats Wiped",
 					"look": "success",
 					"description": "Successfully wiped the player's seasonal stats. This action has been logged for staff review. Use `/unwipe` to undo it.\n\n\u003e **Player:** `…`\n\u003e **Season:** `…`\n\u003e **Wiped:** …\n\u003e **ELO:** `…` → `…`\n\u003e **Rank:** `…`\n\u003e **Wipe ID:** `…`"
+				},
+				{
+					"key": "wipe.no-active-season",
+					"slug": "no-active-season",
+					"title": "No Active Season",
+					"look": "error",
+					"description": "This guild does not have an active season configured. An administrator should configure a season first."
 				}
 			]
 		}

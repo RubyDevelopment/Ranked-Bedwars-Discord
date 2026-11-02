@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -15,7 +16,7 @@ import (
 
 func init() {
 	helpers.Register(ModerationWarnCommand)
-	helpers.RegisterLadderAction("warning", warnSpec)
+	punish.RegisterLadderAction("warning", warnSpec)
 }
 
 // ============================================================================
@@ -29,9 +30,9 @@ var ModerationWarnCommand = &types.Command{
 	Description:  "Issues a formal warning to a player for breaking the rules.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to warn", "Reason for the warning", true, true, false),
+		Options: punish.PunishmentOptions("Discord user to warn", "Reason for the warning", true, true, false),
 	},
-	Autocomplete: helpers.PunishmentLevelAutocomplete("warning"),
+	Autocomplete: punish.PunishmentLevelAutocomplete("warning"),
 	Execute:      executeModerationWarnCommand,
 }
 
@@ -39,7 +40,7 @@ var ModerationWarnCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
-var warnSpec = &helpers.ApplySpec{
+var warnSpec = &punish.ApplySpec{
 	Command:       "warn",
 	Action:        "warn",
 	Adjective:     "warned",
@@ -51,5 +52,5 @@ var warnSpec = &helpers.ApplySpec{
 }
 
 func executeModerationWarnCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, warnSpec)
+	return punish.ApplyPunishment(s, i, warnSpec)
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/partymgr"
 	"ranked-bedwars/src/types"
 )
 
@@ -19,7 +20,7 @@ var PartyInviteButtonEvent = &types.Event{
 	Type:        "interaction_create",
 	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.GuildID != "" && i.Type == discordgo.InteractionMessageComponent {
-			helpers.HandlePartyButton(s, i, i.MessageComponentData().CustomID)
+			partymgr.HandlePartyButton(s, i, i.MessageComponentData().CustomID)
 		}
 	},
 }
@@ -34,5 +35,5 @@ var PartySweeperEvent = &types.Event{
 	System:      true,
 	Description: "Disbands idle parties and expires party invitations in every server.",
 	Type:        "ready",
-	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { helpers.StartPartySweeper(s) },
+	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { partymgr.StartPartySweeper(s) },
 }

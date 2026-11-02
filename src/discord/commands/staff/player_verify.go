@@ -2,6 +2,7 @@ package staff
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
@@ -9,6 +10,8 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -51,19 +54,19 @@ func executePlayerVerifyCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, PlayerVerifyInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, PlayerVerifyBotTargetEmbed(i))
 	}
 
 	// 2. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyNotRegisteredEmbed(i, target))
+			return helpers.EditInteractionEmbed(s, i, PlayerVerifyNotRegisteredEmbed(i, target))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerVerifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerVerifyEmbed(i))
 	}
 
 	// 3. Check Account Age
@@ -84,21 +87,91 @@ func executePlayerVerifyCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	// 4. Check Active Restrictions
 	active, err := database.Must().Punishments.ByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), true, "", sdk.Page{})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerVerifyEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerVerifyEmbed(i))
 	}
 	restrictions := []string{}
 	for _, row := range active.Data {
 		restrictions = append(restrictions, row.Type)
-		if helpers.PunishmentTypeIn(row.Type, []string{"ban", "server_ban"}) {
+		if punish.PunishmentTypeIn(row.Type, []string{"ban", "server_ban"}) {
 			problems = append(problems, fmt.Sprintf("Active **%s** punishment", row.Type))
 		}
 	}
 
 	// 5. Check Game State
-	inGame := helpers.Games.InGame(i.GuildID, target.ID)
+	inGame := match.Games.InGame(i.GuildID, target.ID)
 	if inGame {
 		problems = append(problems, "Currently in a game")
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.PlayerVerifyReportEmbed(i, target, view.Config.Username, ageDays, whitelisted, restrictions, inGame, problems))
+	return helpers.EditInteractionEmbed(s, i, PlayerVerifyReportEmbed(i, target, view.Config.Username, ageDays, whitelisted, restrictions, inGame, problems))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorPlayerVerifyEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while verifying the player. Please try again later or contact support.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerVerifyInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "You must specify a player to verify. Select a Discord member from the command options.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerVerifyBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "Automated bot accounts cannot be verified. Target a registered player instead.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func PlayerVerifyNotRegisteredEmbed(i *discordgo.InteractionCreate, user *discordgo.User) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Player Not Registered",
+		Description: fmt.Sprintf("<@%s> is not registered in this guild, so they cannot queue. Register them with `/forceregister`.", user.ID),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
+	})
+}
+
+func PlayerVerifyReportEmbed(i *discordgo.InteractionCreate, user *discordgo.User, username string, ageDays int, whitelisted bool, restrictions []string, inGame bool, problems []string) *discordgo.MessageEmbed {
+	preset, verdict := "success", "Eligible"
+	if len(problems) > 0 {
+		preset, verdict = "error", "Not Eligible"
+	}
+
+	age := fmt.Sprintf("**%d** days", ageDays)
+	if whitelisted {
+		age += " (whitelisted)"
+	}
+	active := "`None`"
+	if len(restrictions) > 0 {
+		active = "`" + strings.Join(restrictions, "`, `") + "`"
+	}
+	state := "`Available`"
+	if inGame {
+		state = "`In a game`"
+	}
+
+	description := fmt.Sprintf(
+		"Eligibility report for <@%s>.\n\n> **Username:** `%s`\n> **Verdict:** `%s`\n> **Account Age:** %s\n> **Active Punishments:** %s\n> **Game State:** %s",
+		user.ID, username, verdict, age, active, state,
+	)
+	if len(problems) > 0 {
+		description += "\n\n**Blocking:**\n> " + strings.Join(problems, "\n> ")
+	}
+
+	return helpers.Preset(preset, types.PresetOptions{
+		Title:       fmt.Sprintf("Player Verification · %s", username),
+		Description: description,
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -15,7 +16,7 @@ import (
 
 func init() {
 	helpers.Register(ModerationQueueBanCommand)
-	helpers.RegisterLadderAction("queue_ban", queueBanSpec)
+	punish.RegisterLadderAction("queue_ban", queueBanSpec)
 }
 
 // ============================================================================
@@ -31,9 +32,9 @@ var ModerationQueueBanCommand = &types.Command{
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to queue ban", "Reason for the queue ban", true, true, true),
+		Options: punish.PunishmentOptions("Discord user to queue ban", "Reason for the queue ban", true, true, true),
 	},
-	Autocomplete: helpers.PunishmentLevelAutocomplete("queue_ban"),
+	Autocomplete: punish.PunishmentLevelAutocomplete("queue_ban"),
 	Execute:      executeModerationQueueBanCommand,
 }
 
@@ -41,7 +42,7 @@ var ModerationQueueBanCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
-var queueBanSpec = &helpers.ApplySpec{
+var queueBanSpec = &punish.ApplySpec{
 	Command:     "ban",
 	RoleKey:     "queue_banned_role",
 	Action:      "queue ban",
@@ -57,5 +58,5 @@ var queueBanSpec = &helpers.ApplySpec{
 }
 
 func executeModerationQueueBanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, queueBanSpec)
+	return punish.ApplyPunishment(s, i, queueBanSpec)
 }

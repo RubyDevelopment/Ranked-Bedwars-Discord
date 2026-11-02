@@ -80,7 +80,10 @@ func main() {
 		if len(cmds) > 1 {
 			fmt.Fprintf(os.Stderr, "warning: %s defines %d commands; responses go to %q\n", key, len(cmds), cmds[0])
 		}
+		// A command's own embeds sit under its "Helper functions" and call helpers.Preset: they are its responses.
+		inConfig = true
 		add(cmds[0], scan(f, nil))
+		inConfig = false
 	}
 
 	// embed_helper.go's Command Embeds part: sections by source file. The event embeds after it belong to the shared builders below.
@@ -400,17 +403,19 @@ func partyResponses(root string, fset *token.FileSet) []response {
 	src, err := os.ReadFile(filepath.Join(root, "src/discord/commands/general/party_manage.go"))
 	check(err)
 	answers := map[string]bool{}
-	for _, m := range regexp.MustCompile(`EditInteractionEmbed\(s, i, helpers\.(\w+)\(`).FindAllStringSubmatch(string(src), -1) {
+	for _, m := range regexp.MustCompile(`EditInteractionEmbed\(s, i, partymgr\.(\w+)\(`).FindAllStringSubmatch(string(src), -1) {
 		answers[m[1]] = true
 	}
-	f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers/embed_helper.go"), nil, 0)
+	f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers/partymgr/party_responses.go"), nil, 0)
 	check(err)
 	var out []response
+	inConfig = true // the party embeds call helpers.Preset
 	for _, d := range f.Decls {
 		if fn, ok := d.(*ast.FuncDecl); ok && answers[fn.Name.Name] {
 			out = append(out, scan(fn, fn)...)
 		}
 	}
+	inConfig = false
 	return out
 }
 
@@ -424,7 +429,7 @@ type commandResponses struct {
 // "removed" texts in step with punishmentAppliedEmbed and punishmentRevokedEmbed (a test in helpers checks one).
 func punishmentResponses(root string, fset *token.FileSet, files []string) []commandResponses {
 	funcs := map[string]*ast.FuncDecl{}
-	for _, name := range []string{"punishment_helper.go", "embed_helper.go"} {
+	for _, name := range []string{"punish/punishment_helper.go", "punish/punishment_responses.go", "embed_helper.go"} {
 		f, err := parser.ParseFile(fset, filepath.Join(root, "src/discord/helpers", name), nil, 0)
 		check(err)
 		for _, d := range f.Decls {
@@ -437,6 +442,7 @@ func punishmentResponses(root string, fset *token.FileSet, files []string) []com
 		subst = args
 		defer func() { subst = nil }()
 		var out []response
+		inConfig = true // the punishment embeds call helpers.Preset
 		for _, n := range names {
 			if fn := funcs[n]; fn != nil {
 				out = append(out, scan(fn, fn)...)
@@ -457,7 +463,7 @@ func punishmentResponses(root string, fset *token.FileSet, files []string) []com
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			lit, ok := n.(*ast.CompositeLit)
-			if !ok || !(isSel(lit.Type, "helpers", "ApplySpec") || isSel(lit.Type, "helpers", "RevokeSpec")) {
+			if !ok || !(isSel(lit.Type, "punish", "ApplySpec") || isSel(lit.Type, "punish", "RevokeSpec")) {
 				return true
 			}
 			spec := map[string]string{}
@@ -471,9 +477,9 @@ func punishmentResponses(root string, fset *token.FileSet, files []string) []com
 				}
 			}
 			var rs []response
-			if isSel(lit.Type, "helpers", "ApplySpec") {
+			if isSel(lit.Type, "punish", "ApplySpec") {
 				a := map[string]string{"action": spec["Action"], "adjective": spec["Adjective"]}
-				names := []string{"punishmentSelfTargetEmbed", "punishmentBotTargetEmbed", "punishmentReasonRequiredEmbed", "unexpectedErrorPunishmentEmbed", "punishmentAlreadyActiveEmbed"}
+				names := []string{"punishmentSelfTargetEmbed", "punishmentBotTargetEmbed", "punishmentReasonRequiredEmbed", "UnexpectedErrorPunishmentEmbed", "punishmentAlreadyActiveEmbed"}
 				if spec["RequireMember"] == "true" {
 					names = append(names, "punishmentMemberNotFoundEmbed")
 				}
@@ -493,11 +499,12 @@ func punishmentResponses(root string, fset *token.FileSet, files []string) []com
 			} else {
 				lower := strings.ToLower(spec["Action"])
 				a := map[string]string{"action": lower, "adjective": spec["Adjective"]}
-				rs = use(a, "punishmentInvalidTargetEmbed", "PunishmentPlayerNotFoundEmbed", "unexpectedErrorPunishmentEmbed", "punishmentNotActiveEmbed")
+				rs = use(a, "punishmentInvalidTargetEmbed", "PunishmentPlayerNotFoundEmbed", "UnexpectedErrorPunishmentEmbed", "punishmentNotActiveEmbed")
 				title := spec["Action"] + " Removed"
 				rs = append(rs, response{Title: title, Look: "success", Slug: slug(title),
 					Description: "Successfully removed the " + lower + ". This action has been logged for staff review.\n\n> **Player:** <@" + changing + ">\n> **Type:** `" + changing + "`\n> **Reason:** " + changing + "\n> **Removed by:** <@" + changing + ">"})
 			}
+			inConfig = false
 			out = append(out, commandResponses{cmds[0], rs})
 			return true
 		})
@@ -515,6 +522,8 @@ var sharedBuilders = map[string][]string{
 func sharedResponses(root string, fset *token.FileSet, files []string) []commandResponses {
 	funcs := map[string]*ast.FuncDecl{}
 	helpers, _ := filepath.Glob(filepath.Join(root, "src/discord/helpers/*.go"))
+	sub, _ := filepath.Glob(filepath.Join(root, "src/discord/helpers/*/*.go")) // the sub-packages (tickets, panels) call helpers.Preset
+	helpers = append(helpers, sub...)
 	for _, path := range helpers {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -538,10 +547,11 @@ func sharedResponses(root string, fset *token.FileSet, files []string) []command
 			continue
 		}
 		for call, builders := range sharedBuilders {
-			if !strings.Contains(string(src), "helpers."+call+"(") {
+			if !regexp.MustCompile(`\b[a-z]+\.` + call + `\(`).MatchString(string(src)) {
 				continue
 			}
 			var rs []response
+			inConfig = true
 			for _, name := range builders {
 				if fn := funcs[name]; fn != nil {
 					rs = append(rs, scan(fn, fn)...)

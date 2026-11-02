@@ -9,6 +9,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 )
 
@@ -65,25 +66,25 @@ func executeModerationStrikeRequestCommand(s *discordgo.Session, i *discordgo.In
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeRequestInvalidTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeRequestInvalidTargetEmbed(i))
 	}
 	if target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeRequestBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeRequestBotTargetEmbed(i))
 	}
 
 	// 2. Validate Reason
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
 	if reason == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeRequestReasonRequiredEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikeRequestReasonRequiredEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeRequestNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, ModerationStrikeRequestNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationStrikeRequestEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationStrikeRequestEmbed(i))
 	}
 
 	username := target.Username
@@ -92,7 +93,7 @@ func executeModerationStrikeRequestCommand(s *discordgo.Session, i *discordgo.In
 	}
 	// 4. Open the thread (the request and its vote live in it). The thread is the answer: a prefix request shows it under the
 	// player's own message, and a slash request, whose reply is private, gets a link to it.
-	thread, problem := helpers.OpenStrikeRequest(s, i, target, username, reason, helpers.OptionInt(i, "game"))
+	thread, problem := match.OpenStrikeRequest(s, i, target, username, reason, helpers.OptionInt(i, "game"))
 	if problem != nil {
 		return helpers.EditInteractionEmbed(s, i, problem)
 	}
@@ -101,4 +102,48 @@ func executeModerationStrikeRequestCommand(s *discordgo.Session, i *discordgo.In
 	}
 	text := "Strike request opened: <#" + thread.ID + ">"
 	return helpers.EditInteractionResponse(s, i, &discordgo.WebhookEdit{Content: &text})
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorModerationStrikeRequestEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while submitting the strike review request. Please try again later or contact support.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikeRequestInvalidTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "You must specify a player to request a strike review for. Select a registered player from the command options.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikeRequestBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "Automated bot accounts do not have strikes to review. Target a registered player instead.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikeRequestReasonRequiredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Reason Required",
+		Description: "You must explain why the strike should be reviewed. Include a clear explanation in the reason field.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikeRequestNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Player Not Registered",
+		Description: "That player is not registered in this guild. Only registered players can have a strike review requested.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
+	})
 }

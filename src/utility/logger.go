@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
@@ -25,12 +24,6 @@ type AppLogger interface {
 	Error(msg string, fields ...zap.Field)
 	Debug(msg string, fields ...zap.Field)
 	Child(label string) AppLogger
-}
-
-// GameLogger provides separate diagnostic channels for dynamic match instances.
-type GameLogger struct {
-	Discord   AppLogger
-	Minecraft AppLogger
 }
 
 // zapLogger implements the AppLogger interface using Zap's Logger.
@@ -53,11 +46,8 @@ func (l *zapLogger) Child(label string) AppLogger {
 // ============================================================================
 
 var (
-	logDir          string
-	mu              sync.RWMutex
-	dynamicRotators = make(map[string]*lumberjack.Logger)
-	logLevel        = zapcore.DebugLevel
-	bufPool         = buffer.NewPool()
+	logDir  string
+	bufPool = buffer.NewPool()
 
 	// Global instances available application-wide.
 	GlobalLogger      AppLogger
@@ -88,7 +78,6 @@ func init() {
 	if err := level.UnmarshalText([]byte(strings.ToLower(logLevelStr))); err != nil {
 		level = zapcore.DebugLevel
 	}
-	logLevel = level
 
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.TimeKey = ""
@@ -310,108 +299,4 @@ func CreateModuleLogger(module string, channel string) AppLogger {
 		root = EngineLogger
 	}
 	return root.Child(module)
-}
-
-// CreateEngineGameLogger creates per-game rotating loggers for discord and minecraft channels.
-func CreateEngineGameLogger(guildID string, gameID string, gameNumber any) GameLogger {
-	logKey := sanitizePathPart(fmt.Sprintf("%v", gameNumber))
-	if gameNumber == nil {
-		logKey = sanitizePathPart(gameID)
-	}
-	guildID = sanitizePathPart(guildID)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	minecraftPath := filepath.Join(logDir, "guilds", guildID, "games", fmt.Sprintf("minecraft-%s.log", logKey))
-	discordPath := filepath.Join(logDir, "guilds", guildID, "discord", fmt.Sprintf("discord-%s.log", logKey))
-
-	ctxDiscord := fmt.Sprintf("guild:%s:discord", guildID)
-	ctxMinecraft := fmt.Sprintf("game:%s:%s:minecraft", guildID, gameID)
-
-	mcRotator := getOrCreateRotator(minecraftPath)
-	dcRotator := getOrCreateRotator(discordPath)
-
-	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.TimeKey = ""
-	encoderConfig.LevelKey = ""
-
-	customLineEncoder := func(isConsole bool) zapcore.Encoder {
-		return &textLineEncoder{Encoder: zapcore.NewConsoleEncoder(encoderConfig), isConsole: isConsole}
-	}
-
-	mcCore := zapcore.NewCore(customLineEncoder(false), zapcore.AddSync(mcRotator), logLevel)
-	dcCore := zapcore.NewCore(customLineEncoder(false), zapcore.AddSync(dcRotator), logLevel)
-
-	mcZap := zap.New(mcCore).With(
-		zap.String("contextType", ctxMinecraft),
-		zap.String("moduleLabel", fmt.Sprintf("Game#%s/Minecraft", logKey)),
-	)
-	dcZap := zap.New(dcCore).With(
-		zap.String("contextType", ctxDiscord),
-		zap.String("moduleLabel", fmt.Sprintf("Game#%s/Discord", logKey)),
-	)
-
-	gl := GameLogger{
-		Minecraft: &zapLogger{sugar: mcZap},
-		Discord:   &zapLogger{sugar: dcZap},
-	}
-
-	gl.Discord.Info(fmt.Sprintf("Logger created for game #%s | guild=%s | channel=discord | path=%s", logKey, guildID, discordPath))
-	gl.Minecraft.Info(fmt.Sprintf("Logger created for game #%s | guild=%s | channel=minecraft | path=%s", logKey, guildID, minecraftPath))
-
-	return gl
-}
-
-// ClearEngineGameLogger closes and removes active file rotators for a finished game.
-func ClearEngineGameLogger(guildID string, gameID string, gameNumber any) {
-	logKey := sanitizePathPart(fmt.Sprintf("%v", gameNumber))
-	if gameNumber == nil {
-		logKey = sanitizePathPart(gameID)
-	}
-	guildID = sanitizePathPart(guildID)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	minecraftPath := filepath.Join(logDir, "guilds", guildID, "games", fmt.Sprintf("minecraft-%s.log", logKey))
-	discordPath := filepath.Join(logDir, "guilds", guildID, "discord", fmt.Sprintf("discord-%s.log", logKey))
-	for _, path := range []string{minecraftPath, discordPath} {
-		if rotator, exists := dynamicRotators[path]; exists {
-			rotator.Close()
-			delete(dynamicRotators, path)
-		}
-	}
-}
-
-// sanitizePathPart keeps [A-Za-z0-9._-], replaces everything else with '_',
-// and neutralizes empty/dot-only values so it can never traverse directories.
-func sanitizePathPart(v string) string {
-	b := []byte(v)
-	for i, c := range b {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
-			b[i] = '_'
-		}
-	}
-	out := string(b)
-	if out == "" || strings.Contains(out, "..") {
-		return "_"
-	}
-	return out
-}
-
-// getOrCreateRotator manages (caller must hold mu) global state cache for Lumberjack dynamic log rotators.
-func getOrCreateRotator(path string) *lumberjack.Logger {
-	if r, exists := dynamicRotators[path]; exists {
-		return r
-	}
-	r := &lumberjack.Logger{
-		Filename:   path,
-		MaxSize:    10,
-		MaxBackups: 7,
-		LocalTime:  true,
-		Compress:   true,
-	}
-	dynamicRotators[path] = r
-	return r
 }

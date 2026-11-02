@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 
 	"github.com/bwmarrin/discordgo"
@@ -40,25 +41,53 @@ func executeGameVoidCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	actor := helpers.InteractionUserID(i)
 
 	// 1. Only in a game's channel, and only for its players
-	game, ok := helpers.Games.ByChannel(i.ChannelID)
+	game, ok := match.Games.ByChannel(i.ChannelID)
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotGameChannelEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, VoidMatchNotGameChannelEmbed(i))
 	}
 	if _, isParticipant := game.Player(actor); !isParticipant {
-		return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchNotInMatchEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, VoidMatchNotInMatchEmbed(i))
 	}
 
 	// 2. Vote: three quarters of the players (rounded down) void the game; everyone in the channel sees the count
-	votes, needed, _ := helpers.CastVoidVote(game.ID, actor, len(game.Players))
+	votes, needed, _ := match.CastVoidVote(game.ID, actor, len(game.Players))
 	if votes < needed {
 		// The vote is a message with Agree and Disagree buttons: nobody has to run /void again.
-		return helpers.EditInteractionComponents(s, i, helpers.VoidVotePanel(game), helpers.VoidVoteButtons(game.ID))
+		return helpers.EditInteractionComponents(s, i, match.VoidVotePanel(game), match.VoidVoteButtons(game.ID))
 	}
 
 	// 3. Enough votes: void the game
 	reason := fmt.Sprintf("Void vote passed (%d of %d players)", votes, len(game.Players))
-	if err := helpers.Games.Void(actor, i.GuildID, game.ID, reason, helpers.VoidOptions{}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
+	if err := match.Games.Void(actor, i.GuildID, game.ID, reason, match.VoidOptions{}); err != nil {
+		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("void the game", err))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.VoidMatchSuccessEmbed(i, game.Number))
+	return helpers.EditInteractionEmbed(s, i, VoidMatchSuccessEmbed(i, game.Number))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func VoidMatchNotGameChannelEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Not a Game Channel",
+		Description: "This command can only be used in a game text channel. Run it in the text channel of the match you want to void.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func VoidMatchNotInMatchEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Not in Match",
+		Description: "You must be a participant in this game to void it.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func VoidMatchSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Void Vote Passed",
+		Description: fmt.Sprintf("The void vote passed: game **#%d** has been voided. No ELO or stats were recorded.", gameNumber),
+		Thumbnail:   helpers.ThumbTrashCan,
+	})
 }

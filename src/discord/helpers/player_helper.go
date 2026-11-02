@@ -26,6 +26,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
 	appLog "ranked-bedwars/src/utility"
 )
@@ -67,11 +68,11 @@ type AccountAgeConfig struct {
 	Whitelist []string `json:"-"` // Discord user ids that are never checked
 }
 
-var accountAgeCache = newTTLCache[AccountAgeConfig](eloConfigCacheTTL)
+var accountAgeCache = base.NewTTLCache[AccountAgeConfig](base.ConfigCacheTTL)
 
 // LoadAccountAgeConfig reads the guild's settings (cached briefly). A failed read counts as "off".
 func LoadAccountAgeConfig(guildID string) AccountAgeConfig {
-	cfg, _ := accountAgeCache.get(guildID, func() (AccountAgeConfig, error) {
+	cfg, _ := accountAgeCache.Get(guildID, func() (AccountAgeConfig, error) {
 		reg, err := database.Must().GuildConfig.Field(guildID, "registration_verification")
 		if err != nil && !sdk.IsNotFound(err) {
 			return AccountAgeConfig{}, err
@@ -124,7 +125,7 @@ func EnforceAccountAge(s *discordgo.Session, guildID string, user *discordgo.Use
 		return ""
 	}
 
-	playerID, _, err := EnsureModerationTarget(actorSystem, guildID, user)
+	playerID, _, err := EnsureModerationTarget(sdk.SystemActor, guildID, user)
 	if err != nil {
 		appLogf("account age: load player %s in guild %s: %v", user.ID, guildID, err)
 		return ""
@@ -149,7 +150,7 @@ func EnforceAccountAge(s *discordgo.Session, guildID string, user *discordgo.Use
 		t := time.Now().Add(time.Duration(cfg.BanDays) * 24 * time.Hour).UTC()
 		expires, expiresAt = t.Format(time.RFC3339), &t
 	}
-	if _, err := database.Must().Punishments.Create(actorSystem, guildID, pid, sdk.NewPunishment{
+	if _, err := database.Must().Punishments.Create(sdk.SystemActor, guildID, pid, sdk.NewPunishment{
 		StaffID: "000000000000000000", Reason: reason, Type: "ban", ExpiresAt: expires,
 	}); err != nil {
 		appLogf("account age: ban %s in guild %s: %v", user.ID, guildID, err)
@@ -184,7 +185,7 @@ func HandleAccountAge(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	}
 	// Tell them why, if their DMs are open.
 	if dm, err := s.UserChannelCreate(m.User.ID); err == nil {
-		denied := queueDeniedEmbed(msg)
+		denied := QueueDeniedEmbed(msg)
 		denied.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: ThumbPlayers}
 		_, _ = s.ChannelMessageSendEmbed(dm.ID, denied)
 	}
@@ -213,11 +214,6 @@ func NewDiscordRestAPI(botToken string) *DiscordRestAPI {
 		baseURL:  "https://discord.com/api/v10",
 		botToken: botToken,
 	}
-}
-
-// SetBotToken updates the bot token for the API client
-func (api *DiscordRestAPI) SetBotToken(token string) {
-	api.botToken = token
 }
 
 // ============================================================================
@@ -265,19 +261,6 @@ func discordProfileText(text string, limit int) any {
 		return string(runes[:limit])
 	}
 	return text
-}
-
-// GetGuildMember retrieves the current guild member info via REST API
-func (api *DiscordRestAPI) GetGuildMember(guildID string) (*GuildMember, error) {
-	endpoint := fmt.Sprintf("%s/guilds/%s/members/@me", api.baseURL, guildID)
-
-	member := &GuildMember{}
-	err := api.makeRequest("GET", endpoint, nil, member)
-	if err != nil {
-		return nil, err
-	}
-
-	return member, nil
 }
 
 // ============================================================================
@@ -406,10 +389,7 @@ func HistoryTotalPages(total int) int {
 	return pages
 }
 
-const (
-	EmojiRedDot    = "<:red_dot:1490569600805372085>"
-	EmojiYellowDot = "<:yellow_dot:1490569602076512410>"
-)
+const ()
 
 // newestFirst sorts history entries by creation time, newest first (ID breaks ties).
 func newestFirst[T any](entries []T, key func(T) (time.Time, uint)) []T {
@@ -483,13 +463,13 @@ func FilterGameHistoryEntries(participants []sdk.GameHistory, seasonID uint, win
 		if hideVoided && game.Status == string(types.GameStatusVoided) {
 			continue
 		}
-		if window > 0 && gameWhen(*game).Before(cutoff) {
+		if window > 0 && GameWhen(*game).Before(cutoff) {
 			continue
 		}
 		entries = append(entries, participant)
 	}
 	sort.Slice(entries, func(a, b int) bool {
-		return gameWhen(*entries[a].Game).After(gameWhen(*entries[b].Game))
+		return GameWhen(*entries[a].Game).After(GameWhen(*entries[b].Game))
 	})
 	return entries
 }
@@ -685,11 +665,6 @@ func punishmentHistoryStatus(punishment models.PlayerPunishmentsModel, now time.
 	}
 }
 
-// BuildGameHistoryDescriptionsDirect builds description blocks for one page of game history.
-func BuildGameHistoryDescriptionsDirect(guildID string, entries []sdk.GameHistory, page int) []string {
-	return buildGameHistoryDescriptions(guildID, entries, page, nil)
-}
-
 type GameHistoryPlayer struct {
 	Username string
 	IsWinner bool
@@ -825,14 +800,14 @@ func buildGameHistoryDescriptions(guildID string, entries []sdk.GameHistory, pag
 
 		descriptions = append(descriptions, fmt.Sprintf(
 			"%s **%s | %s | %s | %s**\n%s",
-			resultEmoji, MatchLink(guildID, game.GuildNumber, fmt.Sprintf("Game #%d", game.GameNumber)), game.MapName, game.ModeName, DiscordRelativeTimestamp(gameWhen(*game)), strings.Join(valueLines, "\n"),
+			resultEmoji, MatchLink(guildID, game.GuildNumber, fmt.Sprintf("Game #%d", game.GameNumber)), game.MapName, game.ModeName, DiscordRelativeTimestamp(GameWhen(*game)), strings.Join(valueLines, "\n"),
 		))
 	}
 	return descriptions
 }
 
-// gameWhen resolves the effective timestamp for a game history entry.
-func gameWhen(game models.GamesModel) time.Time {
+// GameWhen resolves the effective timestamp for a game history entry.
+func GameWhen(game models.GamesModel) time.Time {
 	if game.StartedAt != nil {
 		return *game.StartedAt
 	}
@@ -1074,7 +1049,7 @@ func SyncRegisteredPlayerProfile(
 		}
 	}
 
-	go Engine.RefreshNames(guildID, discordUserID) // a game being hosted right now invites and tracks by the new name
+	go OnProfileSynced(guildID, discordUserID) // a game being hosted right now invites and tracks by the new name
 	return actions, nil
 }
 
@@ -1110,14 +1085,6 @@ func GetRankName(rank *types.Rank) string {
 	return rank.RankName
 }
 
-// AbsInt returns the absolute value of an integer.
-func AbsInt(value int) int {
-	if value < 0 {
-		return -value
-	}
-	return value
-}
-
 // ============================================================================
 // Registration Verification Settings
 // ============================================================================
@@ -1147,11 +1114,6 @@ func RequiresRegistrationAPIVerification(cfg *types.RegistrationVerification) bo
 		return false
 	}
 	return cfg.Mode == "network_api" || cfg.Mode == "custom_api"
-}
-
-// VerifyMinecraftUsernameExists checks username existence via Mojang or custom API when API verification is enabled.
-func VerifyMinecraftUsernameExists(username string) (bool, error) {
-	return VerifyMinecraftUsernameExistsWithConfig(username, nil)
 }
 
 // VerifyMinecraftUsernameExistsWithConfig checks username existence using the provided verification config.
@@ -1381,65 +1343,6 @@ func SyncRankForElo(actor, guildID, pid string, seasonID uint, currentRank strin
 	return rank.RankName, nil
 }
 
-// NewPerkResolver builds the lookup the EloManager uses to find a player's
-// active perks (see EloManager.SetPerkResolver): the guild's enabled perks from
-// the game config, filtered by the member's roles. session returns the live
-// Discord session (nil = nobody has perks).
-//
-// A member boosting the server gets one booster
-// stack, and a perk whose allowed roles include one of their managed
-// (subscriber) roles counts as a booster perk.
-func NewPerkResolver(session func() *discordgo.Session) func(guildID, userID string) PerkContext {
-	cache := newTTLCache[[]Perk](eloConfigCacheTTL)
-	return func(guildID, userID string) PerkContext {
-		s := session()
-		if s == nil {
-			return PerkContext{Err: errors.New("no Discord session to read roles from")}
-		}
-		perks, err := cache.get(guildID, func() ([]Perk, error) { return GuildPerks(guildID) })
-		if err != nil {
-			return PerkContext{Err: err}
-		}
-		if len(perks) == 0 {
-			return PerkContext{}
-		}
-		member, err := s.State.Member(guildID, userID)
-		if err != nil {
-			if member, err = s.GuildMember(guildID, userID); err != nil {
-				if isUnknownMember(err) {
-					return PerkContext{} // left the server: no roles, so no perks
-				}
-				return PerkContext{Err: err} // a lookup failure is not "no perks": scoring retries instead of paying nothing
-			}
-		}
-
-		held := make(map[string]bool, len(member.Roles))
-		for _, id := range member.Roles {
-			held[id] = true
-		}
-		var boosterRoles []string
-		stacks := 0
-		if member.PremiumSince != nil {
-			stacks = 1
-			if g, err := s.State.Guild(guildID); err == nil {
-				for _, r := range g.Roles {
-					if r.Managed && held[r.ID] {
-						boosterRoles = append(boosterRoles, r.ID)
-					}
-				}
-			}
-		}
-
-		ctx := PerkContext{BoosterStacks: stacks}
-		for _, p := range MarkBoosters(perks, boosterRoles...) {
-			if p.QualifiesFor(held, nil) {
-				ctx.Perks = append(ctx.Perks, p)
-			}
-		}
-		return ctx
-	}
-}
-
 // ============================================================================
 // Party-code registration
 // ============================================================================
@@ -1486,11 +1389,6 @@ func regVerifyCodeSettings(cfg *types.InGameCode) (length int, alphabet string, 
 		ttl = time.Duration(cfg.ExpiresMinutes) * time.Minute
 	}
 	return
-}
-
-// RequiresPartyCodeVerification reports whether /register has to prove ownership with a party code.
-func RequiresPartyCodeVerification(cfg *types.RegistrationVerification) bool {
-	return cfg != nil && cfg.Mode == RegistrationModePartyCode
 }
 
 // RateLimitError says when the next code may be requested.
@@ -1640,11 +1538,48 @@ func (v *RegistrationVerifierStore) sweep(now time.Time) {
 	}
 }
 
-// isUnknownMember reports whether Discord answered that the member (or user) does not exist.
-func isUnknownMember(err error) bool {
+// IsUnknownMember reports whether Discord answered that the member (or user) does not exist.
+func IsUnknownMember(err error) bool {
 	var rest *discordgo.RESTError
 	if errors.As(err, &rest) && rest.Message != nil {
 		return rest.Message.Code == discordgo.ErrCodeUnknownMember || rest.Message.Code == discordgo.ErrCodeUnknownUser
 	}
 	return false
 }
+
+// OnProfileSynced is told when a player's profile name was synced; the engine sets it to rename the player in a game it is hosting.
+var OnProfileSynced = func(guildID, userID string) {}
+
+// FormatSpan renders a duration the way staff type it: 30m, 2h, 7d.
+func FormatSpan(d time.Duration) string {
+	switch {
+	case d%(24*time.Hour) == 0:
+		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%dm", int(d/time.Minute))
+}
+
+// TrackPunishmentExpiry starts the expiry sweep for the guild when a just-created punishment carries an expiry.
+func TrackPunishmentExpiry(guildID, expiresAt string) {
+	if expiresAt != "" {
+		OnPunishmentTimed(guildID)
+	}
+}
+
+// IsAutomaticActor says whether a punishment was issued by the bot itself rather than a person: nobody is credited then.
+func IsAutomaticActor(id string) bool {
+	return strings.Trim(id, "0") == "" || id == sdk.SystemActor
+}
+
+// PunishmentBy is the "who did it" line of a punishment message ("" when the bot did it on its own).
+func PunishmentBy(label, actorID string) string {
+	if IsAutomaticActor(actorID) {
+		return ""
+	}
+	return fmt.Sprintf("\n> **%s:** <@%s>", label, actorID)
+}
+
+// OnPunishmentTimed is told when a punishment that expires was created; the punishment code sets it to start its expiry sweep.
+var OnPunishmentTimed = func(guildID string) {}

@@ -1,11 +1,14 @@
 package staff
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ============================================================================
@@ -47,7 +50,7 @@ var GameForceVoidCommand = &types.Command{
 			},
 		},
 	},
-	Autocomplete: helpers.ForceVoidGameNumberAutocomplete(),
+	Autocomplete: match.ForceVoidGameNumberAutocomplete(),
 	Execute:      executeGameForceVoidCommand,
 }
 
@@ -67,18 +70,38 @@ func executeGameForceVoidCommand(s *discordgo.Session, i *discordgo.InteractionC
 	}
 
 	// 2. Fetch the Game
-	game, ok, err := helpers.Games.FindByNumber(i.GuildID, gameNumber)
+	game, ok, err := match.Games.FindByNumber(i.GuildID, gameNumber)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("find the game", err))
+		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("find the game", err))
 	}
 	if !ok {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameForceVoidNotFoundEmbed(i, gameNumber))
+		return helpers.EditInteractionEmbed(s, i, GameForceVoidNotFoundEmbed(i, gameNumber))
 	}
 
 	// 3. Void the Game
-	if err := helpers.Games.Void(actor, i.GuildID, game.ID, reason, helpers.VoidOptions{}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("void the game", err))
+	if err := match.Games.Void(actor, i.GuildID, game.ID, reason, match.VoidOptions{}); err != nil {
+		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("void the game", err))
 	}
 
-	return helpers.EditInteractionEmbed(s, i, helpers.GameForceVoidSuccessEmbed(i, gameNumber, reason))
+	return helpers.EditInteractionEmbed(s, i, GameForceVoidSuccessEmbed(i, gameNumber, reason))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func GameForceVoidNotFoundEmbed(i *discordgo.InteractionCreate, gameNumber int) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Game Not Found",
+		Description: fmt.Sprintf("Game **#%d** could not be found. It may have already been cleaned up.", gameNumber),
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func GameForceVoidSuccessEmbed(i *discordgo.InteractionCreate, gameNumber int, reason string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Game Force Voided",
+		Description: fmt.Sprintf("Game **#%d** has been force voided. This action has been logged for staff review.\n\n> **Reason:** %s", gameNumber, reason),
+		Thumbnail:   helpers.ThumbTrashCan,
+	})
 }

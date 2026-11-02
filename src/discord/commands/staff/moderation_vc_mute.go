@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -15,7 +16,7 @@ import (
 
 func init() {
 	helpers.Register(ModerationVcMuteCommand)
-	helpers.RegisterLadderAction("vc_mute", vcMuteSpec)
+	punish.RegisterLadderAction("vc_mute", vcMuteSpec)
 }
 
 // ============================================================================
@@ -29,9 +30,9 @@ var ModerationVcMuteCommand = &types.Command{
 	Description:  "Server-mutes a player in voice channels.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to voice mute", "Reason for the voice mute", true, true, true),
+		Options: punish.PunishmentOptions("Discord user to voice mute", "Reason for the voice mute", true, true, true),
 	},
-	Autocomplete: helpers.PunishmentLevelAutocomplete("vc_mute"),
+	Autocomplete: punish.PunishmentLevelAutocomplete("vc_mute"),
 	Execute:      executeModerationVcMuteCommand,
 }
 
@@ -39,7 +40,7 @@ var ModerationVcMuteCommand = &types.Command{
 // Command Execution
 // ============================================================================
 
-var vcMuteSpec = &helpers.ApplySpec{
+var vcMuteSpec = &punish.ApplySpec{
 	Command:       "vcmute",
 	RoleKey:       "vc_muted_role",
 	Action:        "voice mute",
@@ -47,7 +48,7 @@ var vcMuteSpec = &helpers.ApplySpec{
 	Summary:       "the voice mute",
 	Title:         "Voice Mute Applied",
 	Type:          "vc_mute",
-	ActiveTypes:   helpers.VoiceMutePunishmentTypes(),
+	ActiveTypes:   punish.VoiceMutePunishmentTypes(),
 	Duration:      true,
 	Duplicates:    true,
 	RequireMember: true,
@@ -59,7 +60,7 @@ var vcMuteSpec = &helpers.ApplySpec{
 }
 
 func executeModerationVcMuteCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, vcMuteSpec)
+	return punish.ApplyPunishment(s, i, vcMuteSpec)
 }
 
 // ============================================================================

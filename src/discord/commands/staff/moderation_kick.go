@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -28,7 +29,7 @@ var ModerationKickCommand = &types.Command{
 	Description:  "Kicks a member from the Discord guild.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to kick", "Reason for the kick", true, false, false),
+		Options: punish.PunishmentOptions("Discord user to kick", "Reason for the kick", true, false, false),
 	},
 	Execute: executeModerationKickCommand,
 }
@@ -38,7 +39,7 @@ var ModerationKickCommand = &types.Command{
 // ============================================================================
 
 func executeModerationKickCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.ApplyPunishment(s, i, &helpers.ApplySpec{
+	return punish.ApplyPunishment(s, i, &punish.ApplySpec{
 		Command:       "kick",
 		Action:        "kick",
 		Adjective:     "kicked",

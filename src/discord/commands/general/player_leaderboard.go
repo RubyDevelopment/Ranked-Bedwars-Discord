@@ -3,6 +3,7 @@ package general
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
@@ -11,6 +12,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/types"
 )
 
@@ -117,10 +119,10 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 
 	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorLeaderboardEmbed(i))
 	}
 	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardNoActiveSeasonEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, LeaderboardNoActiveSeasonEmbed(i))
 	}
 
 	stat := leaderboardStats[0]
@@ -133,13 +135,13 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 	offset := (page - 1) * leaderboardPerPage
 	rows, err := database.Must().Stats.Leaderboard(i.GuildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: offset, Sort: stat.key})
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorLeaderboardEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorLeaderboardEmbed(i))
 	}
 	if len(rows.Data) == 0 {
 		if page > 1 {
-			return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardEmptyPageEmbed(i, page))
+			return helpers.EditInteractionEmbed(s, i, LeaderboardEmptyPageEmbed(i, page))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardEmptyEmbed(i, seasonKey))
+		return helpers.EditInteractionEmbed(s, i, LeaderboardEmptyEmbed(i, seasonKey))
 	}
 
 	totalPages := 1
@@ -159,7 +161,7 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 	if stat.key != "elo" {
 		title += " · " + stat.label
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.LeaderboardOverviewEmbed(i, rows.Data, title, page, totalPages))
+	return helpers.EditInteractionEmbed(s, i, LeaderboardOverviewEmbed(i, rows.Data, title, page, totalPages))
 }
 
 // ============================================================================
@@ -180,36 +182,36 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if invoker == nil {
 		return false, nil
 	}
-	doc := helpers.LoadBanners(i.GuildID)
-	viewer := helpers.BannerViewer(invoker.ID, i.Member)
+	doc := banner.LoadBanners(i.GuildID)
+	viewer := banner.BannerViewer(invoker.ID, i.Member)
 
 	view, verr := database.Must().Player.Get(i.GuildID, invoker.ID)
 	preferred := ""
 	if verr == nil {
-		preferred = helpers.ChosenBanner(view.Config, "leaderboard")
+		preferred = banner.ChosenBanner(view.Config, "leaderboard")
 	}
 	if style := helpers.OptionString(i, "style"); style != "" {
 		for _, b := range doc.Eligible("leaderboard", viewer) {
 			if b.ID == style {
 				preferred = style
 				if verr == nil {
-					if err := helpers.RememberBanner(i.GuildID, invoker.ID, view.Config, "leaderboard", style); err != nil {
+					if err := banner.RememberBanner(i.GuildID, invoker.ID, view.Config, "leaderboard", style); err != nil {
 						log.Printf("remember leaderboard banner: %v", err)
 					}
 				}
 			}
 		}
 	}
-	banner := doc.Choose("leaderboard", viewer, preferred)
-	if banner == nil {
+	chosen := doc.Choose("leaderboard", viewer, preferred)
+	if chosen == nil {
 		return false, nil
 	}
 
-	vars := helpers.GuildVars(s, i.GuildID, invoker)
+	vars := banner.GuildVars(s, i.GuildID, invoker)
 	vars["lb.title"] = fmt.Sprintf("%s Leaderboard", season)
 	vars["lb.stat"] = stat.label
 	vars["season.name"] = season
-	helpers.LeaderboardRowVars(s, i.GuildID, rows, vars)
+	banner.LeaderboardRowVars(s, i.GuildID, rows, vars)
 	for n := range rows {
 		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(stat.value(&rows[n].PlayerStatsModel))
 	}
@@ -218,7 +220,7 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 		you(s, i.GuildID, invoker, view, seasonID, vars)
 	}
 
-	img, err := helpers.RenderBanner(banner, vars)
+	img, err := banner.RenderBanner(chosen, vars)
 	if err != nil {
 		return false, err
 	}
@@ -229,7 +231,7 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	return true, helpers.EditInteractionFile(s, i, text, "leaderboard.png", img)
 }
 
-func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, vars helpers.Vars) {
+func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, vars banner.Vars) {
 	playerID := sdk.UintToString(view.Player.ID)
 	st, err := database.Must().Stats.Get(guildID, playerID, seasonID)
 	if err != nil {
@@ -239,5 +241,64 @@ func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sd
 	if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
 		position = rank.Position
 	}
-	helpers.EntryVars(vars, "me.", position, view.Config.Username, helpers.AvatarOf(invoker), st)
+	banner.EntryVars(vars, "me.", position, view.Config.Username, banner.AvatarOf(invoker), st)
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorLeaderboardEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while trying to fetch the leaderboard for this guild. Please contact an administrator for assistance or try again later.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func LeaderboardNoActiveSeasonEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "No Active Season",
+		Description: "This guild does not have an active season configured.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func LeaderboardEmptyEmbed(i *discordgo.InteractionCreate, season string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       fmt.Sprintf("Leaderboard · %s", season),
+		Description: "No players have stats for the active season yet.",
+		Thumbnail:   helpers.ThumbPlayers,
+	})
+}
+
+func LeaderboardEmptyPageEmbed(i *discordgo.InteractionCreate, page int) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Page Empty",
+		Description: fmt.Sprintf("There are no leaderboard entries on page `%d`. Try a lower page number.", page),
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func LeaderboardOverviewEmbed(i *discordgo.InteractionCreate, rows []sdk.LeaderboardEntry, season string, page, totalPages int) *discordgo.MessageEmbed {
+	var b strings.Builder
+	for _, row := range rows {
+		total := row.Wins + row.Losses
+		winRate := 0.0
+		if total > 0 {
+			winRate = float64(row.Wins) / float64(total) * 100
+		}
+		b.WriteString(helpers.FillLayout(helpers.GuildOf(i), helpers.LayoutLeaderboardRow, map[string]string{
+			"position": fmt.Sprint(row.Position), "elo": fmt.Sprint(row.Elo), "wins": fmt.Sprint(row.Wins), "losses": fmt.Sprint(row.Losses),
+			"games": fmt.Sprint(total), "win_rate": fmt.Sprintf("%.0f%%", winRate), "rank": row.Rank, "peak": fmt.Sprint(row.HighestElo),
+			"kills": fmt.Sprint(row.Kills), "deaths": fmt.Sprint(row.Deaths), "final_kills": fmt.Sprint(row.FinalKills), "beds": fmt.Sprint(row.BedsDestroyed), "mvps": fmt.Sprint(row.MvpCount),
+		}) + "\n")
+	}
+
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       fmt.Sprintf("Leaderboard · %s", season),
+		Description: b.String(),
+		FooterText:  fmt.Sprintf("Page %d/%d", page, totalPages),
+		Thumbnail:   helpers.ThumbPlayers,
+	})
 }

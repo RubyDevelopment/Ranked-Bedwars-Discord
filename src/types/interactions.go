@@ -67,20 +67,6 @@ type SlashSubcommand struct {
 	Run         func(s *discordgo.Session, i *discordgo.InteractionCreate) error
 }
 
-// Sub creates a subcommand with optional options.
-func Sub(
-	name, description string,
-	run func(s *discordgo.Session, i *discordgo.InteractionCreate) error,
-	options ...SlashOption,
-) SlashSubcommand {
-	return SlashSubcommand{
-		Name:        name,
-		Description: description,
-		Options:     options,
-		Run:         run,
-	}
-}
-
 // SelectedSubcommand extracts the invoked subcommand name and its options from an interaction.
 func SelectedSubcommand(i *discordgo.InteractionCreate) (name string, options []*discordgo.ApplicationCommandInteractionDataOption) {
 	if i == nil {
@@ -123,6 +109,7 @@ type Requirement struct {
 	Type         RequirementType `json:"type"`
 	Key          string          `json:"key"`
 	Optional     bool            `json:"optional"`
+	Label        string          `json:"label,omitempty"` // dashboard name; empty reads as RequirementLabel(Key)
 	ErrorMessage string          `json:"error_message"`
 	// Grants marks a role the command hands out or manages (muted, registered) rather than one members must hold: it is
 	// configuration only and is never checked against the member running the command.
@@ -181,12 +168,6 @@ var ModerationRequirements = []Requirement{
 	{Type: ReqChannel, Key: CommandLogsKey, Optional: true},
 	{Type: ReqChannel, Key: ModerationAlertsKey, Optional: true},
 	{Type: ReqRole, Key: "staff_role"},
-}
-
-// ModerationRequirementsWithRole is ModerationRequirements plus the role the command hands out and takes back
-// (chat_muted_role, vc_muted_role, queue_banned_role). Its pair command declares the same key, so they share one role.
-func ModerationRequirementsWithRole(roleKey string) []Requirement {
-	return append(append([]Requirement{}, ModerationRequirements...), Requirement{Type: ReqRole, Key: roleKey, Grants: true})
 }
 
 type Embed struct {

@@ -1,6 +1,7 @@
 package general
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
@@ -8,6 +9,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/pagination"
 	"ranked-bedwars/src/types"
 )
 
@@ -70,35 +72,79 @@ func executeModerationStrikesCommand(s *discordgo.Session, i *discordgo.Interact
 		return helpers.EditInteractionEmbed(s, i, helpers.PlayerProfileNotRegisteredEmbed(i))
 	}
 	if target == nil || target.Bot {
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikesBotTargetEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikesBotTargetEmbed(i))
 	}
 
 	// 3. Fetch Existing Player Profile
 	view, err := database.Must().Player.Get(i.GuildID, target.ID)
 	if err != nil {
 		if sdk.IsNotFound(err) {
-			return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikesNotRegisteredEmbed(i))
+			return helpers.EditInteractionEmbed(s, i, ModerationStrikesNotRegisteredEmbed(i))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationStrikesEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationStrikesEmbed(i))
 	}
 
 	// 4. Fetch & Filter Strike History
 	entries, err := database.Must().Strikes.AllByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), 0, false)
 	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorModerationStrikesEmbed(i))
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationStrikesEmbed(i))
 	}
 
 	filtered := helpers.FilterStrikeHistoryEntries(entries, filterDuration)
 	if len(filtered) == 0 {
 		if filterInput != "" {
-			return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikesEmptyFilteredEmbed(i, view.Config.Username, filterInput))
+			return helpers.EditInteractionEmbed(s, i, ModerationStrikesEmptyFilteredEmbed(i, view.Config.Username, filterInput))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikesEmptyEmbed(i, view.Config.Username))
+		return helpers.EditInteractionEmbed(s, i, ModerationStrikesEmptyEmbed(i, view.Config.Username))
 	}
 
 	// 5. Render First Page
 	totalPages := helpers.HistoryTotalPages(len(filtered))
 	embed := helpers.BuildStrikeHistoryEmbed(view.Config.Username, filtered, 0)
-	components := helpers.BuildHistoryPageComponents(helpers.HistoryPageStrikes, target.ID, 1, totalPages, []string{filterInput})
+	components := pagination.BuildHistoryPageComponents(pagination.HistoryPageStrikes, target.ID, 1, totalPages, []string{filterInput})
 	return helpers.EditInteractionComponents(s, i, embed, components)
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func UnexpectedErrorModerationStrikesEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Unexpected Error",
+		Description: "An unexpected error occurred while loading the strike history. Please try again later or contact support.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikesBotTargetEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Invalid Target",
+		Description: "Automated bot accounts do not have a strike history. Target a registered player instead.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationStrikesNotRegisteredEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Player Not Registered",
+		Description: "That player is not registered in this guild. Register with `/register` to link a Minecraft account first.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(""),
+	})
+}
+
+func ModerationStrikesEmptyEmbed(i *discordgo.InteractionCreate, username string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Strikes Clear",
+		Description: "No strike history was found for this player. This player maintains a clean record.",
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
+}
+
+func ModerationStrikesEmptyFilteredEmbed(i *discordgo.InteractionCreate, username, filter string) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Strikes Empty",
+		Description: fmt.Sprintf("No strike history was found for this player in the last **%s**. Try a longer filter or remove it.", filter),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
 }

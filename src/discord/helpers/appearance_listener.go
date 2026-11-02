@@ -12,6 +12,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"ranked-bedwars/src/discord/helpers/base"
 	baseutility "ranked-bedwars/src/utility"
 )
 
@@ -72,7 +73,7 @@ func parseAppearanceGuild(body io.Reader) (string, bool) {
 	var payload struct {
 		Guild string `json:"guild"`
 	}
-	if json.Unmarshal(raw, &payload) != nil || !chatGuildID.MatchString(payload.Guild) {
+	if json.Unmarshal(raw, &payload) != nil || !base.GuildIDPattern.MatchString(payload.Guild) {
 		return "", false
 	}
 	return payload.Guild, true

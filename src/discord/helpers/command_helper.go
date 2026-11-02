@@ -7,6 +7,7 @@ import (
 	"log"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
 	apputil "ranked-bedwars/src/utility"
 )
@@ -124,6 +126,7 @@ func executePrefixCommand(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			logCommandPanic(i, cmd, recovered)
 			_ = EditInteractionEmbed(s, i, CommandErrorEmbed())
 		}
 	}()
@@ -138,6 +141,12 @@ func executePrefixCommand(s *discordgo.Session, i *discordgo.InteractionCreate, 
 
 func executeSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *types.Command) error {
 	defer ClearDeferredSlashInteraction(i)
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logCommandPanic(i, cmd, recovered)
+			_ = EditInteractionResponse(s, i, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{CommandErrorSlashEmbed()}})
+		}
+	}()
 
 	if cmd.Execute == nil {
 		return nil
@@ -339,7 +348,7 @@ func messageFlags(ephemeral bool) discordgo.MessageFlags {
 
 // guildLookupCache keeps registered guilds for a few seconds: every command looks its guild up, and only a definitive
 // not-found must stay uncached so a guild that has just been set up is seen at once.
-var guildLookupCache = newTTLCache[*models.GuildsModel](10 * time.Second)
+var guildLookupCache = base.NewTTLCache[*models.GuildsModel](10 * time.Second)
 
 func lookupGuildBySnowflake(guildID string) (*models.GuildsModel, error) {
 	svc := database.Get()
@@ -347,7 +356,7 @@ func lookupGuildBySnowflake(guildID string) (*models.GuildsModel, error) {
 		return nil, errGuildNotRegistered
 	}
 
-	guild, err := guildLookupCache.get(guildID, func() (*models.GuildsModel, error) { return svc.Guild.Get(guildID) })
+	guild, err := guildLookupCache.Get(guildID, func() (*models.GuildsModel, error) { return svc.Guild.Get(guildID) })
 	if err != nil {
 		if sdk.IsNotFound(err) {
 			return nil, errGuildNotRegistered
@@ -1071,8 +1080,7 @@ func SendCommandChannelMessage(s *discordgo.Session, guildID, cmdName, key strin
 	if channelID == "" {
 		return ErrRequirementNotConfigured
 	}
-	trimMessageSend(msg)
-	_, err = s.ChannelMessageSendComplex(channelID, msg)
+	_, err = SendChannelMessage(s, guildID, channelID, msg)
 	return err
 }
 
@@ -1357,6 +1365,22 @@ func HandlePrefixCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	interaction := BuildPrefixInteraction(s, m.Message, cmd, route)
+	if names := unresolvedPrefixPlayers(interaction, cmd, route); len(names) > 0 {
+		replyPrefixEmbed(s, m, PrefixProblemEmbed(prefix, cmd, route, "Player not found", strings.Join(names, ", ")+" is not a registered player here. Use a mention, their Discord ID, or the Minecraft name they registered with."))
+		return
+	}
+	if left := unmatchedPrefixWords(m.GuildID, cmd, route); len(left) > 0 {
+		quoted := make([]string, len(left))
+		for k, w := range left {
+			quoted[k] = "`" + w + "`"
+		}
+		replyPrefixEmbed(s, m, PrefixProblemEmbed(prefix, cmd, route, "Did not understand "+strings.Join(quoted, ", "), "Nothing in this command matches "+strings.Join(quoted, ", ")+"."))
+		return
+	}
+	if missing := missingPrefixOptions(interaction, cmd, route); len(missing) > 0 {
+		replyPrefixEmbed(s, m, PrefixUsageEmbed(prefix, cmd, route, missing))
+		return
+	}
 	isAdmin := MemberIsAdministrator(s, interaction)
 	if decision := CheckPrefixAccess(settings, m.GuildID, cmd.Name, route.SubcommandPath, m.ChannelID, interaction.Member, isAdmin); !decision.Allowed {
 		replyPrefixEmbed(s, m, AccessDeniedEmbed(decision.Title, decision.Message))
@@ -2245,12 +2269,20 @@ func reconcileRequirements(cfg *types.CommandConfig, requirements []types.Requir
 var renamedRequirements = map[string]string{"chat_mute": "chat_muted_role", "queue_ban": "queue_banned_role", "chat_vc": "vc_muted_role", "game_logs": "game_results"}
 
 func reconcileRequirementMap(m *map[string]types.RequirementSlot, requirements []types.Requirement, reqType types.RequirementType) bool {
-	declared := map[string]bool{} // key -> Required
+	type slotSpec struct {
+		required bool
+		label    string
+	}
+	declared := map[string]slotSpec{}
 	for _, req := range requirements {
 		if req.Type != reqType || req.Key == "" {
 			continue
 		}
-		declared[req.Key] = !req.Optional
+		label := req.Label
+		if label == "" {
+			label = types.RequirementLabel(req.Key)
+		}
+		declared[req.Key] = slotSpec{!req.Optional, label}
 	}
 
 	changed := false
@@ -2265,18 +2297,18 @@ func reconcileRequirementMap(m *map[string]types.RequirementSlot, requirements [
 			}
 		}
 	}
-	for key, required := range declared {
+	for key, spec := range declared {
 		slot, ok := (*m)[key]
 		if !ok {
 			if *m == nil {
 				*m = map[string]types.RequirementSlot{}
 			}
-			(*m)[key] = types.RequirementSlot{Required: required}
+			(*m)[key] = types.RequirementSlot{Required: spec.required, Label: spec.label}
 			changed = true
 			continue
 		}
-		if slot.Required != required {
-			slot.Required = required
+		if slot.Required != spec.required || slot.Label != spec.label {
+			slot.Required, slot.Label = spec.required, spec.label
 			(*m)[key] = slot
 			changed = true
 		}
@@ -2422,4 +2454,32 @@ func assignRequirementSlot(commandsMap map[string]types.CommandConfig, cmdName s
 		commandsMap[name] = cfg
 	}
 	return true
+}
+
+// logCommandPanic records a command that panicked, with where, so "Command Error" in Discord can be traced.
+func logCommandPanic(i *discordgo.InteractionCreate, cmd *types.Command, recovered any) {
+	name := "unknown"
+	if cmd != nil {
+		name = cmd.Name
+	}
+	fields := []zap.Field{zap.String("command", name), zap.Any("panic", recovered), zap.ByteString("stack", debug.Stack())}
+	if i != nil && i.Interaction != nil {
+		fields = append(fields, zap.String("guild_id", i.GuildID), zap.String("channel_id", i.ChannelID))
+		if data, ok := i.Data.(discordgo.ApplicationCommandInteractionData); ok {
+			var parts []string
+			for _, o := range data.Options {
+				parts = append(parts, fmt.Sprintf("%s=%v", o.Name, o.Value))
+			}
+			fields = append(fields, zap.String("options", strings.Join(parts, " ")))
+		}
+	}
+	apputil.DiscordLogger.Error("Command panicked", fields...)
+}
+
+// SendChannelMessage posts a message a command or the bot sends to a channel of a server. Like every answer to an interaction, it
+// carries the server's decoration (footer icon, time, thumbnail) from here, so callers never add it themselves.
+func SendChannelMessage(s *discordgo.Session, guildID, channelID string, msg *discordgo.MessageSend) (*discordgo.Message, error) {
+	trimMessageSend(msg)
+	WithGuildFooterIconForGuild(s, guildID, msg.Embeds...)
+	return s.ChannelMessageSendComplex(channelID, msg)
 }

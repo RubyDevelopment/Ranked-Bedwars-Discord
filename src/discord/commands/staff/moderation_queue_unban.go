@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -30,7 +31,7 @@ var ModerationQueueUnbanCommand = &types.Command{
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		Options: helpers.PunishmentOptions("Discord user to queue unban", "Reason for the queue unban", false, false, false),
+		Options: punish.PunishmentOptions("Discord user to queue unban", "Reason for the queue unban", false, false, false),
 	},
 	Execute: executeModerationQueueUnbanCommand,
 }
@@ -40,7 +41,7 @@ var ModerationQueueUnbanCommand = &types.Command{
 // ============================================================================
 
 func executeModerationQueueUnbanCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return helpers.RevokePunishment(s, i, &helpers.RevokeSpec{
+	return punish.RevokePunishment(s, i, &punish.RevokeSpec{
 		Command:   "ban",
 		Ladder:    "queue_ban",
 		RoleKey:   "queue_banned_role",
