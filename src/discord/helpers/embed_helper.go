@@ -603,6 +603,47 @@ func guildEmbedBranding(guildID string) embedBranding {
 	return b
 }
 
+var guildIconCache = newTTLCache[string](10 * time.Minute)
+
+// guildIconURL is the server's icon: from the session's cache, else fetched from Discord (the cache can lack it right
+// after a reconnect). "" when the server has none.
+func guildIconURL(s *discordgo.Session, guildID string) string {
+	if s == nil || guildID == "" {
+		return ""
+	}
+	if s.State != nil {
+		if g, err := s.State.Guild(guildID); err == nil && g != nil && g.Icon != "" {
+			return g.IconURL("128")
+		}
+	}
+	icon, _ := guildIconCache.get(guildID, func() (string, error) {
+		g, err := s.Guild(guildID)
+		if err != nil || g == nil || g.Icon == "" {
+			return "", err
+		}
+		return g.IconURL("128"), nil
+	})
+	return icon
+}
+
+// withSavedFooterIcon gives the footer of a saved message the server's icon when the message sets none, like the built-in
+// answers get, unless the server switched the footer branding off.
+func withSavedFooterIcon(s *discordgo.Session, guildID string, payload map[string]any) {
+	if !guildEmbedBranding(guildID).footer {
+		return
+	}
+	embeds, _ := payload["embeds"].([]map[string]any)
+	for _, e := range embeds {
+		if ft, ok := e["footer"].(map[string]any); ok {
+			if icon, _ := ft["icon_url"].(string); icon == "" {
+				if icon = guildIconURL(s, guildID); icon != "" {
+					ft["icon_url"] = icon
+				}
+			}
+		}
+	}
+}
+
 // WithGuildFooterIconForGuild brands embeds the way the guild chose: every embed gets a footer carrying the server's
 // icon and a thumbnail unless it already has one. Plain "blend" embeds (no colour bar) are left as they are.
 func WithGuildFooterIconForGuild(s *discordgo.Session, guildID string, embeds ...*discordgo.MessageEmbed) {
@@ -627,10 +668,8 @@ func WithGuildFooterIconForGuild(s *discordgo.Session, guildID string, embeds ..
 		if emb.Footer.IconURL != "" {
 			continue
 		}
-		if icon == "" && s != nil && s.State != nil {
-			if g, err := s.State.Guild(guildID); err == nil && g != nil && g.Icon != "" {
-				icon = g.IconURL("128")
-			}
+		if icon == "" {
+			icon = guildIconURL(s, guildID)
 		}
 		emb.Footer.IconURL = icon
 	}
@@ -698,6 +737,7 @@ func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, em
 	if !ok {
 		return false, nil
 	}
+	withSavedFooterIcon(s, i.GuildID, payload)
 	if len(components) > 0 {
 		payload["components"] = append(componentList(payload["components"]), componentsAny(components)...)
 	}
