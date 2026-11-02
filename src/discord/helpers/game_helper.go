@@ -6620,3 +6620,70 @@ func (f FlowSettings) CaptainFor(m types.Mode) CaptainFlow {
 func embedIsEmpty(e *discordgo.MessageEmbed) bool {
 	return strings.TrimSpace(e.Title) == "" && strings.TrimSpace(e.Description) == "" && len(e.Fields) == 0 && e.Author == nil && (e.Footer == nil || strings.TrimSpace(e.Footer.Text) == "") && e.Image == nil && e.Thumbnail == nil
 }
+
+// ============================================================================
+// Startup recovery
+// ============================================================================
+
+var gameSweeperOnce sync.Once
+
+// RecoverGamesOnStartup runs once the bot is connected: it picks up the games the database still lists as open (a game
+// stuck in setup is voided, a scored one is closed), deletes the channels of every game that is already scored, voided or
+// cancelled but whose channels were never removed (the bot was down when they were due), and starts the watchdog that voids
+// games stuck in setup.
+func RecoverGamesOnStartup(s *discordgo.Session, guildIDs []string) {
+	gameSession.Store(s) // the game effects reach Discord through this; until a voice event arrives it would be empty
+	gameSweeperOnce.Do(func() { Games.StartSweeper(context.Background(), time.Minute) })
+	sum := Games.Recover(guildIDs)
+	removed := 0
+	for _, guildID := range guildIDs {
+		removed += Games.CleanupFinishedGames(s, guildID)
+	}
+	Games.logf("startup: %d games kept, %d voided, %d cancelled, %d closed; %d leftover game channels deleted", sum.Kept, sum.Voided, sum.Cancelled, sum.Closed, removed)
+}
+
+// CleanupFinishedGames deletes the channels that still exist for the guild's recent games that are over (scored, voided or
+// cancelled). It returns how many channels it deleted. Games the manager still runs are left alone.
+func (m *GameManager) CleanupFinishedGames(s *discordgo.Session, guildID string) int {
+	existing := map[string]bool{}
+	if channels, err := s.GuildChannels(guildID); err == nil {
+		for _, c := range channels {
+			existing[c.ID] = true
+		}
+	} else {
+		m.logf("cleanup: list channels of %s: %v", guildID, err)
+		return 0
+	}
+	if threads, err := s.GuildThreadsActive(guildID); err == nil {
+		for _, t := range threads.Threads {
+			existing[t.ID] = true
+		}
+	}
+	deleted := 0
+	for _, status := range []string{string(types.GameStatusCompleted), string(types.GameStatusVoided), string(types.GameStatusCancelled)} {
+		recs, err := m.api().RecentGames(guildID, status, 100)
+		if err != nil {
+			m.logf("cleanup: list %s games of %s: %v", status, guildID, err)
+			continue
+		}
+		for i := range recs {
+			rec := &recs[i]
+			if m.live(rec.ID) != nil || rec.RuntimeMetadata.IsEmpty() {
+				continue
+			}
+			var g Game
+			if rec.RuntimeMetadata.Unmarshal(&g) != nil {
+				continue
+			}
+			for _, id := range g.Channels.ownedIDs() {
+				if !existing[id] {
+					continue
+				}
+				if _, err := s.ChannelDelete(id); err == nil {
+					deleted++
+				}
+			}
+		}
+	}
+	return deleted
+}
