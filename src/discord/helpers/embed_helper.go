@@ -4646,6 +4646,11 @@ func ModerationStrikeReasonRequiredEmbed(i *discordgo.InteractionCreate) *discor
 }
 
 func ModerationStrikeSuccessEmbed(i *discordgo.InteractionCreate, id uint, user *discordgo.User, username, strikeType, reason string) *discordgo.MessageEmbed {
+	return ModerationStrikeSuccessEmbedBy(InteractionUserID(i), id, user, username, strikeType, reason)
+}
+
+// ModerationStrikeSuccessEmbedBy is the strike result credited to actor (nobody when the bot or a vote did it).
+func ModerationStrikeSuccessEmbedBy(actor string, id uint, user *discordgo.User, username, strikeType, reason string) *discordgo.MessageEmbed {
 	description := fmt.Sprintf(
 		"Successfully issued a strike to the player. This action has been logged for staff review.\n\n> **Strike ID:** `#%d`\n> **Player:** <@%s> (**%s**)\n> **Reason:** %s",
 		id, user.ID, username, reason,
@@ -4653,7 +4658,7 @@ func ModerationStrikeSuccessEmbed(i *discordgo.InteractionCreate, id uint, user 
 	if strikeType != "" {
 		description += fmt.Sprintf("\n> **Type:** `%s`", strikeType)
 	}
-	description += punishmentBy("Issued by", InteractionUserID(i))
+	description += punishmentBy("Issued by", actor)
 	return Preset("success", types.PresetOptions{
 		Title:       "Strike Issued",
 		Description: description,

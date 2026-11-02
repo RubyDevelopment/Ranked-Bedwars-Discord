@@ -45,6 +45,13 @@ var ModerationStrikeRequestCommand = &types.Command{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Required:    true,
 			},
+			{
+				Name:        "game",
+				Description: "Game number the request is about (default: the player's latest game)",
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Required:    false,
+				MinValue:    func() *float64 { v := 1.0; return &v }(),
+			},
 		},
 	},
 	Execute: executeModerationStrikeRequestCommand,
@@ -83,34 +90,15 @@ func executeModerationStrikeRequestCommand(s *discordgo.Session, i *discordgo.In
 	if view.Config != nil && view.Config.Username != "" {
 		username = view.Config.Username
 	}
-	openStrikeRequestThread(s, i, target, username, reason)
-	return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeRequestSubmittedEmbed(i, target, username, reason))
-}
-
-// openStrikeRequestThread starts "Strike Request for <player>" from the message of the request, so staff and the requester
-// talk about it in one place. A prefix request threads the player's own message; a slash request (whose answer is private)
-// posts a public line in the channel and threads that. It never fails the command: with no permission, or inside a thread
-// already, the request is simply answered without a thread.
-func openStrikeRequestThread(s *discordgo.Session, i *discordgo.InteractionCreate, target *discordgo.User, username, reason string) {
-	if ch, err := s.State.Channel(i.ChannelID); err == nil && ch.IsThread() {
-		return
+	// 4. Open the thread (the request and its vote live in it). The thread is the answer: a prefix request shows it under the
+	// player's own message, and a slash request, whose reply is private, gets a link to it.
+	thread, problem := helpers.OpenStrikeRequest(s, i, target, username, reason, helpers.OptionInt(i, "game"))
+	if problem != nil {
+		return helpers.EditInteractionEmbed(s, i, problem)
 	}
-	requester := helpers.InteractionUserID(i)
-	summary := "<@" + requester + "> requested a strike review for <@" + target.ID + "> (**" + username + "**).\n**Reason:** " + reason
-	messageID := helpers.PrefixSourceMessageID(i)
-	if messageID == "" {
-		msg, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{Content: summary, AllowedMentions: &discordgo.MessageAllowedMentions{}})
-		if err != nil {
-			return
-		}
-		messageID = msg.ID
+	if helpers.IsPrefixInteraction(i) {
+		return nil
 	}
-	thread, err := s.MessageThreadStartComplex(i.ChannelID, messageID, &discordgo.ThreadStart{
-		Name:                "Strike Request for " + username,
-		AutoArchiveDuration: 1440,
-	})
-	if err != nil {
-		return
-	}
-	_, _ = s.ChannelMessageSendComplex(thread.ID, &discordgo.MessageSend{Content: summary, AllowedMentions: &discordgo.MessageAllowedMentions{Users: []string{requester}}})
+	text := "Strike request opened: <#" + thread.ID + ">"
+	return helpers.EditInteractionResponse(s, i, &discordgo.WebhookEdit{Content: &text})
 }

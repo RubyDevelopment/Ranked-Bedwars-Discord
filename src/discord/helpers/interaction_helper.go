@@ -26,6 +26,7 @@ import (
 
 var (
 	prefixDurationPattern  = regexp.MustCompile(`(?i)^(\d+[smhdw]|perm|permanent|permanentban)$`)
+	prefixGameNumberPattern = regexp.MustCompile(`^\d{3,9}$`) // a game number among the words of =sr @player 27439 afk
 	prefixSnowflakePattern = regexp.MustCompile(`^\d{17,20}$`)
 	timeFilterPattern      = regexp.MustCompile(`^(\d+)([smhdw])$`)
 )
@@ -448,10 +449,11 @@ func extractPrefixOptions(guildID string, leaf []*discordgo.ApplicationCommandOp
 		}
 		isUser := opt.Type == discordgo.ApplicationCommandOptionUser
 		isDuration := opt.Type == discordgo.ApplicationCommandOptionString && opt.Name == "duration"
+		isGame := opt.Type == discordgo.ApplicationCommandOptionInteger && opt.Name == "game"
 		for idx, tok := range rest {
 			clean := strings.Trim(tok, "<@!>")
 			if (isUser && (strings.HasPrefix(tok, "<@") || prefixSnowflakePattern.MatchString(clean))) ||
-				(isDuration && prefixDurationPattern.MatchString(tok)) {
+				(isDuration && prefixDurationPattern.MatchString(tok)) || (isGame && prefixGameNumberPattern.MatchString(tok)) {
 				take(opt, idx, idx+1, tok)
 				break
 			}

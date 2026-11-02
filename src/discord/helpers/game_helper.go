@@ -6855,6 +6855,34 @@ func RecoverGamesOnStartup(s *discordgo.Session, guildIDs []string) {
 		removed += Games.CleanupFinishedGames(s, guildID)
 	}
 	Games.logf("startup: %d games kept, %d voided, %d cancelled, %d closed; %d leftover game channels deleted", sum.Kept, sum.Voided, sum.Cancelled, sum.Closed, removed)
+	sweepQueuesOnStartup(s, guildIDs) // once the games are known: players who are in a game are then not eligible
+}
+
+// sweepQueuesOnStartup checks everyone already sitting in a queue voice channel when the bot comes up. They joined while the bot
+// was offline, so no voice event ever screened them: each is checked now, like a fresh join (registered, not banned, not in a
+// game, rank and role gates), those who cannot queue are removed with the reason, and a lobby forms for the rest.
+func sweepQueuesOnStartup(s *discordgo.Session, guildIDs []string) {
+	for _, guildID := range guildIDs {
+		// The guild's voice states arrive just after the ready event: wait for them (a guild that never appears is skipped).
+		ready := false
+		for range 60 {
+			if g, err := s.State.Guild(guildID); err == nil && g != nil && g.Name != "" {
+				ready = true
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		if !ready {
+			continue
+		}
+		snap, err := Queues.Snapshot(guildID)
+		if err != nil || snap == nil {
+			continue
+		}
+		for channelID := range snap.Bindings {
+			sweepQueueChannel(s, guildID, channelID)
+		}
+	}
 }
 
 // CleanupFinishedGames deletes the channels that still exist for the guild's recent games that are over (scored, voided or
