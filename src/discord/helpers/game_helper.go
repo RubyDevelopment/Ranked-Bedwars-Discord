@@ -2401,7 +2401,7 @@ func (d embedData) common() map[string]string {
 		m = "Not chosen"
 	}
 	vars := map[string]string{
-		"game": strconv.Itoa(g.Number), "mode": g.Mode.Name, "map": m, "bot": g.Bot, "host": "", "hostMention": "—",
+		"game": strconv.Itoa(g.Number), "gameUrl": MatchURL(g.GuildID, g.ID), "gameLink": MatchLink(g.GuildID, g.ID, "Game #"+strconv.Itoa(g.Number)), "mode": g.Mode.Name, "map": m, "bot": g.Bot, "host": "", "hostMention": "—",
 		"winner": g.Winner, "mvp": g.MVP, "mvpMention": "—", "playerCount": strconv.Itoa(len(g.Players)),
 	}
 	if p, ok := g.Player(g.Host); ok {

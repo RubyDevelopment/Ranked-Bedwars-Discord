@@ -1527,7 +1527,7 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game Game) *discordgo
 	var description strings.Builder
 
 	// Basic info
-	description.WriteString(fmt.Sprintf("**Game Number:** #%d\n", game.Number))
+	description.WriteString(fmt.Sprintf("**Game Number:** %s\n", MatchLink(game.GuildID, game.ID, fmt.Sprintf("#%d", game.Number))))
 	description.WriteString(fmt.Sprintf("**Mode:** %s\n", game.Mode.Name))
 	description.WriteString(fmt.Sprintf("**State:** %s\n", game.State))
 	description.WriteString(fmt.Sprintf("**Map:** %s\n", game.Map))
@@ -5509,18 +5509,18 @@ func BuildPunishmentHistoryEmbed(username string, entries []models.PlayerPunishm
 }
 
 // BuildGameHistoryEmbed renders the game history embed for one page.
-func BuildGameHistoryEmbed(username string, entries []sdk.GameHistory, page int) *discordgo.MessageEmbed {
-	return BuildGameHistoryEmbedWithPlayers(username, entries, page, nil)
+func BuildGameHistoryEmbed(guildID, username string, entries []sdk.GameHistory, page int) *discordgo.MessageEmbed {
+	return BuildGameHistoryEmbedWithPlayers(guildID, username, entries, page, nil)
 }
 
 // BuildGameHistoryEmbedWithPlayers renders game history with the full participant lists.
-func BuildGameHistoryEmbedWithPlayers(username string, entries []sdk.GameHistory, page int, players map[uint][]GameHistoryPlayer) *discordgo.MessageEmbed {
+func BuildGameHistoryEmbedWithPlayers(guildID, username string, entries []sdk.GameHistory, page int, players map[uint][]GameHistoryPlayer) *discordgo.MessageEmbed {
 	totalPages := HistoryTotalPages(len(entries))
 	description := fmt.Sprintf("This player has a total of **%d** game(s) on record for the current season.", len(entries))
 	if len(entries) == 0 {
 		description = "No game history was found for this player."
 	} else {
-		description += "\n\n" + strings.Join(buildGameHistoryDescriptions(entries, page, players), "\n\n")
+		description += "\n\n" + strings.Join(buildGameHistoryDescriptions(guildID, entries, page, players), "\n\n")
 	}
 	return Preset("success", types.PresetOptions{
 		Title:       fmt.Sprintf("%s's Game History • Page %d of %d", username, page+1, totalPages),
@@ -6109,7 +6109,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	// Post-game
 	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match. The result is being scored.",
 		embedField{Name: "Match stats", Value: "{statTable}"})),
-	"scored":     thumb(colored(tpl("default", "Match Finished", "**Game #{game}**\n\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), "#dc4d4d"), ThumbTada),
+	"scored":     thumb(colored(tpl("default", "Match Finished", "**{gameLink}**\n\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), "#dc4d4d"), ThumbTada),
 	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied · no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), ThumbTada),
 	"staffPending": thumb(colored(tpl("pending", "Win Submitted • Game #{game}",
 		"**Status:** Pending staff scoring\n**Claimed winner:** {winner}\n\nThe match was moved to the review category. Staff will score it shortly."), "#fee75c"), ThumbTimer),

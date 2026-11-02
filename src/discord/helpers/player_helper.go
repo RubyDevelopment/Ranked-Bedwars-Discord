@@ -671,8 +671,8 @@ func punishmentHistoryStatus(punishment models.PlayerPunishmentsModel, now time.
 }
 
 // BuildGameHistoryDescriptionsDirect builds description blocks for one page of game history.
-func BuildGameHistoryDescriptionsDirect(entries []sdk.GameHistory, page int) []string {
-	return buildGameHistoryDescriptions(entries, page, nil)
+func BuildGameHistoryDescriptionsDirect(guildID string, entries []sdk.GameHistory, page int) []string {
+	return buildGameHistoryDescriptions(guildID, entries, page, nil)
 }
 
 type GameHistoryPlayer struct {
@@ -737,7 +737,7 @@ func LoadGameHistoryPlayers(svc *sdk.Services, guildID string, entries []sdk.Gam
 	return playersByGame, nil
 }
 
-func buildGameHistoryDescriptions(entries []sdk.GameHistory, page int, playersByGame map[uint][]GameHistoryPlayer) []string {
+func buildGameHistoryDescriptions(guildID string, entries []sdk.GameHistory, page int, playersByGame map[uint][]GameHistoryPlayer) []string {
 	start := page * HistoryPerPage
 	if start >= len(entries) {
 		return nil
@@ -809,8 +809,8 @@ func buildGameHistoryDescriptions(entries []sdk.GameHistory, page int, playersBy
 		}
 
 		descriptions = append(descriptions, fmt.Sprintf(
-			"%s **Game #%d | %s | %s | %s**\n%s",
-			resultEmoji, game.GameNumber, game.MapName, game.ModeName, DiscordRelativeTimestamp(gameWhen(*game)), strings.Join(valueLines, "\n"),
+			"%s **%s | %s | %s | %s**\n%s",
+			resultEmoji, MatchLink(guildID, game.ID, fmt.Sprintf("Game #%d", game.GameNumber)), game.MapName, game.ModeName, DiscordRelativeTimestamp(gameWhen(*game)), strings.Join(valueLines, "\n"),
 		))
 	}
 	return descriptions

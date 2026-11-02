@@ -123,7 +123,7 @@ func executeGameHistoryCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		voidedFlag = "1"
 	}
 	totalPages := helpers.HistoryTotalPages(len(entries))
-	embed := helpers.BuildGameHistoryEmbedWithPlayers(view.Config.Username, entries, 0, playersByGame)
+	embed := helpers.BuildGameHistoryEmbedWithPlayers(i.GuildID, view.Config.Username, entries, 0, playersByGame)
 	components := helpers.BuildHistoryPageComponents(helpers.HistoryPageGames, target.ID, 1, totalPages, []string{filterInput, voidedFlag})
 	return helpers.EditInteractionComponents(s, i, embed, components)
 }

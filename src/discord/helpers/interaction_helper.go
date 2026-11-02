@@ -1590,7 +1590,7 @@ func renderHistoryPage(guildID string, kind HistoryPageKind, snowflake string, p
 		if err != nil {
 			return nil, nil, err
 		}
-		emb := BuildGameHistoryEmbedWithPlayers(username, entries, page-1, playersByGame)
+		emb := BuildGameHistoryEmbedWithPlayers(guildID, username, entries, page-1, playersByGame)
 		components := BuildHistoryPageComponents(HistoryPageGames, snowflake, page, totalPages, opts)
 		return emb, components, nil
 	}
