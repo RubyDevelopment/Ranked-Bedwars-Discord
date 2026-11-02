@@ -47,7 +47,18 @@ func NewBlobStoreFromEnv() *BlobStore {
 }
 
 // Enabled reports whether uploads will be attempted.
-func (b *BlobStore) Enabled() bool { return b != nil && b.Token != "" }
+func (b *BlobStore) Enabled() bool {
+	if b == nil {
+		return false
+	}
+	if b.Token == "" { // Blobs is built before main loads .env, so look again
+		b.Token = strings.TrimSpace(os.Getenv("BLOB_READ_WRITE_TOKEN"))
+		if api := strings.TrimRight(strings.TrimSpace(os.Getenv("VERCEL_BLOB_API_URL")), "/"); api != "" {
+			b.APIURL = api
+		}
+	}
+	return b.Token != ""
+}
 
 // PutJSON stores v as JSON at pathname and returns its private URL.
 func (b *BlobStore) PutJSON(ctx context.Context, pathname string, v any) (string, error) {
