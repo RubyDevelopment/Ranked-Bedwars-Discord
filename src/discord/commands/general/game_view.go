@@ -58,7 +58,11 @@ func executeGameViewCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	// Resolve the game from the option, falling back to the current game channel
 	if gameNumber := helpers.SubOptionInt(i.ApplicationCommandData().Options, "game"); gameNumber > 0 {
-		game, ok = helpers.Games.ByNumber(i.GuildID, gameNumber)
+		var err error
+		game, ok, err = helpers.Games.ByNumberOrStored(i.GuildID, gameNumber)
+		if err != nil {
+			return helpers.EditInteractionEmbed(s, i, helpers.GameActionErrorEmbed("look up the game", err))
+		}
 		if !ok {
 			return helpers.EditInteractionEmbed(s, i, helpers.GameViewNotFoundEmbed(i, gameNumber))
 		}
