@@ -83,5 +83,34 @@ func executeModerationStrikeRequestCommand(s *discordgo.Session, i *discordgo.In
 	if view.Config != nil && view.Config.Username != "" {
 		username = view.Config.Username
 	}
+	openStrikeRequestThread(s, i, target, username, reason)
 	return helpers.EditInteractionEmbed(s, i, helpers.ModerationStrikeRequestSubmittedEmbed(i, target, username, reason))
+}
+
+// openStrikeRequestThread starts "Strike Request for <player>" from the message of the request, so staff and the requester
+// talk about it in one place. A prefix request threads the player's own message; a slash request (whose answer is private)
+// posts a public line in the channel and threads that. It never fails the command: with no permission, or inside a thread
+// already, the request is simply answered without a thread.
+func openStrikeRequestThread(s *discordgo.Session, i *discordgo.InteractionCreate, target *discordgo.User, username, reason string) {
+	if ch, err := s.State.Channel(i.ChannelID); err == nil && ch.IsThread() {
+		return
+	}
+	requester := helpers.InteractionUserID(i)
+	summary := "<@" + requester + "> requested a strike review for <@" + target.ID + "> (**" + username + "**).\n**Reason:** " + reason
+	messageID := helpers.PrefixSourceMessageID(i)
+	if messageID == "" {
+		msg, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{Content: summary, AllowedMentions: &discordgo.MessageAllowedMentions{}})
+		if err != nil {
+			return
+		}
+		messageID = msg.ID
+	}
+	thread, err := s.MessageThreadStartComplex(i.ChannelID, messageID, &discordgo.ThreadStart{
+		Name:                "Strike Request for " + username,
+		AutoArchiveDuration: 1440,
+	})
+	if err != nil {
+		return
+	}
+	_, _ = s.ChannelMessageSendComplex(thread.ID, &discordgo.MessageSend{Content: summary, AllowedMentions: &discordgo.MessageAllowedMentions{Users: []string{requester}}})
 }
