@@ -477,9 +477,41 @@ func memberHasRole(s *discordgo.Session, guildID, userID, roleID string) bool {
 	return false
 }
 
+// onceInWindow lets one key through once per window.
+type onceInWindow struct {
+	mu   sync.Mutex
+	last map[string]time.Time
+	span time.Duration
+}
+
+func (c *onceInWindow) take(key string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	if t, ok := c.last[key]; ok && now.Sub(t) < c.span {
+		return false
+	}
+	if c.last == nil {
+		c.last = map[string]time.Time{}
+	}
+	for k, t := range c.last { // forget old entries so the map does not grow forever
+		if now.Sub(t) >= c.span {
+			delete(c.last, k)
+		}
+	}
+	c.last[key] = now
+	return true
+}
+
+var queueAlertCooldown = &onceInWindow{span: 30 * time.Second}
+
 // sendQueueAlert tells a member why they were turned away, by direct message (they were just removed from the queue
 // channel, and there is no alerts channel to post to).
 func sendQueueAlert(s *discordgo.Session, guildID, userID string, embed *discordgo.MessageEmbed) {
+	// The same refusal is not repeated while the member keeps bouncing off the queue (each join attempt would alert again).
+	if !queueAlertCooldown.take(guildID + ":" + userID + ":" + embed.Description) {
+		return
+	}
 	dm, err := s.UserChannelCreate(userID)
 	if err == nil {
 		_, err = s.ChannelMessageSendEmbed(dm.ID, embed)

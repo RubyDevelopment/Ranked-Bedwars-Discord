@@ -1183,6 +1183,21 @@ func (d *gameDiscord) matchEvent(s *discordgo.Session, g Game, ev *MatchEvent) {
 	d.refreshTracker(s, g)
 }
 
+// gatherForDraft moves everyone already in voice into the first team's voice channel while the captains pick, so they
+// talk in one place; applyTeams sends each player to their own team's channel once the draft is done.
+func (d *gameDiscord) gatherForDraft(s *discordgo.Session, g Game) {
+	vcID := g.Channels.Voice[TeamName(0)]
+	if vcID == "" {
+		return
+	}
+	for _, p := range g.Players {
+		if vs, err := s.State.VoiceState(g.GuildID, p.UserID); err != nil || vs == nil || vs.ChannelID == "" || vs.ChannelID == vcID {
+			continue
+		}
+		_ = s.GuildMemberMove(g.GuildID, p.UserID, &vcID)
+	}
+}
+
 // applyTeams moves players already in voice into their team's voice channel.
 func (d *gameDiscord) applyTeams(g Game) error {
 	s := d.session()
@@ -1580,6 +1595,7 @@ func (d *gameDiscord) startDraft(s *discordgo.Session, g Game) {
 	// The welcome and the player list go out first, as they do for a game with automatic teams (which only posts them once
 	// the teams exist, after the draft would already be under way); then the draft starts.
 	d.announceBeforeDraft(s, g)
+	d.gatherForDraft(s, g)
 	ui := &draftUI{channelID: g.Channels.Text}
 	ui.setTimer(Games.FlowSettings(g.GuildID).CaptainFor(g.Mode).PickTimeoutSeconds)
 	embed := d.draftEmbed(s, g, view, ui)
