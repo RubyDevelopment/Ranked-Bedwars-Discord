@@ -52,6 +52,11 @@ func isMissingDiscordImage(err error) bool {
 // automatically, for a set number of days or for good, unless it is on the whitelist. The settings are the dashboard's
 // Account Age page: `account_age` inside the guild's registration_verification, plus the account_age_whitelist list.
 
+// LogRegistrationFailure records why a registration step failed. The player only sees "Unexpected Error", so this is the only trace.
+func LogRegistrationFailure(step string, err error) {
+	appLog.EngineLogger.Error(fmt.Sprintf("[Registration] %s: %v", step, err))
+}
+
 func appLogf(format string, a ...any) {
 	appLog.EngineLogger.Error("[AccountAge] " + fmt.Sprintf(format, a...))
 }
@@ -935,6 +940,11 @@ func ApplyStartingRank(guildID, actorID string, playerID uint) error {
 		return nil // no ranks configured yet
 	}
 	pid := sdk.UintToString(playerID)
+	// A player registered in an earlier season (or before stats were kept) has no row for the active one, and patching a missing row
+	// is a 404. Make sure it exists first; for a brand new registration it already does, so this is a plain read.
+	if _, err = database.Must().Stats.GetOrCreate(guildID, pid, 0); err != nil {
+		return err
+	}
 	if startingElo > 0 {
 		// The entry rating is the base of the game chain, not a staff modification on top of it.
 		if _, err = database.Must().Stats.ApplyElo(actorID, guildID, pid, 0, sdk.EloEffect{Part: "game", Delta: startingElo}); err != nil {

@@ -111,15 +111,18 @@ func registerNewPlayer(i *discordgo.InteractionCreate, s *discordgo.Session, gui
 		if sdk.IsConflict(err) {
 			return helpers.PlayerRegisterConflictEmbed(i, username)
 		}
+		helpers.LogRegistrationFailure("register player", err)
 		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
 	// Apply starting rank/ELO for brand new registrations
 	if reg.CreatedGuild {
 		if err := helpers.ApplyStartingRank(guildID, userID, reg.PlayerID); err != nil {
+			helpers.LogRegistrationFailure("apply starting rank", err)
 			return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 		}
 	}
 	if _, err := helpers.SyncRegisteredPlayerProfile(s, guildID, reg.PlayerID, userID); err != nil {
+		helpers.LogRegistrationFailure("profile sync", err)
 		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
 	return PlayerRegisterSuccessEmbed(i, username)

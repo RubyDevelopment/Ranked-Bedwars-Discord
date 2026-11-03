@@ -108,6 +108,7 @@ func restoreRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, v
 	if _, seasonID, err := helpers.ActiveSeasonKey(i.GuildID); err == nil && seasonID != 0 {
 		if _, err := database.Must().Stats.Get(i.GuildID, sdk.UintToString(view.Player.ID), seasonID); sdk.IsNotFound(err) {
 			if err := helpers.ApplyStartingRank(i.GuildID, userID, view.Player.ID); err != nil {
+				helpers.LogRegistrationFailure("restore starting rank", err)
 				return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 			}
 			restored = append(restored, "Created your stats and starting rank for the active season.")
@@ -115,6 +116,7 @@ func restoreRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, v
 	}
 	actions, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID)
 	if err != nil {
+		helpers.LogRegistrationFailure("restore profile sync", err)
 		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
 	}
 	restored = append(restored, actions...)
