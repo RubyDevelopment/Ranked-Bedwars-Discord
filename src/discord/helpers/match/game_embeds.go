@@ -695,7 +695,7 @@ func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 		if d.BedLost[team] {
 			bed = "❌"
 		}
-		teams = append(teams, map[string]string{"team": team, "teamPlayers": strings.Join(rows, sep), "bed": bed})
+		teams = append(teams, map[string]string{"team": team, "teamPlayers": strings.Join(rows, sep), "teamStats": TeamStatLines(d.Game, team, d.Flow), "bed": bed})
 	}
 	return teams
 }
@@ -794,3 +794,45 @@ func pingsOf(g Game) string {
 
 // ============================================================================
 // Embed Builders
+
+// TeamStatLines is a team's players one block each: the mention with their username beside it, then their ELO change (once the
+// game is scored) and their stats. It stops before Discord's field limit.
+func TeamStatLines(g Game, team string, f guildFlow) string {
+	var blocks []string
+	size := 0
+	for _, p := range g.TeamPlayers(team) {
+		head := fmt.Sprintf("<@%s> (`%s`)", p.UserID, p.Username)
+		if p.Captain {
+			head = "👑 " + head
+		}
+		elo := fmt.Sprintf("> ELO: `%d`", p.EloBefore)
+		for _, r := range g.Results {
+			if r.UserID == p.UserID {
+				elo = fmt.Sprintf("> ELO: `%d → %d` (`%+d`)", r.Before, r.After, r.Change)
+				break
+			}
+		}
+		stats := fmt.Sprintf("> K/D: `%d/%d` · FK: `%d` · Beds: `%d`", p.Kills, p.Deaths, p.FinalKills, p.BedsDestroyed)
+		ids := make([]string, 0, len(p.Custom))
+		for id := range p.Custom {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			stats += fmt.Sprintf(" · %s: `%g`", f.label(id), p.Custom[id])
+		}
+		block := head + "\n" + elo + "\n" + stats
+		if size+len(block)+2 > 1000 {
+			break
+		}
+		size += len(block) + 2
+		blocks = append(blocks, block)
+	}
+	if len(blocks) == 0 {
+		return "No players"
+	}
+	return strings.Join(blocks, "\n\n")
+}
+
+// TeamStats is TeamStatLines with the guild's own stat labels, for commands outside this package.
+func TeamStats(g Game, team string) string { return TeamStatLines(g, team, flowOf(g.GuildID)) }

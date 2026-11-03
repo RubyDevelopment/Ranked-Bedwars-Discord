@@ -186,8 +186,8 @@ func TicketActionErrorEmbed(err error) *discordgo.MessageEmbed {
 		return ticketNotInChannelEmbed()
 	case errors.Is(err, ErrTicketAlreadyClaimed):
 		return helpers.Preset("error", types.PresetOptions{
-			Title:       "Already Claimed",
-			Description: "This ticket has already been claimed. Only the staff member who claimed it can release it.",
+			Title:       "Ticket Already Claimed",
+			Description: "This ticket is already claimed. Only the staff member who claimed it, or an administrator, can release it.",
 			Thumbnail:   helpers.ThumbFlag,
 		})
 	case errors.Is(err, ErrTicketNotClaimed):

@@ -8,6 +8,7 @@ import (
 	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
 	"slices"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -350,6 +351,7 @@ func (v *mapVote) components(gameID uint, disabled bool, winner int) []discordgo
 }
 
 func formatWeight(w float64) string {
+	w = math.Round(w*100) / 100 // 0.1+0.2 style float sums must not print as 3.5999999999999996
 	return strconv.FormatFloat(w, 'f', -1, 64)
 }
 

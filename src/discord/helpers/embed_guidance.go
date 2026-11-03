@@ -132,12 +132,13 @@ var answerGuidance = map[string][]string{
 	"Nothing To Verify":          {"Nothing needs checking right now.", "Run the command again after something changes."},
 
 	// Tickets
-	"Not A Ticket":         {"Run this command inside an open ticket thread."},
-	"Not Claimed":          {"Claim the ticket first with `/ticket claim`."},
-	"Panel Not Found":      {"Ask staff to publish a fresh panel with `/ticket panel`.", "Then open your ticket from the new panel."},
-	"Panel Outdated":       {"Ask staff to publish a fresh panel with `/ticket panel`.", "Then open your ticket from the new panel."},
-	"Ticket Limit Reached": {"Continue in one of your open tickets, or close one before opening another."},
-	"Ticket Not Created":   {"Give the bot **Create Private Threads** in the panel's channel.", "Then try again, or contact staff."},
+	"Not A Ticket":           {"Run this command inside an open ticket thread."},
+	"Not Claimed":            {"Claim the ticket first with `/ticket claim`."},
+	"Ticket Already Claimed": {"Ask the staff member who claimed it to release it.", "An administrator can also release it."},
+	"Panel Not Found":        {"Ask staff to publish a fresh panel with `/ticket panel`.", "Then open your ticket from the new panel."},
+	"Panel Outdated":         {"Ask staff to publish a fresh panel with `/ticket panel`.", "Then open your ticket from the new panel."},
+	"Ticket Limit Reached":   {"Continue in one of your open tickets, or close one before opening another."},
+	"Ticket Not Created":     {"Give the bot **Create Private Threads** in the panel's channel.", "Then try again, or contact staff."},
 
 	// Permissions and general failures
 	"Permission Denied":        {"You need a role that is allowed to use this command.", "Ask a guild administrator to review the command's roles in the dashboard."},

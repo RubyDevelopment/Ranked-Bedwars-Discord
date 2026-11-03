@@ -12,6 +12,7 @@ import (
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 	appLog "ranked-bedwars/src/utility"
+	"slices"
 	"strings"
 	"time"
 )
@@ -137,7 +138,7 @@ func buildHostJob(g match.Game) (*engineHostStart, error) {
 			if err != nil || view.Config == nil || strings.TrimSpace(view.Config.Username) == "" {
 				return nil, fmt.Errorf("%s has no registered Minecraft name", p.Username)
 			}
-			t.Players = append(t.Players, hostPlayerOf(p, view.Config.Username))
+			t.Players = append(t.Players, hostPlayerOf(p, view.Config.Username, view.Config.Nickname))
 		}
 		job.Teams = append(job.Teams, t)
 	}
@@ -166,13 +167,24 @@ func buildHostJob(g match.Game) (*engineHostStart, error) {
 	return job, nil
 }
 
-// hostPlayerOf is how the engine knows a player: the Minecraft name they registered, and the other names they show up as.
-func hostPlayerOf(p match.GamePlayer, mcName string) engineHostPlayer {
+// hostPlayerOf is how the engine knows a player: the Minecraft name they registered, and the other names they show up as
+// (their display name and their nickname: a player who is nicked in game appears under it, and must not be kicked for it).
+func hostPlayerOf(p match.GamePlayer, mcName string, nickname *string) engineHostPlayer {
 	names := []string{}
-	if p.Username != "" && !strings.EqualFold(p.Username, mcName) {
-		names = append(names, p.Username)
+	for _, name := range []string{p.Username, derefName(nickname)} {
+		name = strings.TrimSpace(name)
+		if name != "" && !strings.EqualFold(name, mcName) && !slices.ContainsFunc(names, func(n string) bool { return strings.EqualFold(n, name) }) {
+			names = append(names, name)
+		}
 	}
 	return engineHostPlayer{ID: p.UserID, MCName: mcName, Names: names}
+}
+
+func derefName(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // syncPlayers answers the engine's players.sync: the roster's current Minecraft names. A player may have used /rename or
@@ -188,7 +200,7 @@ func (b *EngineBridge) syncPlayers(gameID uint) {
 		if err != nil || view.Config == nil || strings.TrimSpace(view.Config.Username) == "" {
 			continue // keep the name the engine has
 		}
-		players = append(players, hostPlayerOf(p, view.Config.Username))
+		players = append(players, hostPlayerOf(p, view.Config.Username, view.Config.Nickname))
 	}
 	if err := b.Write(map[string]any{"type": "players.synced", "game_id": gameID, "players": players}); err != nil {
 		b.logf("send player names for game %d: %v", gameID, err)

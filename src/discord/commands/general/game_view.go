@@ -77,7 +77,7 @@ func executeGameViewCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, GameViewOverviewEmbed(i, game, match.PlayerRatios(i.GuildID, game.PlayerIDs())))
+	return helpers.EditInteractionEmbed(s, i, GameViewOverviewEmbed(i, game))
 }
 
 // ============================================================================
@@ -104,8 +104,7 @@ func GameViewNoGameEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed
 	})
 }
 
-// ratios maps a user id to the "W/L x · K/D y" text shown beside that player.
-func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game, ratios map[string]string) *discordgo.MessageEmbed {
+func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game) *discordgo.MessageEmbed {
 	var description strings.Builder
 
 	// Basic info
@@ -125,19 +124,7 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game, rati
 	// Teams, side by side
 	var fields []*discordgo.MessageEmbedField
 	for _, teamName := range game.Teams {
-		teamPlayers := game.TeamPlayers(teamName)
-		rows := make([]string, len(teamPlayers))
-		for idx, p := range teamPlayers {
-			captainMark := ""
-			if p.Captain {
-				captainMark = "👑 "
-			}
-			rows[idx] = fmt.Sprintf("%s<@%s>", captainMark, p.UserID)
-			if r, ok := ratios[p.UserID]; ok {
-				rows[idx] += " · " + r
-			}
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{Name: teamName, Value: strings.Join(rows, "\n"), Inline: true})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: teamName, Value: match.TeamStats(game, teamName), Inline: true})
 	}
 
 	// Custom game info

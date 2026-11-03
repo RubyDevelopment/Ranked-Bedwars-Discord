@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -333,12 +334,24 @@ func punishmentLevel(guildID, ladderType, levelName string) (*ladderConfig, *key
 	}
 	label := strings.ReplaceAll(ladderType, "_", " ")
 	if strings.TrimSpace(levelName) == "" {
+		var usable []keyedLevel
 		for _, lvl := range cfg.enabledLevels() {
 			if lvl.handles(ladderType) {
-				return cfg, &lvl, nil
+				usable = append(usable, lvl)
 			}
 		}
-		return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("The punishment ladder has no enabled level with a %s step. Add one on the dashboard (Moderation > Punishment ladders) before using this command.", label)}
+		switch len(usable) {
+		case 0:
+			return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("The punishment ladder has no enabled level with a %s step. Add one on the dashboard (Moderation > Punishment ladders) before using this command.", label)}
+		case 1:
+			return cfg, &usable[0], nil
+		}
+		// Several rules could apply: guessing one (the first by key) records the wrong rule against the player, so ask instead.
+		names := make([]string, 0, 5)
+		for _, lvl := range usable[:min(len(usable), 5)] {
+			names = append(names, "**"+lvl.Name+"**")
+		}
+		return nil, nil, &ErrLadderNotConfigured{Reason: fmt.Sprintf("No rule was chosen, and %d levels have a %s step (%s...). Name the rule: its number or a word from its name, or use the `level` option.", len(usable), label, strings.Join(names, ", "))}
 	}
 	for _, lvl := range cfg.enabledLevels() {
 		if !lvl.matches(levelName) {
@@ -1168,7 +1181,43 @@ func findPrefixLevel(guildID string, tokens []string) (start, end int, key strin
 			}
 		}
 	}
+	// No level written out in full: a rule number ("1.1") or a word only one level's name has ("discrimination") names it.
+	for i, tok := range tokens {
+		if k := levelByWord(levels, tok); k != "" {
+			return i, i + 1, k
+		}
+	}
 	return 0, 0, ""
+}
+
+var ruleNumber = regexp.MustCompile(`^\d+(\.\d+)*\.?$`)
+
+// levelByWord is the key of the one level a single word points at: the level whose name starts with that rule number, or
+// the only level whose name contains the word (4+ letters). "" when none or more than one fit, so it never guesses.
+func levelByWord(levels []keyedLevel, word string) string {
+	word = strings.ToLower(strings.Trim(word, ".,:;!?()[]\"'"))
+	if len(word) < 2 {
+		return ""
+	}
+	key, n := "", 0
+	for _, lvl := range levels {
+		words := strings.FieldsFunc(strings.ToLower(lvl.Name), func(r rune) bool { return r == ' ' || r == ',' || r == '&' || r == '/' || r == '-' })
+		hit := false
+		if ruleNumber.MatchString(word) {
+			hit = len(words) > 0 && strings.TrimSuffix(words[0], ".") == strings.TrimSuffix(word, ".")
+		} else if len(word) >= 4 {
+			for _, w := range words {
+				hit = hit || strings.Trim(w, ".,:;()") == word
+			}
+		}
+		if hit {
+			key, n = lvl.Key, n+1
+		}
+	}
+	if n != 1 {
+		return ""
+	}
+	return key
 }
 
 func init() {
