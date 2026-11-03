@@ -3,6 +3,7 @@ package playersettings
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -34,24 +35,23 @@ type Setting struct {
 	Label       string
 	Column      string // the player config column it is stored in
 	Restriction string // its key in the guild's settings restrictions ("" = a guild cannot restrict it)
-	On, Off     string // what the state is called
 	Detail      string
 }
 
 // Settings are the switches in the order the answer lists them.
 var Settings = []Setting{
-	{ID: "stats", Emoji: "📊", Label: "Stats Visibility", Column: "is_stats_visible", Restriction: "stats_visibility", On: "Public", Off: "Hidden",
-		Detail: "Whether other players can look at your stats and profile."},
-	{ID: "elo", Emoji: "📈", Label: "ELO Visibility", Column: "is_elo_visible", Restriction: "elo_visibility", On: "Public", Off: "Hidden",
-		Detail: "Whether your ELO shows in your server nickname and on your profile."},
-	{ID: "invites", Emoji: "📨", Label: "Party Invites", Column: "is_party_invites_enabled", Restriction: "party_invites", On: "Enabled", Off: "Disabled",
-		Detail: "Whether other players can invite you to their party."},
-	{ID: "autowarp", Emoji: "🚀", Label: "Party Autowarp", Column: "is_party_autowarp_enabled", Restriction: "party_autowarp", On: "Enabled", Off: "Disabled",
-		Detail: "When you lead a party and join a voice channel, your party members who are in voice are moved with you."},
-	{ID: "results", Emoji: "🔔", Label: "Ping On Results", Column: "is_ping_on_results_enabled", Restriction: "result_pings", On: "Yes", Off: "No",
-		Detail: "Whether you are pinged when a game you played is scored."},
-	{ID: "alerts", Emoji: "📣", Label: "Ping On Alerts", Column: "is_ping_on_alerts_enabled", On: "Yes", Off: "No",
-		Detail: "Whether party, queue and game alerts ping you."},
+	{ID: "stats", Emoji: "📊", Label: "Stats Visibility", Column: "is_stats_visible", Restriction: "stats_visibility",
+		Detail: "Controls who can look you up.\n**On:** anyone can use `/profile`, `/stats` and `/compare` on you.\n**Off:** other players are turned away instead of seeing your numbers. You still see your own, and so do server administrators.\n*Example:* with this off, a friend who runs `/stats @you` is told your stats are private instead of seeing your win rate."},
+	{ID: "elo", Emoji: "📈", Label: "ELO Visibility", Column: "is_elo_visible", Restriction: "elo_visibility",
+		Detail: "Controls whether your rating is shown.\n**On:** your ELO appears in your server nickname and on your profile.\n**Off:** it is left out of both. You still see it yourself, and so do server administrators.\n*Example:* on, your nickname reads `[1250] Steve`; off, it reads `Steve`. The nickname updates as soon as you press the button."},
+	{ID: "invites", Emoji: "📨", Label: "Party Invites", Column: "is_party_invites_enabled", Restriction: "party_invites",
+		Detail: "Controls whether other players can invite you.\n**On:** anyone can invite you to a party with `/party invite`.\n**Off:** invites to you are refused and the sender is told your invites are off. You can still make your own party and invite other people.\n*Example:* turn this off while you solo queue so nobody can pull you into a party before your game starts."},
+	{ID: "autowarp", Emoji: "🚀", Label: "Party Autowarp", Column: "is_party_autowarp_enabled", Restriction: "party_autowarp",
+		Detail: "Brings your party along when you change voice channel.\n**On:** when you lead a party and join a voice channel, every party member who is in voice is moved into it with you.\n**Off:** everyone moves on their own.\n*Example:* you lead a party of three and join a queue channel; your two teammates, sitting in the lobby, are moved in automatically. Only the party leader's move triggers it."},
+	{ID: "results", Emoji: "🔔", Label: "Ping On Results", Column: "is_ping_on_results_enabled", Restriction: "result_pings",
+		Detail: "Controls the ping when your game is scored.\n**On:** the results post notifies you.\n**Off:** your name still appears in the results, but you are not notified.\n*Example:* turn it off if you play many games a night and don't want a notification after every one."},
+	{ID: "alerts", Emoji: "📣", Label: "Ping On Alerts", Column: "is_ping_on_alerts_enabled",
+		Detail: "Controls pings from the bot's alerts.\n**On:** you are pinged for party alerts (an invite sent to you, your invite being declined, someone leaving your party, leadership passing to you) and for game alerts (a queue refusing you, your game being voided, the hosting bot losing track of your match, you being added to a team channel).\n**Off:** the alert is still posted, but without pinging you.\n*Example:* with this off, a voided game still posts its alert, but your phone stays quiet."},
 }
 
 func find(id string) *Setting {
@@ -153,8 +153,8 @@ const idPrefix = "pset:"
 const maxComponents = 40
 
 // Panel is the answer: one container laid out like the embed it replaced. At the top the title and the note, with the player's head on
-// the right; then one section per switch, its name, state and what it does on the left and its button on the far right. The button is
-// an icon (the same one as in the text beside it): green when on, grey when off, disabled when the guild locks it.
+// the right; then one section per switch, its name and what it does on the left and its button on the far right. The button is an icon
+// (the same one as in the text beside it) and the only sign of the state: green when on, grey when off, disabled when the guild locks it.
 func Panel(c *models.PlayerConfigsModel, allowed map[string]bool) []discordgo.MessageComponent {
 	locked := false
 	for _, st := range Settings {
@@ -178,17 +178,16 @@ func Panel(c *models.PlayerConfigsModel, allowed map[string]bool) []discordgo.Me
 		children = append(children, discordgo.Separator{Divider: &divider, Spacing: &spacing})
 	}
 	for _, st := range Settings {
-		on := st.Value(c)
-		dot, state, style := helpers.DotRed, st.Off, discordgo.SecondaryButton
-		if on {
-			dot, state, style = helpers.DotGreen, st.On, discordgo.SuccessButton
+		style := discordgo.SecondaryButton
+		if st.Value(c) {
+			style = discordgo.SuccessButton
 		}
 		lock := ""
 		if !allowed[st.ID] {
 			lock = " 🔒"
 		}
 		children = append(children, discordgo.Section{
-			Components: []discordgo.MessageComponent{discordgo.TextDisplay{Content: fmt.Sprintf("**%s %s**\n%s **%s**%s\n> %s", st.Emoji, st.Label, dot, state, lock, st.Detail)}},
+			Components: []discordgo.MessageComponent{discordgo.TextDisplay{Content: fmt.Sprintf("**%s %s**%s\n> %s", st.Emoji, st.Label, lock, quote(st.Detail))}},
 			Accessory: discordgo.Button{
 				Style: style, CustomID: idPrefix + st.ID, Emoji: &discordgo.ComponentEmoji{Name: st.Emoji}, Disabled: !allowed[st.ID],
 			},
@@ -198,9 +197,25 @@ func Panel(c *models.PlayerConfigsModel, allowed map[string]bool) []discordgo.Me
 	return []discordgo.MessageComponent{discordgo.Container{AccentColor: &accent, Components: children}}
 }
 
-// editV2 fills the reply the command (or a button press) is answering with a V2 message. A prefix command has no interaction to edit, so
-// it gets a message of its own, in reply to what was typed.
-func editV2(s *discordgo.Session, i *discordgo.InteractionCreate, components []discordgo.MessageComponent) error {
+// quote puts every line of text in a quote, so a longer explanation stays under the setting's name.
+func quote(text string) string { return strings.ReplaceAll(text, "\n", "\n> ") }
+
+// editV2 fills the reply the command is answering with a V2 message (first = true: the flag that makes it one is set now), or redraws the
+// message a button press came from (first = false: it is a V2 message already, so only its components change). A prefix command has no
+// interaction to edit, so it gets a message of its own, in reply to what was typed. A failure is logged: nobody else would know.
+func editV2(s *discordgo.Session, i *discordgo.InteractionCreate, components []discordgo.MessageComponent, first bool) error {
+	err := sendV2(s, i, components, first)
+	if err != nil {
+		log.Printf("[Settings] could not update the settings message of %s in guild %s: %v", helpers.InteractionUserID(i), i.GuildID, err)
+	}
+	return err
+}
+
+func sendV2(s *discordgo.Session, i *discordgo.InteractionCreate, components []discordgo.MessageComponent, first bool) error {
+	if !first && !helpers.IsPrefixInteraction(i) {
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Components: &components})
+		return err
+	}
 	if helpers.IsPrefixInteraction(i) {
 		_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
 			Flags:      discordgo.MessageFlagsIsComponentsV2,
@@ -229,7 +244,7 @@ func Show(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return helpers.EditInteractionEmbed(s, i, errorEmbed())
 	}
 	allowed := Allowed(i.GuildID, userID, memberRoles(i))
-	return editV2(s, i, Panel(view.Config, allowed))
+	return editV2(s, i, Panel(view.Config, allowed), true)
 }
 
 func memberRoles(i *discordgo.InteractionCreate) []string {
@@ -287,7 +302,7 @@ func handleButton(s *discordgo.Session, i *discordgo.InteractionCreate, customID
 	}
 	allowed := Allowed(i.GuildID, userID, memberRoles(i))
 	if !allowed[st.ID] {
-		_ = editV2(s, i, Panel(view.Config, allowed))
+		_ = editV2(s, i, Panel(view.Config, allowed), false)
 		helpers.FollowupEmbed(s, i, restrictedEmbed(st))
 		return true
 	}
@@ -296,7 +311,7 @@ func handleButton(s *discordgo.Session, i *discordgo.InteractionCreate, customID
 		helpers.FollowupEmbed(s, i, errorEmbed())
 		return true
 	}
-	_ = editV2(s, i, Panel(config, allowed))
+	_ = editV2(s, i, Panel(config, allowed), false)
 	if st.ID == "elo" {
 		// The ELO in the server nickname follows the switch right away.
 		go func() { _, _ = helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID) }()

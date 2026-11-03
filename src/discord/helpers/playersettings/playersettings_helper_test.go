@@ -76,9 +76,10 @@ func TestPanelLayout(t *testing.T) {
 		if btn.CustomID != idPrefix+st.ID || btn.Label != "" || btn.Emoji == nil || btn.Emoji.Name != st.Emoji {
 			t.Errorf("%s: button should be the icon %s with id %s and no text, got %+v", st.ID, st.Emoji, idPrefix+st.ID, btn)
 		}
+		// The button's colour is the state: the text is only the name and what the setting does.
 		text := sec.Components[0].(discordgo.TextDisplay).Content
-		if !strings.Contains(text, st.Label) || !strings.Contains(text, st.Detail) {
-			t.Errorf("%s: the text beside the button lacks its name or what it does: %q", st.ID, text)
+		if want := "**" + st.Emoji + " " + st.Label + "**\n> " + quote(st.Detail); text != want {
+			t.Errorf("%s: text beside the button is %q, want %q", st.ID, text, want)
 		}
 	}
 }
@@ -121,6 +122,35 @@ func TestPanelFitsInOneMessage(t *testing.T) {
 	if n := countComponents(box); n > maxComponents {
 		t.Errorf("%d settings make %d components, Discord allows %d: split the answer before adding more", len(Settings), n, maxComponents)
 	}
+}
+
+// Every setting explains what On and Off do and gives an example.
+func TestSettingsAreExplainedWithAnExample(t *testing.T) {
+	for _, st := range Settings {
+		for _, part := range []string{"**On:**", "**Off:**", "*Example:*"} {
+			if !strings.Contains(st.Detail, part) {
+				t.Errorf("%s: the explanation lacks %s", st.ID, part)
+			}
+		}
+	}
+}
+
+// Discord allows 4000 characters of text in a message in all. The explanations make the panel long, so this fails before a setting added
+// later can silently break /settings: shorten the explanations, or split the answer.
+func TestPanelTextFitsDiscordLimit(t *testing.T) {
+	box := container(t, &models.PlayerConfigsModel{Username: "A_Sixteen_Name_X"}, allAllowed())
+	total := 0
+	for _, child := range box.Components {
+		if s, ok := child.(discordgo.Section); ok {
+			for _, c := range s.Components {
+				total += len([]rune(c.(discordgo.TextDisplay).Content))
+			}
+		}
+	}
+	if total > 4000 {
+		t.Errorf("%d characters of text for %d settings, Discord allows 4000", total, len(Settings))
+	}
+	t.Logf("%d of 4000 characters used by %d settings", total, len(Settings))
 }
 
 // Each setting has its own icon, so the buttons can be told apart without text.
