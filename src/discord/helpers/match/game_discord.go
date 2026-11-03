@@ -636,6 +636,7 @@ func (d *gameDiscord) matchEvent(s *discordgo.Session, g Game, ev *MatchEvent) {
 		d.mu.Lock()
 		st.bedLost[ev.Team] = true
 		d.mu.Unlock()
+		d.scheduleTeamStatuses(s, g, false)
 		d.post(s, g, "bedDestroyed", embedData{Vars: map[string]string{"team": ev.Team, "destroyer": mention(ev.Destroyer)}})
 	case "eliminated":
 		d.mu.Lock()
