@@ -128,6 +128,10 @@ func (m *GameManager) stampState(g Game) {
 // Rescore changes the winner of a scored game: the old results are reversed
 // and the new ones applied from the players' current ratings. mvp may be "".
 // The winner must be named (the recorded one is what is being replaced).
+//
+// A game that was voided before it was ever scored has no results to reverse
+// (the void is what stopped it being scored), so it is reopened and scored for
+// the first time with the winner named.
 func (m *GameManager) Rescore(actor, guildID string, id uint, winningTeam, mvp string) (ScoreResult, error) {
 	if m.liveIn(guildID, id) != nil {
 		return ScoreResult{}, ErrWrongState
@@ -140,19 +144,25 @@ func (m *GameManager) Rescore(actor, guildID string, id uint, winningTeam, mvp s
 	if err != nil {
 		return ScoreResult{}, err
 	}
-	if !anyScored(rows) {
+	scored := anyScored(rows)
+	if !scored && rec.Status != "voided" {
 		return ScoreResult{}, ErrNotScored
 	}
 	team, err := storedWinner(g, rows, winningTeam)
 	if err != nil {
 		return ScoreResult{}, err
 	}
-	holders := m.startingGrantHolders(guildID, rec, nil)
+	var holders []string
+	if scored {
+		holders = m.startingGrantHolders(guildID, rec, nil)
+	}
 	if _, err := m.api().ReverseGame(actor, guildID, id, nil, true); err != nil {
 		return ScoreResult{}, fmt.Errorf("reverse results: %w", err)
 	}
-	m.deps.Elo.ReopenStartingGrants(actor, guildID, holders)
-	m.afterReverse(actor, guildID, id, nil)
+	if scored {
+		m.deps.Elo.ReopenStartingGrants(actor, guildID, holders)
+		m.afterReverse(actor, guildID, id, nil)
+	}
 	res, err := m.commitStored(actor, g, team, mvp)
 	if err != nil {
 		return ScoreResult{}, fmt.Errorf("%w: %v", ErrRescoreIncomplete, err)
