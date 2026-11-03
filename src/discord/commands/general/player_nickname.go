@@ -120,11 +120,12 @@ func validateNicknameConflicts(i *discordgo.InteractionCreate, guildID string, p
 
 	// Verify if the requested nickname is a premium Minecraft account
 	if rules.BlockRealAccounts && helpers.RequiresRegistrationAPIVerification(verification) {
-		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(nickname, verification)
+		exists, fellBack, verifyErr := helpers.VerifyWithFallback(nickname, verification)
 		if verifyErr != nil {
 			return NicknameAPIOutageEmbed(i, helpers.RegistrationNetworkLabel(verification))
 		}
-		if exists {
+		// With the API down and the database fallback on, a name cannot be told from a real account: only the server's own checks below apply.
+		if exists && !fellBack {
 			return NicknamePremiumNameEmbed(i, nickname)
 		}
 	}

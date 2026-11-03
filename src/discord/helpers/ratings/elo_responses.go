@@ -10,11 +10,19 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// eloChange is " (840 → 820)", or nothing when the notice does not know the ELO before and after (a notice rebuilt from an old log).
+func eloChange(n DecayNotice) string {
+	if n.Before == 0 && n.After == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (%d → %d)", n.Before, n.After)
+}
+
 // DecayWarningEmbed warns a player that their ELO is about to decay.
 func DecayWarningEmbed(n DecayNotice) *discordgo.MessageEmbed {
 	return helpers.Preset("caution", types.PresetOptions{
 		Title:       "ELO Decay Incoming",
-		Description: fmt.Sprintf("You have been inactive for a while. Unless you play a ranked game before <t:%d:R>, you will lose **%d ELO** (%d → %d).", n.At.Unix(), n.Amount, n.Before, n.After),
+		Description: fmt.Sprintf("You have been inactive for a while. Unless you play a ranked game before <t:%d:R>, you will lose **%d ELO**%s.", n.At.Unix(), n.Amount, eloChange(n)),
 		Thumbnail:   helpers.ThumbClock,
 	})
 }
@@ -23,7 +31,7 @@ func DecayWarningEmbed(n DecayNotice) *discordgo.MessageEmbed {
 func DecayAppliedEmbed(n DecayNotice) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "ELO Decayed",
-		Description: fmt.Sprintf("%d days without a ranked game cost you **%d ELO** (%d → %d). Play a ranked game to stop the decay.", n.InactivityDays, n.Amount, n.Before, n.After),
+		Description: fmt.Sprintf("%d days without a ranked game cost you **%d ELO**%s. Play a ranked game to stop the decay.", n.InactivityDays, n.Amount, eloChange(n)),
 		Thumbnail:   helpers.ThumbFlag,
 	})
 }

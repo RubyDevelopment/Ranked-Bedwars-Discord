@@ -1133,6 +1133,19 @@ func VerifyMinecraftUsernameExistsWithConfig(username string, cfg *types.Registr
 	return verifyViaMojang(username)
 }
 
+// VerifyWithFallback is VerifyMinecraftUsernameExistsWithConfig, except that when the lookup itself fails (the API is down, or answers
+// with an error: not "no such account") and the server turned on the database fallback (Account verification), it carries on as the
+// database-only mode does: the account is taken as real, and the server's own checks (the username is not registered by someone else, and
+// so on) decide. fellBack says that happened; the caller can tell the player the account could not be checked.
+func VerifyWithFallback(username string, cfg *types.RegistrationVerification) (exists, fellBack bool, err error) {
+	exists, err = VerifyMinecraftUsernameExistsWithConfig(username, cfg)
+	if err != nil && cfg != nil && cfg.DatabaseFallback {
+		appLog.EngineLogger.Warn(fmt.Sprintf("[Verification] the account lookup for %q failed (%v): falling back to the database", username, err))
+		return true, true, nil
+	}
+	return exists, false, err
+}
+
 // verifyViaMojang checks username existence via Mojang API.
 func verifyViaMojang(username string) (bool, error) {
 	httpClient := &http.Client{Timeout: 10 * time.Second}

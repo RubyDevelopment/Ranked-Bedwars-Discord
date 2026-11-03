@@ -12,7 +12,6 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
-	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/discord/helpers/queue"
@@ -127,16 +126,16 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 
 // queueRosterField is a team's (or the draft pool's) field: its heading and a row for each player, from the layouts.
 func queueRosterField(guildID string, seasonID uint, titleLayout, team string, players []match.GamePlayer) *discordgo.MessageEmbedField {
-	// Each player's win/loss and kill/death ratios for the season, looked up side by side (a player with no stats yet reads 0.00).
+	// Each player's wins/losses and kills/deaths for the season as they are (5/2, not 2.50), looked up side by side (a player with no stats yet reads 0/0).
 	wlr, kdr := make([]string, len(players)), make([]string, len(players))
 	var wg sync.WaitGroup
 	for n, p := range players {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			wlr[n], kdr[n] = "0.00", "0.00"
+			wlr[n], kdr[n] = "0/0", "0/0"
 			if st, err := database.Must().Stats.Get(guildID, p.UserID, seasonID); err == nil {
-				wlr[n], kdr[n] = banner.Ratio(st.Wins, st.Losses), banner.Ratio(st.Kills, st.Deaths)
+				wlr[n], kdr[n] = fmt.Sprintf("%d/%d", st.Wins, st.Losses), fmt.Sprintf("%d/%d", st.Kills, st.Deaths)
 			}
 		}()
 	}

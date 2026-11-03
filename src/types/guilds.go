@@ -131,6 +131,9 @@ type RegistrationVerification struct {
 	CustomProfileURL string       `json:"custom_profile_url,omitempty"`
 	ExternalAPI      *ExternalAPI `json:"external_api,omitempty"`
 	InGame           *InGameCode  `json:"in_game,omitempty"`
+	// DatabaseFallback: when the verification API fails (an outage, not "no such account"), carry on as database_only does: the account is
+	// taken as real and the server's own uniqueness checks decide.
+	DatabaseFallback bool `json:"database_fallback,omitempty"`
 	// NicknameRules is what /nickname may set; nil = every rule on.
 	NicknameRules *NicknameRules `json:"nickname_rules,omitempty"`
 }
