@@ -1624,13 +1624,20 @@ var OnPunishmentTimed = func(guildID string) {}
 // punishment code sets it when it loads.
 var LadderLevelName = func(guildID, field, levelKey string) string { return "" }
 
-// LadderReason is what a history entry shows as its reason: the name of the ladder level that chose it, which is short, or the
-// recorded reason when the entry did not come from the ladder.
+// LadderReason is what a history entry shows as its reason: the reason the staff member wrote, else the name of the ladder level that
+// chose the punishment (which is short).
 func LadderReason(guildID, field, levelKey, reason string) string {
+	name := ""
 	if levelKey != "" {
-		if name := LadderLevelName(guildID, field, levelKey); name != "" {
-			return name
-		}
+		name = LadderLevelName(guildID, field, levelKey)
+	}
+	// A reason the staff member wrote themselves is what they meant: the level's name only stands in when there is none (or it
+	// only repeats the level).
+	if text := strings.TrimSpace(reason); text != "" && !strings.EqualFold(text, "No reason provided") && !strings.EqualFold(text, name) {
+		return text
+	}
+	if name != "" {
+		return name
 	}
 	return reason
 }
