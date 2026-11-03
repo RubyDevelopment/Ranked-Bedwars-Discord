@@ -19,7 +19,7 @@ import (
 	"ranked-bedwars/src/types"
 )
 
-// A player's own switches (/settings): what others can see of them, who can invite them and when the bot pings them. A guild can
+// A player's own switches (/settings, one V2 container with a button beside each switch): what others can see of them, who can invite them and when the bot pings them. A guild can
 // lock a switch or limit it to roles, perks or boosters (the dashboard's Settings Restrictions). The buttons of the /settings
 // answer and the party autowarp live here.
 
@@ -31,7 +31,6 @@ import (
 type Setting struct {
 	ID          string
 	Emoji       string
-	Button      string // the short name on the button
 	Label       string
 	Column      string // the player config column it is stored in
 	Restriction string // its key in the guild's settings restrictions ("" = a guild cannot restrict it)
@@ -41,18 +40,18 @@ type Setting struct {
 
 // Settings are the switches in the order the answer lists them.
 var Settings = []Setting{
-	{ID: "stats", Emoji: "📊", Button: "Stats", Label: "Stats Visibility", Column: "is_stats_visible", Restriction: "stats_visibility", On: "Public", Off: "Hidden",
+	{ID: "stats", Emoji: "📊", Label: "Stats Visibility", Column: "is_stats_visible", Restriction: "stats_visibility", On: "Public", Off: "Hidden",
 		Detail: "Whether other players can look at your stats and profile."},
-	{ID: "elo", Emoji: "📈", Button: "ELO", Label: "ELO Visibility", Column: "is_elo_visible", Restriction: "elo_visibility", On: "Public", Off: "Hidden",
+	{ID: "elo", Emoji: "📈", Label: "ELO Visibility", Column: "is_elo_visible", Restriction: "elo_visibility", On: "Public", Off: "Hidden",
 		Detail: "Whether your ELO shows in your server nickname and on your profile."},
-	{ID: "invites", Emoji: "📨", Button: "Invites", Label: "Party Invites", Column: "is_party_invites_enabled", Restriction: "party_invites", On: "Enabled", Off: "Disabled",
+	{ID: "invites", Emoji: "📨", Label: "Party Invites", Column: "is_party_invites_enabled", Restriction: "party_invites", On: "Enabled", Off: "Disabled",
 		Detail: "Whether other players can invite you to their party."},
-	{ID: "autowarp", Emoji: "🚀", Button: "Autowarp", Label: "Party Autowarp", Column: "is_party_autowarp_enabled", Restriction: "party_autowarp", On: "Enabled", Off: "Disabled",
+	{ID: "autowarp", Emoji: "🚀", Label: "Party Autowarp", Column: "is_party_autowarp_enabled", Restriction: "party_autowarp", On: "Enabled", Off: "Disabled",
 		Detail: "When you lead a party and join a voice channel, your party members who are in voice are moved with you."},
-	{ID: "results", Emoji: "🔔", Button: "Result Pings", Label: "Ping On Results", Column: "is_ping_on_results_enabled", Restriction: "result_pings", On: "Yes", Off: "No",
+	{ID: "results", Emoji: "🔔", Label: "Ping On Results", Column: "is_ping_on_results_enabled", Restriction: "result_pings", On: "Yes", Off: "No",
 		Detail: "Whether you are pinged when a game you played is scored."},
-	{ID: "alerts", Emoji: "📣", Button: "Alert Pings", Label: "Ping On Alerts", Column: "is_ping_on_alerts_enabled", On: "Yes", Off: "No",
-		Detail: "Whether party and queue alerts ping you."},
+	{ID: "alerts", Emoji: "📣", Label: "Ping On Alerts", Column: "is_ping_on_alerts_enabled", On: "Yes", Off: "No",
+		Detail: "Whether party, queue and game alerts ping you."},
 }
 
 func find(id string) *Setting {
@@ -150,58 +149,73 @@ func Allowed(guildID, userID string, roles []string) map[string]bool {
 
 const idPrefix = "pset:"
 
-// Embed lists every switch with its state and what it does.
-func Embed(c *models.PlayerConfigsModel, allowed map[string]bool) *discordgo.MessageEmbed {
-	fields := make([]*discordgo.MessageEmbedField, 0, len(Settings))
+// maxComponents is how many components Discord allows in one message.
+const maxComponents = 40
+
+// Panel is the answer: one container laid out like the embed it replaced. At the top the title and the note, with the player's head on
+// the right; then one section per switch, its name, state and what it does on the left and its button on the far right. The button is
+// an icon (the same one as in the text beside it): green when on, grey when off, disabled when the guild locks it.
+func Panel(c *models.PlayerConfigsModel, allowed map[string]bool) []discordgo.MessageComponent {
 	locked := false
 	for _, st := range Settings {
-		on := st.Value(c)
-		dot, state := helpers.DotRed, st.Off
-		if on {
-			dot, state = helpers.DotGreen, st.On
-		}
-		lock := ""
 		if !allowed[st.ID] {
-			lock, locked = " 🔒", true
+			locked = true
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:  st.Emoji + " " + st.Label,
-			Value: fmt.Sprintf("%s **%s**%s\n> %s", dot, state, lock, st.Detail),
-		})
 	}
-	note := "Press a button below to switch a setting. Green buttons are on and grey buttons are off."
+	note := "Press the button beside a setting to switch it. Green is on and grey is off."
 	if locked {
 		note += " A 🔒 means this guild's rules do not let you change that setting."
 	}
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       "Player Settings · " + c.Username,
-		Description: note,
-		Thumbnail:   helpers.MinecraftBustAvatarURL(c.Username),
-		Fields:      fields,
-	})
+	children := []discordgo.MessageComponent{
+		discordgo.Section{
+			Components: []discordgo.MessageComponent{discordgo.TextDisplay{Content: "## Player Settings · " + c.Username + "\n" + note}},
+			Accessory:  discordgo.Thumbnail{Media: discordgo.UnfurledMediaItem{URL: helpers.MinecraftBustAvatarURL(c.Username)}},
+		},
+	}
+	// A section is three components (itself, its text, its button). The divider under the title only fits while the message stays within the limit.
+	if 1+3+1+3*len(Settings) <= maxComponents {
+		divider, spacing := true, discordgo.SeparatorSpacingSizeSmall
+		children = append(children, discordgo.Separator{Divider: &divider, Spacing: &spacing})
+	}
+	for _, st := range Settings {
+		on := st.Value(c)
+		dot, state, style := helpers.DotRed, st.Off, discordgo.SecondaryButton
+		if on {
+			dot, state, style = helpers.DotGreen, st.On, discordgo.SuccessButton
+		}
+		lock := ""
+		if !allowed[st.ID] {
+			lock = " 🔒"
+		}
+		children = append(children, discordgo.Section{
+			Components: []discordgo.MessageComponent{discordgo.TextDisplay{Content: fmt.Sprintf("**%s %s**\n%s **%s**%s\n> %s", st.Emoji, st.Label, dot, state, lock, st.Detail)}},
+			Accessory: discordgo.Button{
+				Style: style, CustomID: idPrefix + st.ID, Emoji: &discordgo.ComponentEmoji{Name: st.Emoji}, Disabled: !allowed[st.ID],
+			},
+		})
+	}
+	accent := helpers.ColorInfo
+	return []discordgo.MessageComponent{discordgo.Container{AccentColor: &accent, Components: children}}
 }
 
-// Components is one button per switch, three to a row: green when on, grey when off, disabled when the guild locks it.
-func Components(c *models.PlayerConfigsModel, allowed map[string]bool) []discordgo.MessageComponent {
-	var rows []discordgo.MessageComponent
-	row := discordgo.ActionsRow{}
-	for _, st := range Settings {
-		style := discordgo.SecondaryButton
-		if st.Value(c) {
-			style = discordgo.SuccessButton
-		}
-		row.Components = append(row.Components, discordgo.Button{
-			Label: st.Button, Style: style, CustomID: idPrefix + st.ID, Emoji: &discordgo.ComponentEmoji{Name: st.Emoji}, Disabled: !allowed[st.ID],
+// editV2 fills the reply the command (or a button press) is answering with a V2 message. A prefix command has no interaction to edit, so
+// it gets a message of its own, in reply to what was typed.
+func editV2(s *discordgo.Session, i *discordgo.InteractionCreate, components []discordgo.MessageComponent) error {
+	if helpers.IsPrefixInteraction(i) {
+		_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+			Flags:      discordgo.MessageFlagsIsComponentsV2,
+			Components: components,
+			Reference:  &discordgo.MessageReference{MessageID: helpers.PrefixSourceMessageID(i), ChannelID: i.ChannelID, GuildID: i.GuildID},
 		})
-		if len(row.Components) == 3 {
-			rows = append(rows, row)
-			row = discordgo.ActionsRow{}
-		}
+		return err
 	}
-	if len(row.Components) > 0 {
-		rows = append(rows, row)
-	}
-	return rows
+	_, err := s.RequestWithBucketID(
+		"PATCH",
+		discordgo.EndpointInteractionResponseActions(s.State.User.ID, i.Interaction.Token),
+		map[string]any{"flags": discordgo.MessageFlagsIsComponentsV2, "components": components},
+		discordgo.EndpointInteractionResponseActions(s.State.User.ID, ""),
+	)
+	return err
 }
 
 // Show is what /settings answers with: the player's settings and the buttons.
@@ -215,8 +229,7 @@ func Show(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 		return helpers.EditInteractionEmbed(s, i, errorEmbed())
 	}
 	allowed := Allowed(i.GuildID, userID, memberRoles(i))
-	embeds, components := []*discordgo.MessageEmbed{Embed(view.Config, allowed)}, Components(view.Config, allowed)
-	return helpers.EditInteractionResponse(s, i, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
+	return editV2(s, i, Panel(view.Config, allowed))
 }
 
 func memberRoles(i *discordgo.InteractionCreate) []string {
@@ -274,8 +287,7 @@ func handleButton(s *discordgo.Session, i *discordgo.InteractionCreate, customID
 	}
 	allowed := Allowed(i.GuildID, userID, memberRoles(i))
 	if !allowed[st.ID] {
-		embeds, components := []*discordgo.MessageEmbed{Embed(view.Config, allowed)}, Components(view.Config, allowed)
-		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
+		_ = editV2(s, i, Panel(view.Config, allowed))
 		helpers.FollowupEmbed(s, i, restrictedEmbed(st))
 		return true
 	}
@@ -284,8 +296,7 @@ func handleButton(s *discordgo.Session, i *discordgo.InteractionCreate, customID
 		helpers.FollowupEmbed(s, i, errorEmbed())
 		return true
 	}
-	embeds, components := []*discordgo.MessageEmbed{Embed(config, allowed)}, Components(config, allowed)
-	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components})
+	_ = editV2(s, i, Panel(config, allowed))
 	if st.ID == "elo" {
 		// The ELO in the server nickname follows the switch right away.
 		go func() { _, _ = helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID) }()

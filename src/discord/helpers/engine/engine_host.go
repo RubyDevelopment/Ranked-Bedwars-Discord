@@ -207,6 +207,20 @@ func (b *EngineBridge) syncPlayers(gameID uint) {
 	}
 }
 
+// Replaced tells the engine a player who never joined the party was voted out: the substitute takes their place on the same team,
+// and the engine invites them right away.
+func (b *EngineBridge) Replaced(g match.Game, out string, in match.GamePlayer) {
+	view, err := database.Must().Player.Get(g.GuildID, in.UserID)
+	if err != nil || view.Config == nil || strings.TrimSpace(view.Config.Username) == "" {
+		b.logf("substitute %s of game %d has no registered Minecraft name: the engine was not told", in.UserID, g.ID)
+		return
+	}
+	player := hostPlayerOf(in, view.Config.Username, view.Config.Nickname)
+	if err := b.Write(map[string]any{"type": "players.replaced", "game_id": g.ID, "out": out, "player": player}); err != nil {
+		b.logf("send the substitute of game %d: %v", g.ID, err)
+	}
+}
+
 // RefreshNames pushes the current Minecraft names to every game the engine hosts that the member plays in, as soon as they
 // register, rename or change their nickname. Without it the engine only asks every so often, so a player who fixed their
 // name while the party was being invited kept being invited under the old one.

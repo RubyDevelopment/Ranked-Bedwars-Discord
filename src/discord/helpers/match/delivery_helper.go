@@ -5,10 +5,12 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 
+	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
@@ -95,7 +97,7 @@ func StaffAlertPinging(s *discordgo.Session, guildID, key string, pingUserIDs []
 		content = append(content, "<@&"+role+">")
 		mentions.Roles = []string{role}
 	}
-	for _, id := range pingUserIDs {
+	for _, id := range alertPingUsers(guildID, pingUserIDs) {
 		content = append(content, "<@"+id+">")
 		mentions.Users = append(mentions.Users, id)
 	}
@@ -105,6 +107,31 @@ func StaffAlertPinging(s *discordgo.Session, guildID, key string, pingUserIDs []
 	if _, err := s.ChannelMessageSendComplex(flow.Delivery.AlertsChannel, send); err != nil {
 		log.Printf("staff alert %s for guild %s: %v", key, guildID, err)
 	}
+}
+
+// alertPingUsers are those of ids who want to be pinged by alerts (everyone, unless they switched Ping On Alerts off in /settings or
+// their settings cannot be read). The alert is still posted: only the ping is left out.
+func alertPingUsers(guildID string, ids []string) []string {
+	keep := make([]bool, len(ids))
+	var wg sync.WaitGroup
+	for n, id := range ids {
+		keep[n] = true
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if view, err := database.Must().Player.Get(guildID, id); err == nil && view.Config != nil && !view.Config.IsPingOnAlertsEnabled {
+				keep[n] = false
+			}
+		}()
+	}
+	wg.Wait()
+	out := make([]string, 0, len(ids))
+	for n, id := range ids {
+		if keep[n] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // voidAlert is the staff alert of a voided game: what the game was, who voided it, why, who was in it and what it means for ratings.

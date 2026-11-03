@@ -116,6 +116,7 @@ type engineInbound struct {
 	Kind        string               `json:"kind"`
 	Lines       []match.GameChatLine `json:"lines"`
 	Missing     []string             `json:"missing"`
+	PlayerID    string               `json:"id"` // host.party.recovered: the player who joined after all
 	Voter       string               `json:"voter"`  // host.map.vote: the Discord id of the player who voted in the party chat
 	Number      int                  `json:"number"` // host.map.vote: the map number they wrote
 	Maps        []match.MapOption    `json:"maps"`
@@ -180,6 +181,8 @@ type engineInbound struct {
 		BedsLost      int                `json:"beds_lost"`
 		FirstBloods   int                `json:"first_bloods"`
 		Custom        map[string]float64 `json:"custom"`
+		Rounds        int                `json:"rounds"`  // host.party.stalled: invite rounds they were still missing for
+		Offline       bool               `json:"offline"` // host.party.stalled: the server last said they are not online
 	} `json:"players"`
 }
 

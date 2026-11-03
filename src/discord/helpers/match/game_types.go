@@ -457,6 +457,13 @@ type GameEffects struct {
 	PresentInQueue func(g Game) map[string]bool
 	// Substitutes returns up to need eligible players waiting in the queue, in line order.
 	Substitutes func(g Game, need int) []queue.QueueMember
+	// WaitingPlayers lists the members sitting in the game's queue channel who passed its join checks and are not in a game.
+	WaitingPlayers func(g Game) []string
+	// HasSpoken reports whether the member wrote anything in the game's chat. When that cannot be told it says true.
+	HasSpoken func(g Game, userID string) bool
+	// SwapMembers makes a substitute's channel access the leaver's, moves the leaver to the waiting voice channel and the
+	// substitute into the leaver's team voice channel.
+	SwapMembers func(g Game, out, in GamePlayer) error
 	// ChannelsExist reports whether the game's Discord channels still exist (recovery).
 	ChannelsExist func(g Game) bool
 	// Released is called when a game ends so the queue can be re-swept.

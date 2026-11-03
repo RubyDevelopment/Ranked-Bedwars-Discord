@@ -109,6 +109,14 @@ func (b *EngineBridge) handle(msg engineInbound) {
 	case "players.sync":
 		go b.syncPlayers(msg.GameID)
 
+	case "host.party.stalled":
+		for _, p := range msg.Players { // who is still not in the party after several rounds of invites
+			go match.Games.OfferSubstitute(msg.GameID, p.ID, p.Rounds, p.Offline)
+		}
+
+	case "host.party.recovered":
+		go match.Games.CancelSubstituteVote(msg.GameID, msg.PlayerID)
+
 	case "host.action.result":
 		b.mu.Lock()
 		ch := b.actions[msg.RequestID]

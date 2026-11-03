@@ -145,6 +145,21 @@ func HandleQueue(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 	SweepQueueChannel(s, guildID, newChannel)
 }
 
+// Waiting lists the members sitting in a queue channel who passed its join checks and are not in a game: who could still be put into
+// one (for instance as a substitute).
+func Waiting(s *discordgo.Session, guildID, channelID string) []string {
+	var out []string
+	for _, userID := range voiceRoster(s, guildID, channelID) {
+		admittedMu.Lock()
+		ok := admitted[channelID+":"+userID]
+		admittedMu.Unlock()
+		if ok && !Queues.deps.InGame(guildID, userID) {
+			out = append(out, userID)
+		}
+	}
+	return out
+}
+
 // isDenied reports whether the join checks refused this member in this queue channel.
 func isDenied(channelID, userID string) bool {
 	admittedMu.Lock()
