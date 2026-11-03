@@ -42,6 +42,9 @@ var (
 	// while sitting in a queue channel; they are the only ones a lobby is built from.
 	admittedMu sync.Mutex
 	admitted   = map[string]bool{}
+	// denied holds "channelID:userID" for members the join checks refused while they sit in a queue channel (the channel's status counts them
+	// as ineligible); it is under admittedMu too.
+	denied = map[string]bool{}
 
 	// lastLaunch is when each queue channel last launched a game.
 	launchMu   sync.Mutex
@@ -72,6 +75,7 @@ func Released(guildID, channelID string) {
 	}
 	if s := base.Session.Load(); s != nil {
 		go SweepQueueChannel(s, guildID, channelID)
+		ScheduleVoiceStatus(s, guildID, channelID)
 	}
 }
 
@@ -105,6 +109,13 @@ func HandleQueue(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 		return
 	}
 
+	// The status under a queue channel's name follows who is in it: each join or leave starts its 3 second wait over (see ScheduleVoiceStatus).
+	for _, channel := range []string{oldChannel, newChannel} {
+		if _, isQueue := snap.Bindings[channel]; isQueue {
+			defer ScheduleVoiceStatus(s, guildID, channel)
+		}
+	}
+
 	// Leaving: drop the member's place in line and dismantle a pending lobby
 	// they were part of. BeforeUpdate can be missing from the state cache, so the
 	// pending group is checked on its own.
@@ -134,9 +145,28 @@ func HandleQueue(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 	SweepQueueChannel(s, guildID, newChannel)
 }
 
-// admitMember runs the join checks (registered, not restricted, not in a game,
-// rank gate). A member who fails is removed from the queue channel with an alert.
+// isDenied reports whether the join checks refused this member in this queue channel.
+func isDenied(channelID, userID string) bool {
+	admittedMu.Lock()
+	defer admittedMu.Unlock()
+	return denied[channelID+":"+userID]
+}
+
+// admitMember runs the join checks (registered, not restricted, not in a game, rank gate) and remembers the result. A member who fails
+// stays in the channel, told why, and is not queued.
 func admitMember(s *discordgo.Session, guildID, userID, channelID string, snap *QueueSnapshot, bind QueueBinding) bool {
+	ok := checkAdmission(s, guildID, userID, channelID, snap, bind)
+	admittedMu.Lock()
+	if ok {
+		delete(denied, channelID+":"+userID)
+	} else {
+		denied[channelID+":"+userID] = true
+	}
+	admittedMu.Unlock()
+	return ok
+}
+
+func checkAdmission(s *discordgo.Session, guildID, userID, channelID string, snap *QueueSnapshot, bind QueueBinding) bool {
 	key := channelID + ":" + userID
 	admittedMu.Lock()
 	ok := admitted[key]
@@ -276,6 +306,7 @@ func forgetAdmitted(channelID, userID string) {
 	alertedMu.Unlock()
 	admittedMu.Lock()
 	delete(admitted, channelID+":"+userID)
+	delete(denied, channelID+":"+userID)
 	admittedMu.Unlock()
 }
 
@@ -328,6 +359,7 @@ func formQueueLobby(s *discordgo.Session, guildID, channelID string) bool {
 		return false
 	}
 	noteLaunch(channelID)
+	ScheduleVoiceStatus(s, guildID, channelID) // the lobby's players are in a game now
 	queueLogger.Info(fmt.Sprintf("Launched lobby %s (%d players) from channel %s", group.ID, len(group.Players), channelID))
 	return true
 }
