@@ -29,7 +29,7 @@ var errNotTicketChannel = errors.New("not a ticket channel")
 
 // LoadTicketContext resolves the ticket that lives in the given thread.
 func LoadTicketContext(guildID, threadID string) (*TicketContext, error) {
-	ip, err := Tickets.Load(guildID)
+	ip, err := Tickets.LoadOpen(guildID)
 	if err != nil {
 		return nil, err
 	}

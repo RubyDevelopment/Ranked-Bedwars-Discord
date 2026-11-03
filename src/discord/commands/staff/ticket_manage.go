@@ -294,7 +294,7 @@ func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCr
 	typed := ""
 	for _, o := range opts {
 		if o.Focused && o.Name == "category" {
-			typed = strings.ToLower(fmt.Sprint(o.Value))
+			typed = strings.ToLower(o.StringValue())
 		}
 	}
 	var choices []*discordgo.ApplicationCommandOptionChoice

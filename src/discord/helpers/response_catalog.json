@@ -2442,12 +2442,6 @@
 			"name": "screenshare",
 			"responses": [
 				{
-					"key": "screenshare.screenshare-request-submitted",
-					"slug": "screenshare-request-submitted",
-					"title": "Screenshare Request Submitted",
-					"look": "success"
-				},
-				{
 					"key": "screenshare.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
@@ -2460,6 +2454,45 @@
 					"title": "Invalid Target",
 					"look": "error",
 					"description": "You must specify a player to request a screenshare for. Select a member from the command options."
+				},
+				{
+					"key": "screenshare.invalid-request",
+					"slug": "invalid-request",
+					"title": "Invalid Request",
+					"look": "error"
+				},
+				{
+					"key": "screenshare.video-evidence-required",
+					"slug": "video-evidence-required",
+					"title": "Video Evidence Required",
+					"look": "error"
+				},
+				{
+					"key": "screenshare.request-already-pending",
+					"slug": "request-already-pending",
+					"title": "Request Already Pending",
+					"look": "error",
+					"description": "An investigation request on \u003c@…\u003e is already waiting for review. Wait for a screensharer to decide it before submitting another."
+				},
+				{
+					"key": "screenshare.review-channel-unavailable",
+					"slug": "review-channel-unavailable",
+					"title": "Review Channel Unavailable",
+					"look": "error",
+					"description": "The investigation request could not be posted. Ask an administrator to check the SS Restricted reviews channel and the bot's permissions in it."
+				},
+				{
+					"key": "screenshare.screenshare-not-created",
+					"slug": "screenshare-not-created",
+					"title": "Screenshare Not Created",
+					"look": "error"
+				},
+				{
+					"key": "screenshare.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "That player is not registered in this guild. Only registered players can be screenshared."
 				}
 			]
 		},
@@ -2625,6 +2658,57 @@
 					"slug": "guild-sync-complete",
 					"title": "Guild Sync Complete",
 					"look": "success"
+				}
+			]
+		},
+		{
+			"name": "ssclose",
+			"responses": [
+				{
+					"key": "ssclose.screenshare-closed",
+					"slug": "screenshare-closed",
+					"title": "Screenshare Closed",
+					"look": "success",
+					"description": "The screenshare ticket was closed. This channel will be deleted in a few seconds."
+				},
+				{
+					"key": "ssclose.not-a-screenshare-ticket",
+					"slug": "not-a-screenshare-ticket",
+					"title": "Not A Screenshare Ticket",
+					"look": "error",
+					"description": "Run this command inside a screenshare ticket channel."
+				},
+				{
+					"key": "ssclose.not-eligible",
+					"slug": "not-eligible",
+					"title": "Not Eligible",
+					"look": "error",
+					"description": "Only members with the screensharer role can close screenshare tickets."
+				},
+				{
+					"key": "ssclose.ticket-not-claimed",
+					"slug": "ticket-not-claimed",
+					"title": "Ticket Not Claimed",
+					"look": "error",
+					"description": "Only a claimed screenshare ticket can be closed. Claim it first with the button in the ticket."
+				}
+			]
+		},
+		{
+			"name": "sshistory",
+			"responses": [
+				{
+					"key": "sshistory.no-screenshare-history",
+					"slug": "no-screenshare-history",
+					"title": "No Screenshare History",
+					"look": "default",
+					"description": "\u003c@…\u003e has never had a screenshare requested on them."
+				},
+				{
+					"key": "sshistory.screenshare-history",
+					"slug": "screenshare-history",
+					"title": "Screenshare History — …",
+					"look": "default"
 				}
 			]
 		},

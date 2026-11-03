@@ -380,6 +380,12 @@ func (b *EngineBridge) gameEnded(msg engineInbound) {
 		b.logf("game-ended frame for game %d: runtime game is unavailable", msg.GameID)
 		return
 	}
+	// The match is over: its players are free to queue again right away, not once the stats are stored and the result is scored.
+	ids := make([]string, len(g.Players))
+	for n, p := range g.Players {
+		ids[n] = p.UserID
+	}
+	match.Games.ReleasePlayers(g.ID, ids...)
 	statsFailed := false
 	for _, p := range msg.Players {
 		if err := match.Games.AddStats(g.ID, p.ID, match.GamePlayer{

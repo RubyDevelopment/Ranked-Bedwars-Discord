@@ -1,0 +1,86 @@
+package general
+
+import (
+	"github.com/bwmarrin/discordgo"
+
+	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/screenshare"
+	"ranked-bedwars/src/types"
+)
+
+// ============================================================================
+// Globals & Initialization
+// ============================================================================
+
+func init() {
+	helpers.Register(ModerationSsCloseCommand)
+}
+
+// ============================================================================
+// Command Definition
+// ============================================================================
+
+// ModerationSsCloseCommand closes the screenshare ticket it is run in.
+var ModerationSsCloseCommand = &types.Command{
+	Name:        "ssclose",
+	Description: "Closes the screenshare ticket you are in",
+	Ephemeral:   true,
+	Data:        &discordgo.ApplicationCommand{},
+	Execute:     executeModerationSsCloseCommand,
+}
+
+// ============================================================================
+// Command Execution
+// ============================================================================
+
+// executeModerationSsCloseCommand closes the claimed screenshare ticket in this channel. The screenshare command's category,
+// roles and channels apply to it too.
+func executeModerationSsCloseCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	ticket, ok := screenshare.Requests.ByChannel(i.GuildID, i.ChannelID)
+	if !ok {
+		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotInTicketEmbed(i))
+	}
+	if !screenshare.CanHandle(s, i) {
+		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotEligibleEmbed(i))
+	}
+	if _, err := screenshare.Close(s, i.GuildID, ticket.ID, helpers.InteractionUserID(i)); err != nil {
+		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotClaimedEmbed(i))
+	}
+	return helpers.EditInteractionEmbed(s, i, ModerationSsCloseClosedEmbed(i))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+func ModerationSsCloseClosedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Screenshare Closed",
+		Description: "The screenshare ticket was closed. This channel will be deleted in a few seconds.",
+		Thumbnail:   helpers.ThumbTada,
+	})
+}
+
+func ModerationSsCloseNotInTicketEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Not A Screenshare Ticket",
+		Description: "Run this command inside a screenshare ticket channel.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationSsCloseNotEligibleEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Not Eligible",
+		Description: "Only members with the screensharer role can close screenshare tickets.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func ModerationSsCloseNotClaimedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "Ticket Not Claimed",
+		Description: "Only a claimed screenshare ticket can be closed. Claim it first with the button in the ticket.",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}

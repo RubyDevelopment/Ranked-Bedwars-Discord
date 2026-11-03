@@ -1243,3 +1243,81 @@ func init() {
 		return names[levelKey]
 	}
 }
+
+// ============================================================================
+// Screenshare restriction
+// ============================================================================
+
+// ScreensharePrefix starts the reason of the queue ban a screenshare ticket puts on the player, followed by " #<ticket>:".
+const ScreensharePrefix = "[Screenshare]"
+
+func screenshareReasonPrefix(ticketID int) string { return fmt.Sprintf("%s #%d:", ScreensharePrefix, ticketID) }
+
+// ApplyScreenshareRestriction queue bans target until `until` for a screenshare ticket. hadPrior reports they already were
+// queue banned (nothing is added, and nothing is lifted when the ticket ends); applied that the ban was recorded.
+func ApplyScreenshareRestriction(s *discordgo.Session, guildID, actor string, target *discordgo.User, ticketID int, reason string, until time.Time) (applied, hadPrior bool) {
+	spec := LadderActionSpec("queue_ban")
+	if spec == nil || target == nil {
+		return false, false
+	}
+	playerID, profile, err := helpers.EnsureModerationTarget(actor, guildID, target)
+	if err != nil {
+		return false, false
+	}
+	active, err := database.Must().Punishments.ByPlayer(guildID, sdk.UintToString(playerID), true, "", sdk.Page{})
+	if err != nil {
+		return false, false
+	}
+	for _, entry := range active.Data {
+		if PunishmentTypeIn(entry.Type, spec.activeTypes()) {
+			return false, true
+		}
+	}
+	username := target.Username
+	if profile != nil && profile.Username != "" {
+		username = profile.Username
+	}
+	_, applied = ApplyPunishmentTo(s, guildID, actor, target, playerID, username, screenshareReasonPrefix(ticketID)+" "+reason, spec, "", until.UTC().Format(time.RFC3339), helpers.FormatSpan(time.Until(until)))
+	return applied, false
+}
+
+// ReleaseScreenshareRestriction lifts the queue ban a screenshare ticket put on the player: the role comes off (unless another
+// queue ban still holds it) and the punishment is revoked, staying in their history.
+func ReleaseScreenshareRestriction(s *discordgo.Session, guildID, actor, userID string, ticketID int, note string) {
+	spec := LadderActionSpec("queue_ban")
+	if spec == nil {
+		return
+	}
+	view, err := database.Must().Player.Get(guildID, userID)
+	if err != nil || view.Player == nil {
+		return
+	}
+	active, err := database.Must().Punishments.ByPlayer(guildID, sdk.UintToString(view.Player.ID), true, "", sdk.Page{})
+	if err != nil {
+		return
+	}
+	prefix := screenshareReasonPrefix(ticketID)
+	var mine []models.PlayerPunishmentsModel
+	otherBan := false
+	for _, entry := range active.Data {
+		switch {
+		case strings.HasPrefix(entry.Reason, prefix):
+			mine = append(mine, entry)
+		case PunishmentTypeIn(entry.Type, spec.activeTypes()):
+			otherBan = true
+		}
+	}
+	if len(mine) == 0 {
+		return
+	}
+	if !otherBan {
+		if roleID := LadderRole(guildID, spec.Ladder); roleID != "" {
+			if err := s.GuildMemberRoleRemove(guildID, userID, roleID); err != nil && !IsDiscordNotFound(err) {
+				punishmentLogger.Warn(fmt.Sprintf("removing role %s from %s in %s: %v", roleID, userID, guildID, err))
+			}
+		}
+	}
+	for _, entry := range mine {
+		_ = database.Must().Punishments.Revoke(actor, guildID, entry.ID, actor, note)
+	}
+}
