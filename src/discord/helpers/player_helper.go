@@ -954,20 +954,43 @@ func SetMemberNickname(s *discordgo.Session, guildID, userID, nickname string) e
 	return s.GuildMemberNickname(guildID, userID, nickname)
 }
 
-// FormatPlayerDisplayName builds the registered Discord display nickname.
+// maxNicknameLength is how long a Discord server nickname may be.
+const maxNicknameLength = 32
+
+// FormatPlayerDisplayName builds the registered Discord display nickname, "[ELO] username | nickname". A server nickname holds 32
+// characters, so when it is too long the username comes first: the ELO and the username are always shown in full, and the nickname gets
+// whatever room is left (cut short, or left out when there is none). Only a username too long on its own is ever cut: the ELO goes first,
+// then the end of the username.
 func FormatPlayerDisplayName(elo int, username string, nickname *string, showElo bool) string {
 	prefix := ""
 	if showElo {
 		prefix = fmt.Sprintf("[%d] ", elo)
 	}
-	nick := ""
+	name := []rune(username)
+	if len(name)+len([]rune(prefix)) > maxNicknameLength {
+		prefix = ""
+		if len(name) > maxNicknameLength {
+			name = name[:maxNicknameLength]
+		}
+	}
+	base := prefix + string(name)
+
+	nick := []rune{}
 	if nickname != nil {
-		nick = strings.TrimSpace(*nickname)
+		nick = []rune(strings.TrimSpace(*nickname))
 	}
-	if nick != "" {
-		return prefix + username + " | " + nick
+	const separator = " | "
+	room := maxNicknameLength - len([]rune(base)) - len([]rune(separator))
+	if len(nick) == 0 || room < 1 {
+		return base
 	}
-	return prefix + username
+	if len(nick) > room {
+		nick = nick[:room]
+	}
+	if cut := strings.TrimSpace(string(nick)); cut != "" {
+		return base + separator + cut
+	}
+	return base
 }
 
 // SyncRegisteredPlayerProfile applies registered, rank, and nickname sync for a player.

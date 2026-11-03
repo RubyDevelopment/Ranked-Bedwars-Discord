@@ -38,6 +38,9 @@ func NewGameChannelEffects(session func() *discordgo.Session) (create func(Game)
 		return createGameChannels(s, g)
 	}
 	remove = func(guildID string, ch GameChannels) {
+		for _, voice := range ch.Voice {
+			base.ForgetVoiceStatus(voice) // the channel is going: nothing more to write there
+		}
 		if s := session(); s != nil {
 			deleteGameChannels(s, ch)
 		}

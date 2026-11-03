@@ -91,6 +91,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		if g.Bot != "" {
 			d.post(s, g, "matchStarted", embedData{})
 			d.startTracker(s, g)
+			d.scheduleTeamStatuses(s, g, false)
 		} else {
 			// Hosted by hand: the flow's manual blocks, once the map is chosen (the party and map instructions need it). A game with no flow saved
 			// at all gets the old fixed set.
@@ -142,11 +143,14 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 	case EventMatch:
 		d.matchEvent(s, g, ev.Match)
 	case EventMatchEnded:
+		d.scheduleTeamStatuses(s, g, true)
 		d.post(s, g, "matchEnded", embedData{Vars: ev.Vars})
 	case EventStaffPending:
+		d.scheduleTeamStatuses(s, g, true)
 		d.post(s, g, "staffPending", embedData{})
 		d.forget(g.ID)
 	case EventCasualDone:
+		d.scheduleTeamStatuses(s, g, true)
 		d.post(s, g, "casualDone", embedData{})
 		go func() { // a casual game is a game entry too: its results go out when the mode's "Send results" is on
 			png := d.resultsPNG(g, outcomeCasual)
@@ -165,6 +169,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		}
 		d.forget(g.ID)
 	case EventScored:
+		d.scheduleTeamStatuses(s, g, true)
 		// One message: the scored embed (text, mentions, a box or none) with the results card attached. When the server switched that
 		// embed off, the card alone is posted.
 		go func() {
@@ -190,6 +195,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		StaffAlertPinging(s, g.GuildID, "tracking_lost", g.PlayerIDs(), fmt.Sprintf("Game #%d is no longer tracked by the bot: %s", g.Number, reason))
 		d.forget(g.ID)
 	case EventVoided:
+		d.scheduleTeamStatuses(s, g, true)
 		d.post(s, g, "voided", embedData{Vars: map[string]string{"reason": ev.Reason}})
 		go func() { // a voided game is still a game entry: its card (the void variant) goes out when the mode's "Send results" is on
 			if png := d.resultsPNG(g, outcomeVoid); len(png) > 0 {
@@ -624,6 +630,7 @@ func (d *gameDiscord) matchEvent(s *discordgo.Session, g Game, ev *MatchEvent) {
 		d.mu.Lock()
 		st.eliminated[ev.Victim] = true
 		d.mu.Unlock()
+		d.scheduleTeamStatuses(s, g, false)
 		d.post(s, g, "finalKill", embedData{Vars: map[string]string{"killer": mention(ev.Killer), "victim": mention(ev.Victim)}})
 	case "bed":
 		d.mu.Lock()
@@ -637,6 +644,7 @@ func (d *gameDiscord) matchEvent(s *discordgo.Session, g Game, ev *MatchEvent) {
 			st.eliminated[p.UserID] = true
 		}
 		d.mu.Unlock()
+		d.scheduleTeamStatuses(s, g, false)
 		d.post(s, g, "teamEliminated", embedData{Vars: map[string]string{"team": ev.Team}})
 	case "phase":
 		name := ev.PhaseName
