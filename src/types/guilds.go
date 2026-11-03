@@ -16,12 +16,15 @@ type AppearanceConfig struct {
 // DiscordGuildProfile stores synchronized server branding and configured bot
 // identity together, in the guild config's "discord_profile" section.
 type DiscordGuildProfile struct {
-	ServerIconURL     string              `json:"server_icon_url"`
-	ServerBannerURL   string              `json:"server_banner_url"`
-	MemberCount       int                 `json:"member_count"`
-	SyncedAt          string              `json:"synced_at"`
-	BotProfileVersion int                 `json:"bot_profile_version,omitempty"`
-	Nickname          string              `json:"nickname"`
+	ServerIconURL     string `json:"server_icon_url"`
+	ServerBannerURL   string `json:"server_banner_url"`
+	MemberCount       int    `json:"member_count"`
+	SyncedAt          string `json:"synced_at"`
+	BotProfileVersion int    `json:"bot_profile_version,omitempty"`
+	Nickname          string `json:"nickname"`
+	// BotName and BotAvatarURL are what the bot shows as in this server right now, recorded by the bot (see recordBotLook).
+	BotName           string              `json:"bot_name,omitempty"`
+	BotAvatarURL      string              `json:"bot_avatar_url,omitempty"`
 	BotIconMode       string              `json:"bot_icon_mode"` // default (the bot's own), server or custom
 	BotIconURL        string              `json:"bot_icon_url"`
 	BotBannerMode     string              `json:"bot_banner_mode"`

@@ -1181,6 +1181,8 @@ func applyGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseu
 		}
 	}
 
+	recordBotLook(s, snowflakeID, logger) // after the changes above, so it is what the server shows now
+
 	if !stateChanged {
 		return nil
 	}
@@ -1206,6 +1208,48 @@ func applyGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseu
 		return nil
 	}
 	return err
+}
+
+// recordBotLook saves what the bot looks like in a server right now: its name and picture there (the server's own picture when it has one, else the bot's).
+// A webhook cannot be the bot, only copy it, so the dashboard's Embed Builder posts as this name and picture when a message sets none.
+func recordBotLook(s *discordgo.Session, guildID string, logger baseutility.AppLogger) {
+	if s == nil || s.State == nil || s.State.User == nil {
+		return
+	}
+	body, err := s.RequestWithBucketID("GET", discordgo.EndpointGuildMember(guildID, s.State.User.ID), nil, discordgo.EndpointGuildMember(guildID, ""))
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to read the bot's own profile in guild %s: %v", guildID, err))
+		return
+	}
+	var member discordgo.Member
+	if json.Unmarshal(body, &member) != nil || member.User == nil {
+		return
+	}
+	member.GuildID = guildID
+	name := member.Nick
+	if name == "" {
+		name = member.User.GlobalName
+	}
+	if name == "" {
+		name = member.User.Username
+	}
+	avatar := member.AvatarURL("256")
+	err = database.Must().GuildConfig.UpdateField(sdk.SystemActor, guildID, "discord_profile", func(config *models.GuildConfigsModel) (any, error) {
+		var current types.DiscordGuildProfile
+		if !config.DiscordProfile.IsEmpty() {
+			if err := config.DiscordProfile.Unmarshal(&current); err != nil {
+				return nil, fmt.Errorf("decode Discord profile: %w", err)
+			}
+		}
+		if current.BotName == name && current.BotAvatarURL == avatar {
+			return nil, errGuildConfigUnchanged
+		}
+		current.BotName, current.BotAvatarURL = name, avatar
+		return current, nil
+	})
+	if err != nil && !errors.Is(err, errGuildConfigUnchanged) {
+		logger.Error(fmt.Sprintf("Failed to save the bot's look for guild %s: %v", guildID, err))
+	}
 }
 
 func discordRestAPI() (*DiscordRestAPI, error) {
