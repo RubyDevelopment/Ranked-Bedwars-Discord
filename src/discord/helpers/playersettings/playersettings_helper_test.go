@@ -3,6 +3,7 @@ package playersettings
 import (
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/bwmarrin/discordgo"
@@ -124,13 +125,18 @@ func TestPanelFitsInOneMessage(t *testing.T) {
 	}
 }
 
-// Every setting explains what On and Off do and gives an example.
+// Every setting says what it controls and gives an example. The button's colour is the state, so the text does not spell out On and Off.
 func TestSettingsAreExplainedWithAnExample(t *testing.T) {
 	for _, st := range Settings {
-		for _, part := range []string{"**On:**", "**Off:**", "*Example:*"} {
-			if !strings.Contains(st.Detail, part) {
-				t.Errorf("%s: the explanation lacks %s", st.ID, part)
-			}
+		if !strings.Contains(st.Detail, "*Example:*") {
+			t.Errorf("%s: the explanation has no example", st.ID)
+		}
+		// The example is a sentence of its own: it starts with a capital letter.
+		if _, after, _ := strings.Cut(st.Detail, "*Example:* "); after == "" || !unicode.IsUpper([]rune(after)[0]) {
+			t.Errorf("%s: the example should start with a capital letter: %q", st.ID, after)
+		}
+		if strings.Contains(st.Detail, "**On:**") || strings.Contains(st.Detail, "**Off:**") {
+			t.Errorf("%s: the explanation spells out On and Off, the button's colour already shows it", st.ID)
 		}
 	}
 }

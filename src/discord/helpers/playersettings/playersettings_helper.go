@@ -41,17 +41,17 @@ type Setting struct {
 // Settings are the switches in the order the answer lists them.
 var Settings = []Setting{
 	{ID: "stats", Emoji: "📊", Label: "Stats Visibility", Column: "is_stats_visible", Restriction: "stats_visibility",
-		Detail: "Controls who can look you up.\n**On:** anyone can use `/profile`, `/stats` and `/compare` on you.\n**Off:** other players are turned away instead of seeing your numbers. You still see your own, and so do server administrators.\n*Example:* with this off, a friend who runs `/stats @you` is told your stats are private instead of seeing your win rate."},
+		Detail: "Controls who can look you up.\n*Example:* With this off, a friend who runs `/stats @you` is told your stats are private instead of seeing your win rate."},
 	{ID: "elo", Emoji: "📈", Label: "ELO Visibility", Column: "is_elo_visible", Restriction: "elo_visibility",
-		Detail: "Controls whether your rating is shown.\n**On:** your ELO appears in your server nickname and on your profile.\n**Off:** it is left out of both. You still see it yourself, and so do server administrators.\n*Example:* on, your nickname reads `[1250] Steve`; off, it reads `Steve`. The nickname updates as soon as you press the button."},
+		Detail: "Controls whether your rating is shown.\n*Example:* On, your nickname reads `[1250] Steve`; off, it reads `Steve`. The nickname updates as soon as you press the button."},
 	{ID: "invites", Emoji: "📨", Label: "Party Invites", Column: "is_party_invites_enabled", Restriction: "party_invites",
-		Detail: "Controls whether other players can invite you.\n**On:** anyone can invite you to a party with `/party invite`.\n**Off:** invites to you are refused and the sender is told your invites are off. You can still make your own party and invite other people.\n*Example:* turn this off while you solo queue so nobody can pull you into a party before your game starts."},
+		Detail: "Controls whether other players can invite you.\n*Example:* Turn this off while you solo queue so nobody pulls you into a party before your game starts."},
 	{ID: "autowarp", Emoji: "🚀", Label: "Party Autowarp", Column: "is_party_autowarp_enabled", Restriction: "party_autowarp",
-		Detail: "Brings your party along when you change voice channel.\n**On:** when you lead a party and join a voice channel, every party member who is in voice is moved into it with you.\n**Off:** everyone moves on their own.\n*Example:* you lead a party of three and join a queue channel; your two teammates, sitting in the lobby, are moved in automatically. Only the party leader's move triggers it."},
+		Detail: "Brings your party along when you change voice channel.\n*Example:* You lead a party of three and join a queue channel; your two teammates, sitting in the lobby, are moved in automatically. Only the party leader's move triggers it."},
 	{ID: "results", Emoji: "🔔", Label: "Ping On Results", Column: "is_ping_on_results_enabled", Restriction: "result_pings",
-		Detail: "Controls the ping when your game is scored.\n**On:** the results post notifies you.\n**Off:** your name still appears in the results, but you are not notified.\n*Example:* turn it off if you play many games a night and don't want a notification after every one."},
+		Detail: "Controls the ping when your game is scored.\n*Example:* Turn it off if you play many games a night and don't want a notification after every one."},
 	{ID: "alerts", Emoji: "📣", Label: "Ping On Alerts", Column: "is_ping_on_alerts_enabled",
-		Detail: "Controls pings from the bot's alerts.\n**On:** you are pinged for party alerts (an invite sent to you, your invite being declined, someone leaving your party, leadership passing to you) and for game alerts (a queue refusing you, your game being voided, the hosting bot losing track of your match, you being added to a team channel).\n**Off:** the alert is still posted, but without pinging you.\n*Example:* with this off, a voided game still posts its alert, but your phone stays quiet."},
+		Detail: "Controls pings from the bot's alerts, such as party invites and a game being voided.\n*Example:* With this off, a voided game still posts its alert, but your phone stays quiet."},
 }
 
 func find(id string) *Setting {
