@@ -213,6 +213,7 @@ type EngineBridge struct {
 	writeMu      sync.Mutex
 	replies      map[uint]chan hostReply // games waiting for host.accepted
 	hosted       map[uint]string         // games the engine runs -> guild
+	resuming     map[uint]string         // matches found open after a restart that the engine has not yet said it still runs -> guild
 	mapSelectors map[uint]func([]match.MapOption, bool) (*match.MapSelection, error)
 	verifies     map[string]chan verifyReply            // registration code deliveries waiting for verify.result
 	actions      map[string]chan match.HostActionResult // host buttons waiting for host.action.result
@@ -223,6 +224,7 @@ type EngineBridge struct {
 var Engine = &EngineBridge{
 	replies:      map[uint]chan hostReply{},
 	hosted:       map[uint]string{},
+	resuming:     map[uint]string{},
 	mapSelectors: map[uint]func([]match.MapOption, bool) (*match.MapSelection, error){},
 	verifies:     map[string]chan verifyReply{},
 	actions:      map[string]chan match.HostActionResult{},

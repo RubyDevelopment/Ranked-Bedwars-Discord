@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
 	"sort"
@@ -559,6 +560,10 @@ func (d *gameDiscord) post(s *discordgo.Session, g Game, key string, data embedD
 	}
 	if send.Content != "" {
 		send.AllowedMentions = &discordgo.MessageAllowedMentions{Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers}}
+		if key == "scored" {
+			// Everyone is named in the results, but only the players who keep Ping On Results on (/settings) are notified.
+			send.AllowedMentions = &discordgo.MessageAllowedMentions{Users: resultPingUsers(g)}
+		}
 	}
 	channel := g.Channels.Text
 	if key == "scored" {
@@ -703,3 +708,29 @@ func (d *gameDiscord) applyTeams(g Game) error {
 
 // ============================================================================
 // Map vote
+
+// resultPingUsers are the players of the game who want to be pinged when it is scored (everyone, unless they switched Ping On
+// Results off in /settings or their settings cannot be read).
+func resultPingUsers(g Game) []string {
+	users := make([]string, len(g.Players))
+	keep := make([]bool, len(g.Players))
+	var wg sync.WaitGroup
+	for n, p := range g.Players {
+		users[n], keep[n] = p.UserID, true
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if view, err := database.Must().Player.Get(g.GuildID, p.UserID); err == nil && view.Config != nil && !view.Config.IsPingOnResultsEnabled {
+				keep[n] = false
+			}
+		}()
+	}
+	wg.Wait()
+	out := make([]string, 0, len(users))
+	for n, id := range users {
+		if keep[n] {
+			out = append(out, id)
+		}
+	}
+	return out
+}

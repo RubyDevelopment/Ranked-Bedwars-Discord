@@ -209,7 +209,7 @@ func draftPing(view DraftView) string {
 	return "<@" + view.Teams[view.Turn][0] + ">"
 }
 
-// PlayerRatios maps each user id to their record, "**12W/9L** · **30K/40D**", for the active season (zeros without stats yet);
+// PlayerRatios maps each user id to their record, "W/L: `12/9` · K/D: `30/40`", for the active season (zeros without stats yet);
 // nil when the guild has no active season.
 func PlayerRatios(guildID string, ids []string) map[string]string {
 	_, seasonID, err := helpers.ActiveSeasonKey(guildID)
@@ -223,12 +223,12 @@ func PlayerRatios(guildID string, ids []string) map[string]string {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			wl, kd := "0W/0L", "0K/0D"
+			wl, kd := "0/0", "0/0"
 			if st, err := database.Must().Stats.Get(guildID, id, seasonID); err == nil {
-				wl, kd = fmt.Sprintf("%dW/%dL", st.Wins, st.Losses), fmt.Sprintf("%dK/%dD", st.Kills, st.Deaths)
+				wl, kd = fmt.Sprintf("%d/%d", st.Wins, st.Losses), fmt.Sprintf("%d/%d", st.Kills, st.Deaths)
 			}
 			mu.Lock()
-			out[id] = "**" + wl + "** · **" + kd + "**"
+			out[id] = "W/L: `" + wl + "` · K/D: `" + kd + "`"
 			mu.Unlock()
 		}()
 	}

@@ -212,7 +212,28 @@ func RecoverGamesOnStartup(s *discordgo.Session, guildIDs []string) {
 		removed += Games.CleanupFinishedGames(s, guildID)
 	}
 	Games.logf("startup: %d games kept, %d voided, %d cancelled, %d closed; %d leftover game channels deleted", sum.Kept, sum.Voided, sum.Cancelled, sum.Closed, removed)
+	resumeHostedGames(guildIDs)
 	sweepQueuesOnStartup(s, guildIDs) // once the games are known: players who are in a game are then not eligible
+}
+
+// resumeHostedGames asks the engine to take up again the matches it was hosting before the restart. The engine keeps a match going
+// while the bot is away; once it answers, tracking and the automatic result carry on as if nothing had happened.
+func resumeHostedGames(guildIDs []string) {
+	resumer, ok := HostEngine.(interface{ Resume([]Game) })
+	if !ok {
+		return
+	}
+	var open []Game
+	for _, guildID := range guildIDs {
+		for _, g := range Games.GuildGames(guildID) {
+			if g.State == GameInGame && g.Bot != "" {
+				open = append(open, g)
+			}
+		}
+	}
+	if len(open) > 0 {
+		resumer.Resume(open)
+	}
 }
 
 // sweepQueuesOnStartup checks everyone already sitting in a queue voice channel when the bot comes up. They joined while the bot

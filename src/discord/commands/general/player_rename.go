@@ -66,7 +66,8 @@ func executePlayerRenameCommand(s *discordgo.Session, i *discordgo.InteractionCr
 
 	// Validation checks
 	if strings.EqualFold(view.Config.Username, newUsername) {
-		return helpers.EditInteractionEmbed(s, i, PlayerRenameAlreadyLinkedEmbed(i, newUsername))
+		// Registering or renaming to the account that is already linked puts everything back, in case something went missing.
+		return helpers.EditInteractionEmbed(s, i, restoreRegistration(s, i, view))
 	}
 	if !helpers.IsValidMcUsername(newUsername) {
 		return helpers.EditInteractionEmbed(s, i, PlayerRenameInvalidUsernameEmbed(i))
@@ -97,6 +98,35 @@ func executePlayerRenameCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	}
 
 	return helpers.EditInteractionEmbed(s, i, PlayerRenameSuccessEmbed(i, oldUsername, newUsername))
+}
+
+// restoreRegistration re-applies a registered player's profile: the stats and starting rank of the active season when they are
+// missing, then the Registered role, the rank role and the server nickname. It says what it had to put back.
+func restoreRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, view *sdk.PlayerView) *discordgo.MessageEmbed {
+	userID, username := helpers.InteractionUserID(i), view.Config.Username
+	var restored []string
+	if _, seasonID, err := helpers.ActiveSeasonKey(i.GuildID); err == nil && seasonID != 0 {
+		if _, err := database.Must().Stats.Get(i.GuildID, sdk.UintToString(view.Player.ID), seasonID); sdk.IsNotFound(err) {
+			if err := helpers.ApplyStartingRank(i.GuildID, userID, view.Player.ID); err != nil {
+				return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
+			}
+			restored = append(restored, "Created your stats and starting rank for the active season.")
+		}
+	}
+	actions, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID)
+	if err != nil {
+		return helpers.UnexpectedErrorPlayerRegisterEmbed(i)
+	}
+	restored = append(restored, actions...)
+	text := "Everything on your profile was already in place, so nothing needed to be restored."
+	if len(restored) > 0 {
+		text = "Your profile was checked and what was missing has been restored.\n\n" + strings.Join(restored, "\n")
+	}
+	return helpers.Preset("success", types.PresetOptions{
+		Title:       "Registration Restored",
+		Description: fmt.Sprintf("Your account is already linked to **%s**. %s", username, text),
+		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
+	})
 }
 
 // ============================================================================

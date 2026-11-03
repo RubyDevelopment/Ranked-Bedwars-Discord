@@ -321,3 +321,62 @@ func modeSettings(g match.Game) json.RawMessage {
 
 // ============================================================================
 // Frames from the engine
+
+// Resume asks the engine to take up again the matches that were in progress when the bot restarted (the engine keeps running a match
+// while the bot is away). It asks now if the engine is connected, and again whenever the engine says hello until it has answered.
+func (b *EngineBridge) Resume(games []match.Game) {
+	b.mu.Lock()
+	for _, g := range games {
+		b.resuming[g.ID] = g.GuildID
+	}
+	b.mu.Unlock()
+	b.sendResumes()
+}
+
+func (b *EngineBridge) sendResumes() {
+	b.mu.Lock()
+	pending := make(map[uint]string, len(b.resuming))
+	for id, guildID := range b.resuming {
+		pending[id] = guildID
+	}
+	b.mu.Unlock()
+	for id, guildID := range pending {
+		if err := b.Write(map[string]any{"type": "host.resume", "game_id": id, "guild_id": guildID}); err != nil {
+			return // not connected: the engine's next hello asks again
+		}
+	}
+}
+
+// resumed is the engine saying it still runs the match: it is hosted again, and its tracking carries on.
+func (b *EngineBridge) resumed(gameID uint, bot string) {
+	b.mu.Lock()
+	guildID, ok := b.resuming[gameID]
+	delete(b.resuming, gameID)
+	if ok {
+		b.hosted[gameID] = guildID
+	}
+	b.mu.Unlock()
+	if !ok {
+		return
+	}
+	if g, found := match.Games.Get(gameID); found && bot != "" {
+		_ = match.Games.SetBot(g.ID, bot)
+	}
+	b.logf("game %d: the engine still runs this match; tracking resumed", gameID)
+}
+
+// gone is the engine saying it no longer runs the match (it restarted too, or it already ended and was handed over): a match that
+// is still open has lost its tracking, so staff finish it.
+func (b *EngineBridge) gone(gameID uint) {
+	b.mu.Lock()
+	_, ok := b.resuming[gameID]
+	delete(b.resuming, gameID)
+	b.mu.Unlock()
+	if !ok {
+		return
+	}
+	if g, found := match.Games.Get(gameID); found && g.State == match.GameInGame {
+		b.logf("game %d: the engine no longer runs this match", gameID)
+		match.Games.Notify(gameID, match.GameEvent{Kind: match.EventTrackingLost, Reason: "The bot restarted and the engine no longer runs this match, so it will not finish on its own."})
+	}
+}

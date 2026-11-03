@@ -27,6 +27,13 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		if !blob.Blobs.Enabled() {
 			b.logf("WARNING: BLOB_READ_WRITE_TOKEN is not set, so the chat logs of hosted games cannot be saved and will not show on the dashboard")
 		}
+		b.sendResumes()
+
+	case "host.resumed":
+		b.resumed(msg.GameID, msg.Bot)
+
+	case "host.gone":
+		b.gone(msg.GameID)
 
 	case "host.accepted":
 		b.reply(msg.GameID, hostReply{handled: true, bot: msg.Bot})

@@ -2023,6 +2023,13 @@
 			"name": "rename",
 			"responses": [
 				{
+					"key": "rename.registration-restored",
+					"slug": "registration-restored",
+					"title": "Registration Restored",
+					"look": "success",
+					"description": "Your account is already linked to **…**. …"
+				},
+				{
 					"key": "rename.unexpected-error",
 					"slug": "unexpected-error",
 					"title": "Unexpected Error",
@@ -2572,54 +2579,6 @@
 					"slug": "server-unban-applied",
 					"title": "Server Unban Applied",
 					"look": "success"
-				}
-			]
-		},
-		{
-			"name": "settings",
-			"responses": [
-				{
-					"key": "settings.unexpected-error",
-					"slug": "unexpected-error",
-					"title": "Unexpected Error",
-					"look": "error",
-					"description": "An unexpected error occurred while updating your settings. Please contact an administrator for assistance or try again later."
-				},
-				{
-					"key": "settings.invalid-subcommand",
-					"slug": "invalid-subcommand",
-					"title": "Invalid Subcommand",
-					"look": "error",
-					"description": "Use `/settings view` or `/settings toggle`."
-				},
-				{
-					"key": "settings.registration-required",
-					"slug": "registration-required",
-					"title": "Registration Required",
-					"look": "error",
-					"description": "You must register before you can manage your settings. Run `/register` to link your Minecraft account first."
-				},
-				{
-					"key": "settings.unknown-setting",
-					"slug": "unknown-setting",
-					"title": "Unknown Setting",
-					"look": "error",
-					"description": "That is not a setting you can change. Pick one of the options listed in the command."
-				},
-				{
-					"key": "settings.player-settings",
-					"slug": "player-settings",
-					"title": "Player Settings · …",
-					"look": "info",
-					"description": "Your current ranked profile preferences. Use `/settings toggle` to change one.",
-					"has_fields": true
-				},
-				{
-					"key": "settings.setting-updated",
-					"slug": "setting-updated",
-					"title": "Setting Updated",
-					"look": "success",
-					"description": "Successfully updated your settings.\n\n\u003e **Setting:** `…`\n\u003e **State:** `…`"
 				}
 			]
 		},

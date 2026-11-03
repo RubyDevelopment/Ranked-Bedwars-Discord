@@ -5,6 +5,7 @@ import (
 
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/partymgr"
+	"ranked-bedwars/src/discord/helpers/playersettings"
 	"ranked-bedwars/src/types"
 )
 
@@ -36,4 +37,17 @@ var PartySweeperEvent = &types.Event{
 	Description: "Disbands idle parties and expires party invitations in every server.",
 	Type:        "ready",
 	Execute:     func(s *discordgo.Session, _ *discordgo.Ready) { partymgr.StartPartySweeper(s) },
+}
+
+func init() {
+	helpers.RegisterEvent(PartyAutowarpEvent)
+}
+
+// PartyAutowarpEvent moves a party along with its leader when the leader joins a voice channel and has Party Autowarp on.
+var PartyAutowarpEvent = &types.Event{
+	Name:        "Party Autowarp",
+	System:      true,
+	Description: "Moves the members of a party into the voice channel their leader joins, when the leader has Party Autowarp switched on in /settings.",
+	Type:        "voice_state_update",
+	Execute:     playersettings.HandleAutowarp,
 }
