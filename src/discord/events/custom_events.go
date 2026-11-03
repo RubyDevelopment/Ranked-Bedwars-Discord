@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -30,11 +31,16 @@ import (
 // The trigger names are the dashboard's (lib/custom-events.ts); the gateway handlers are further down in this file.
 
 type CustomEventAction struct {
-	Type        string              `json:"type"` // message, dm, add_role, remove_role
+	Type        string              `json:"type"` // message, dm, add_role, remove_role, delete_message, delete_recent, timeout
 	ChannelID   string              `json:"channel_id"`
 	SameChannel bool                `json:"same_channel"` // message: post in the channel where the event happened
 	RoleID      string              `json:"role_id"`
 	Message     *helpers.MessageDoc `json:"message"`
+
+	Count         int    `json:"count"`          // delete_recent: how many of the member's last messages
+	WithinMinutes int    `json:"within_minutes"` // delete_recent: only those from the last this many minutes
+	Scope         string `json:"scope"`          // delete_recent: "guild" (every channel, the default) or "channel" (only where it happened)
+	Minutes       int    `json:"minutes"`        // timeout: for how long
 }
 
 type CustomEvent struct {
@@ -46,6 +52,7 @@ type CustomEvent struct {
 	FilterChannelID string              `json:"filter_channel_id"` // only when it happened in this channel
 	FilterRoleID    string              `json:"filter_role_id"`    // only for members with this role
 	Actions         []CustomEventAction `json:"actions"`
+	Guard           *EventGuard         `json:"guard"` // "a message is sent" only: the sender has to look like a compromised account (see account_guard.go)
 }
 
 const customEventsCacheTTL = 30 * time.Second
@@ -152,6 +159,9 @@ func RunCustomEvents(s *discordgo.Session, guildID, trigger string, c types.Even
 		return
 	}
 	for _, ev := range eventsFor(LoadCustomEvents(guildID), trigger, c) {
+		if ev.Guard != nil && !guardAllows(s, guildID, ev.Guard, c) {
+			continue
+		}
 		fill := helpers.VarFiller(eventVars(s, guildID, ev, c))
 		for i, a := range ev.Actions {
 			if err := runEventAction(s, guildID, c, a, fill); err != nil {
@@ -195,8 +205,34 @@ func runEventAction(s *discordgo.Session, guildID string, c types.EventCtx, a Cu
 		}
 		markBotRoleChange(guildID, c.User.ID, a.RoleID, false)
 		return s.GuildMemberRoleRemove(guildID, c.User.ID, a.RoleID)
+	case "delete_message":
+		if c.Message == nil {
+			return nil
+		}
+		if err := s.ChannelMessageDelete(c.Message.ChannelID, c.Message.ID); err != nil && !isUnknownMessage(err) {
+			return err
+		}
+		return nil
+	case "delete_recent":
+		if c.User == nil {
+			return nil
+		}
+		n := deleteRecent(s, guildID, c.User.ID, c.ChannelID, a)
+		logger.Info(fmt.Sprintf("deleted %d recent messages of %s in %s", n, c.User.ID, guildID))
+		return nil
+	case "timeout":
+		if c.User == nil {
+			return nil
+		}
+		return timeoutMember(s, guildID, c.User.ID, a.Minutes)
 	}
 	return nil
+}
+
+// isUnknownMessage: the message is already gone (another step, or someone else, deleted it first), which is what was wanted.
+func isUnknownMessage(err error) bool {
+	var rest *discordgo.RESTError
+	return errors.As(err, &rest) && rest.Message != nil && rest.Message.Code == discordgo.ErrCodeUnknownMessage
 }
 
 // An event's own role changes must not start events (a "role given" event that gives a role would otherwise run
@@ -334,7 +370,16 @@ func init() {
 		if member != nil {
 			member.User = m.Author
 		}
-		run(s, m.GuildID, "message_create", types.EventCtx{User: m.Author, Member: member, ChannelID: m.ChannelID, Extra: messageVars(m.GuildID, m.Message, m.Author)})
+		// Count the message and remember where it is, so a rule can look at how much its sender has written and delete what they posted lately.
+		// What the bot sends itself, and other bots and webhooks, are not counted.
+		prior := 0
+		if !m.Author.Bot && m.WebhookID == "" {
+			prior = messageCounts.bump(m.GuildID, m.Author.ID)
+			recentMessages.add(m.GuildID, m.Author.ID, recentMsg{ChannelID: m.ChannelID, MessageID: m.ID, At: time.Now()})
+		}
+		extra := messageVars(m.GuildID, m.Message, m.Author)
+		extra["member.messages"] = fmt.Sprint(prior)
+		run(s, m.GuildID, "message_create", types.EventCtx{User: m.Author, Member: member, ChannelID: m.ChannelID, Extra: extra, Message: m.Message, MessagesBefore: prior})
 	})
 	on("Message Edit", func(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		if m.GuildID == "" || m.Author == nil || m.EditedTimestamp == nil {

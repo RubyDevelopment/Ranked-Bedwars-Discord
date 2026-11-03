@@ -26,4 +26,8 @@ type EventCtx struct {
 	Member    *discordgo.Member // set while they are in the server
 	ChannelID string            // where it happened
 	Extra     map[string]string // the event's own {{variables}} (role.name, message.content, change.old…)
+
+	// A message was sent: the message itself, and how many messages its sender had sent in the server before it.
+	Message        *discordgo.Message
+	MessagesBefore int
 }
