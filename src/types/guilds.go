@@ -131,6 +131,8 @@ type RegistrationVerification struct {
 	CustomProfileURL string       `json:"custom_profile_url,omitempty"`
 	ExternalAPI      *ExternalAPI `json:"external_api,omitempty"`
 	InGame           *InGameCode  `json:"in_game,omitempty"`
+	// NicknameRules is what /nickname may set; nil = every rule on.
+	NicknameRules *NicknameRules `json:"nickname_rules,omitempty"`
 }
 
 // InGameCode configures the party_code verification mode's one-time code.
@@ -261,4 +263,18 @@ type LFGConfig struct {
 	LFGChannelID string `json:"lfg_channel_id"`
 	LFGRoleID    string `json:"lfg_role_id"`
 	QueuesPaused bool   `json:"queues_paused"`
+}
+
+// NicknameRules says which names /nickname refuses (RegistrationVerification.NicknameRules). A name is refused when any rule that is on matches.
+type NicknameRules struct {
+	BlockRealAccounts        bool `json:"block_real_accounts"`        // the name is a real Minecraft account (needs a verification API)
+	BlockRegisteredUsernames bool `json:"block_registered_usernames"` // another player in the guild is registered with the name
+}
+
+// Nicknames is the rules in force: the saved ones, or every rule on when none were saved.
+func (v *RegistrationVerification) Nicknames() NicknameRules {
+	if v == nil || v.NicknameRules == nil {
+		return NicknameRules{BlockRealAccounts: true, BlockRegisteredUsernames: true}
+	}
+	return *v.NicknameRules
 }

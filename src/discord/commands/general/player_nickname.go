@@ -116,9 +116,10 @@ func executePlayerNicknameCommand(s *discordgo.Session, i *discordgo.Interaction
 func validateNicknameConflicts(i *discordgo.InteractionCreate, guildID string, playerID uint, nickname string) *discordgo.MessageEmbed {
 	search := strings.ToLower(nickname)
 	verification, _ := helpers.LoadRegistrationVerification(guildID)
+	rules := verification.Nicknames() // what the server lets a nickname be (Account verification > Nicknames)
 
 	// Verify if the requested nickname is a premium Minecraft account
-	if helpers.RequiresRegistrationAPIVerification(verification) {
+	if rules.BlockRealAccounts && helpers.RequiresRegistrationAPIVerification(verification) {
 		exists, verifyErr := helpers.VerifyMinecraftUsernameExistsWithConfig(nickname, verification)
 		if verifyErr != nil {
 			return NicknameAPIOutageEmbed(i, helpers.RegistrationNetworkLabel(verification))
@@ -129,14 +130,14 @@ func validateNicknameConflicts(i *discordgo.InteractionCreate, guildID string, p
 	}
 
 	// Check if another player in the guild uses this name as a primary username
-	usernameConflict, err := database.Must().Player.GetByUsername(guildID, search)
-	if err == nil && usernameConflict != nil && usernameConflict.PlayerID != playerID {
-		return NicknameConflictEmbed(i, nickname)
+	if rules.BlockRegisteredUsernames {
+		if usernameConflict, err := database.Must().Player.GetByUsername(guildID, search); err == nil && usernameConflict != nil && usernameConflict.PlayerID != playerID {
+			return NicknameConflictEmbed(i, nickname)
+		}
 	}
 
-	// Check if another player in the guild uses this name as a nickname
-	nicknameConflict, err := database.Must().Player.GetByNickname(guildID, search)
-	if err == nil && nicknameConflict != nil && nicknameConflict.PlayerID != playerID {
+	// Two players can never share a nickname: the database refuses it, so this is not a setting.
+	if nicknameConflict, err := database.Must().Player.GetByNickname(guildID, search); err == nil && nicknameConflict != nil && nicknameConflict.PlayerID != playerID {
 		return NicknameConflictEmbed(i, nickname)
 	}
 
