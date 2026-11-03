@@ -34,6 +34,9 @@ func ScheduleVoiceStatus(s *discordgo.Session, guildID, channelID string) {
 		}
 		bind, ok := snap.Bindings[channelID]
 		if !ok {
+			if snap.Disabled[channelID] {
+				return "⛔ Queue disabled", true // switched off on the dashboard: said whether or not anyone is in the channel
+			}
 			return "", false // no longer a queue channel: its status is cleared if the bot had written one
 		}
 		return voiceStatusText(s, guildID, channelID, bind), true
@@ -42,12 +45,12 @@ func ScheduleVoiceStatus(s *discordgo.Session, guildID, channelID string) {
 
 // voiceStatusText is what a queue channel's status reads right now.
 func voiceStatusText(s *discordgo.Session, guildID, channelID string, bind QueueBinding) string {
+	if Queues.IsPaused(guildID) {
+		return "⏸️ Queue paused" // a state of the queue, so it is shown whether or not anyone is in the channel
+	}
 	roster := voiceRoster(s, guildID, channelID)
 	if len(roster) == 0 {
 		return "" // nobody in the channel: no status
-	}
-	if Queues.IsPaused(guildID) {
-		return "⏸️ Queue paused"
 	}
 	var queued, inGame, ineligible int
 	for _, userID := range roster {
@@ -104,25 +107,45 @@ func voiceRoster(s *discordgo.Session, guildID, channelID string) []string {
 	return nil
 }
 
+// voiceStatusRefresh is how often every queue channel's status is checked against the configuration, which can change on the dashboard
+// (a queue switched off or on, queues paused) without any event in Discord.
+const voiceStatusRefresh = 30 * time.Second
+
 // StartVoiceStatuses brings every queue channel's status up to date once the bot is connected and its voice states are loaded, so a
-// restart does not leave an old status behind.
+// restart does not leave an old status behind, and then keeps checking them against the configuration.
 func StartVoiceStatuses(s *discordgo.Session) {
 	go func() {
 		time.Sleep(15 * time.Second)
-		s.State.RLock()
-		var guilds []string
-		for _, g := range s.State.Guilds {
-			guilds = append(guilds, g.ID)
-		}
-		s.State.RUnlock()
-		for _, guildID := range guilds {
-			snap, err := Queues.Snapshot(guildID)
-			if err != nil || snap == nil {
-				continue
-			}
-			for channelID := range snap.Bindings {
-				ScheduleVoiceStatus(s, guildID, channelID)
-			}
+		for {
+			refreshVoiceStatuses(s)
+			time.Sleep(voiceStatusRefresh)
 		}
 	}()
+}
+
+// refreshVoiceStatuses schedules the status of every queue channel, live or switched off, of every server the bot is in.
+func refreshVoiceStatuses(s *discordgo.Session) {
+	defer func() { // the refresh runs on its own: whatever goes wrong in one round must not end it
+		if r := recover(); r != nil {
+			queueLogger.Error(fmt.Sprintf("Refreshing the queue voice statuses failed: %v", r))
+		}
+	}()
+	s.State.RLock()
+	var guilds []string
+	for _, g := range s.State.Guilds {
+		guilds = append(guilds, g.ID)
+	}
+	s.State.RUnlock()
+	for _, guildID := range guilds {
+		snap, err := Queues.Snapshot(guildID)
+		if err != nil || snap == nil {
+			continue
+		}
+		for channelID := range snap.Bindings {
+			ScheduleVoiceStatus(s, guildID, channelID)
+		}
+		for channelID := range snap.Disabled {
+			ScheduleVoiceStatus(s, guildID, channelID)
+		}
+	}
 }

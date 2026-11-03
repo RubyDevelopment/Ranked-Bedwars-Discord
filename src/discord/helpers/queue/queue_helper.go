@@ -535,6 +535,9 @@ type QueueSnapshot struct {
 	Modes    []types.Mode
 	Queues   []types.QueueConfig
 	Bindings map[string]QueueBinding // by queue channel id
+	// Disabled holds the queue channels that are set up but not live (their queue, the channel or its mode is switched off): they no
+	// longer queue anyone, and their status says so.
+	Disabled map[string]bool
 }
 
 // QueueNoticeKind is defined in package types (queues.go).
@@ -742,11 +745,14 @@ func (q *QueueManager) Snapshot(guildID string) (*QueueSnapshot, error) {
 
 // BuildQueueSnapshot resolves every enabled channel of queues against modes.
 func BuildQueueSnapshot(modes []types.Mode, queues []types.QueueConfig) *QueueSnapshot {
-	s := &QueueSnapshot{Modes: modes, Queues: queues, Bindings: map[string]QueueBinding{}}
+	s := &QueueSnapshot{Modes: modes, Queues: queues, Bindings: map[string]QueueBinding{}, Disabled: map[string]bool{}}
 	for _, qc := range queues {
 		for _, ch := range qc.Settings {
+			id := strings.TrimSpace(ch.ChannelID)
 			if b := ResolveQueueBinding(queues, modes, ch.ChannelID); b != nil {
-				s.Bindings[strings.TrimSpace(ch.ChannelID)] = *b
+				s.Bindings[id] = *b
+			} else if id != "" {
+				s.Disabled[id] = true
 			}
 		}
 	}
