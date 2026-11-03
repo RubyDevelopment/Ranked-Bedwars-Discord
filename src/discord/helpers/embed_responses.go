@@ -142,6 +142,15 @@ type ResponseConfig struct {
 	Overrides map[string]ResponseRule `json:"overrides"`
 	// Layouts are the guild's rewrites of the bot's list and row text, by layout key (see DefineLayout). An empty one is the default.
 	Layouts map[string]string `json:"layouts"`
+	// Decoration is, per look, which of the footer (with the server icon), thumbnail and time the bot adds to its embeds of that look. Unset = on.
+	Decoration map[string]Decoration `json:"decoration"`
+}
+
+// Decoration is the default decorations of one look; nil = on.
+type Decoration struct {
+	Footer    *bool `json:"footer"`
+	Thumbnail *bool `json:"thumbnail"`
+	Timestamp *bool `json:"timestamp"`
 }
 
 // ResponseTitleSlug is the stable part of an embed title that names a response: what comes before a " — " or
@@ -294,32 +303,23 @@ func WithGuildFooterIcon(s *discordgo.Session, i *discordgo.InteractionCreate, e
 	WithGuildFooterIconForGuild(s, i.GuildID, embeds...)
 }
 
-// embedBranding is which default decorations a guild keeps on the bot's embeds; both are on until the guild turns
-// them off in the dashboard (discord_profile.hide_embed_footer / hide_embed_thumbnail).
+// embedBranding is which default decorations the bot keeps on an embed of one look: all on until the guild switches one off for
+// that look (Commands > Responses > Default reply styles).
 type embedBranding struct{ footer, thumbnail, timestamp bool }
 
-var embedBrandingCache = base.NewTTLCache[embedBranding](15 * time.Second)
-
-func guildEmbedBranding(guildID string) embedBranding {
-	b, _ := embedBrandingCache.Get(guildID, func() (embedBranding, error) {
-		on := embedBranding{footer: true, thumbnail: true, timestamp: true}
-		svc := database.Get()
-		if svc == nil {
-			return on, nil
+func brandingFor(guildID, look string) embedBranding {
+	b := embedBranding{footer: true, thumbnail: true, timestamp: true}
+	d, ok := responseStateOf(guildID).cfg.Decoration[look]
+	if !ok {
+		return b
+	}
+	on := func(v *bool, def bool) bool {
+		if v == nil {
+			return def
 		}
-		raw, err := svc.GuildConfig.Field(guildID, "discord_profile")
-		if err != nil {
-			return on, nil
-		}
-		var p struct {
-			HideFooter    bool `json:"hide_embed_footer"`
-			HideThumbnail bool `json:"hide_embed_thumbnail"`
-			HideTimestamp bool `json:"hide_embed_timestamp"`
-		}
-		_ = json.Unmarshal(raw, &p)
-		return embedBranding{footer: !p.HideFooter, thumbnail: !p.HideThumbnail, timestamp: !p.HideTimestamp}, nil
-	})
-	return b
+		return *v
+	}
+	return embedBranding{footer: on(d.Footer, true), thumbnail: on(d.Thumbnail, true), timestamp: on(d.Timestamp, true)}
 }
 
 var guildIconCache = base.NewTTLCache[string](10 * time.Minute)
@@ -347,8 +347,8 @@ func guildIconURL(s *discordgo.Session, guildID string) string {
 
 // withSavedFooterIcon gives the footer of a saved message the server's icon when the message sets none, like the built-in
 // answers get, unless the server switched the footer branding off.
-func withSavedFooterIcon(s *discordgo.Session, guildID string, payload map[string]any) {
-	if !guildEmbedBranding(guildID).footer {
+func withSavedFooterIcon(s *discordgo.Session, guildID, look string, payload map[string]any) {
+	if !brandingFor(guildID, look).footer {
 		return
 	}
 	embeds, _ := payload["embeds"].([]map[string]any)
@@ -370,12 +370,12 @@ func WithGuildFooterIconForGuild(s *discordgo.Session, guildID string, embeds ..
 	if guildID == "" {
 		return
 	}
-	b := guildEmbedBranding(guildID)
 	var icon string
 	for _, emb := range embeds {
 		if emb == nil {
 			continue
 		}
+		b := brandingFor(guildID, responseLook(emb.Color))
 		if emb.Color == EmbedBlendColor { // an embed the server made plain on purpose
 			// A plain embed gets no new footer or thumbnail, but a footer it already has still carries the server's icon.
 			if b.footer && emb.Footer != nil && emb.Footer.IconURL == "" {
@@ -470,7 +470,7 @@ func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, em
 	if !ok {
 		return false, nil
 	}
-	withSavedFooterIcon(s, i.GuildID, payload)
+	withSavedFooterIcon(s, i.GuildID, responseLook(emb.Color), payload)
 	if len(components) > 0 {
 		payload["components"] = append(componentList(payload["components"]), componentsAny(components)...)
 	}
