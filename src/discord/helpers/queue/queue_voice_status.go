@@ -19,6 +19,7 @@ import (
 //	✅ 3/8 queued · ✨ 1 in game            some of them are still in a game
 //	⚠️ 3/8 queued · 2 ineligible           some were refused a place (not registered, banned, rank gate…)
 //	⏸️ Queue paused
+//	⛔ Queue disabled                      the queue is switched off on the dashboard (only while someone is in the channel)
 //	(nothing)                              nobody is in the channel: the status is cleared
 //
 // It is written 3 seconds after the last change in the channel (see base.ScheduleVoiceStatus): every join or leave starts that wait over,
@@ -35,7 +36,10 @@ func ScheduleVoiceStatus(s *discordgo.Session, guildID, channelID string) {
 		bind, ok := snap.Bindings[channelID]
 		if !ok {
 			if snap.Disabled[channelID] {
-				return "⛔ Queue disabled", true // switched off on the dashboard: said whether or not anyone is in the channel
+				if len(voiceRoster(s, guildID, channelID)) == 0 {
+					return "", true // nobody there to tell: no status
+				}
+				return "⛔ Queue disabled", true // switched off on the dashboard: said to whoever sits in the channel
 			}
 			return "", false // no longer a queue channel: its status is cleared if the bot had written one
 		}
