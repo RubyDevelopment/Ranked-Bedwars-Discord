@@ -97,7 +97,7 @@ func anyScored(rows []models.GamePlayersModel) bool {
 }
 
 func (m *GameManager) commitStored(actor string, g Game, team, mvp string) (ScoreResult, error) {
-	if !g.Mode.IsEloGainEnabled {
+	if !g.Mode.Rated() {
 		if err := m.commitCasual(actor, g); err != nil {
 			return ScoreResult{}, err
 		}
@@ -233,7 +233,7 @@ func (m *GameManager) Unvoid(actor, guildID string, id uint) (ScoreResult, error
 		return ScoreResult{}, err
 	}
 	team := ""
-	if g.Mode.IsEloGainEnabled {
+	if g.Mode.Rated() {
 		if team, err = storedWinner(g, rows, ""); err != nil {
 			return ScoreResult{}, err // decided before reopening anything
 		}

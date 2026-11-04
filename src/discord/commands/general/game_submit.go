@@ -107,7 +107,7 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 
 	// 4. Ranked games wait for staff, casual games are scored immediately
-	if game.Mode.IsEloGainEnabled {
+	if game.Mode.Rated() {
 		// The claim is recorded on the game: it moves to staff scoring and its players are free to queue again.
 		if _, err := match.Games.Submit(game.ID, actor); err != nil {
 			return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("submit the result", err))

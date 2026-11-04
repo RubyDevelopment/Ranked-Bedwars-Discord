@@ -140,7 +140,7 @@ func (d *gameDiscord) resultsPNG(g Game, outcome string) []byte {
 	vars := banner.ResultsVars(g.Number, season, g.Mode.Name, g.Map, teams)
 	// The mode's settings, for a banner that draws things only when they apply ({{#if match.elo == on}}).
 	vars["match.outcome"], vars["match.status"] = outcome, outcomeStatus[outcome]
-	showElo := g.Mode.IsEloGainEnabled && outcome != outcomeVoid && outcome != outcomeCasual
+	showElo := g.Mode.Rated() && outcome != outcomeVoid && outcome != outcomeCasual
 	vars["match.elo"], vars["match.stats"], vars["match.party"] = onOff(showElo), onOff(g.Mode.IsStatsTrackingEnabled), onOff(g.Mode.IsPartyQueueEnabled)
 	if flow.Delivery.ResultsMode != "builtin" {
 		if custom := chooseResultsBanner(banner.LoadBanners(g.GuildID), outcome); custom != nil {

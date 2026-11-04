@@ -51,6 +51,9 @@ func (m Map) TeamsFor(mode string) []string {
 	return clean(m.Teams)
 }
 
+// Rated reports whether a game of this mode is scored for ELO: a mode that does not track stats never awards ELO.
+func (m Mode) Rated() bool { return m.IsEloGainEnabled && m.IsStatsTrackingEnabled }
+
 // Mode is one entry of the game config's "modes" array.
 type Mode struct {
 	Name                   string  `json:"name"`

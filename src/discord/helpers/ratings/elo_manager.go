@@ -262,7 +262,7 @@ type EloResult = types.EloResult
 // ScoreGame computes every player's result without writing anything; hand the
 // After values to the database's CompleteGame, then call ApplyRanks.
 func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
-	ranked := in.Mode == nil || in.Mode.IsEloGainEnabled
+	ranked := in.Mode == nil || in.Mode.Rated()
 	var ranks []types.Rank
 	if ranked {
 		var err error

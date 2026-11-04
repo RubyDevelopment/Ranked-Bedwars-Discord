@@ -61,7 +61,7 @@ func (m *GameManager) Submit(id uint, userID string) (SubmitOutcome, error) {
 		lg.mu.Unlock()
 		return SubmitOutcome{}, &TooEarlyError{left}
 	}
-	if !g.Mode.IsEloGainEnabled {
+	if !g.Mode.Rated() {
 		lg.submitted = true
 		lg.mu.Unlock()
 		snap, err := m.finishCasual(lg, sdk.SystemActor)
@@ -137,7 +137,7 @@ func (m *GameManager) Score(actor, guildID string, id uint, winningTeam string, 
 	if strings.TrimSpace(o.Map) != "" {
 		lg.g.Map = strings.TrimSpace(o.Map)
 	}
-	if !lg.g.Mode.IsEloGainEnabled {
+	if !lg.g.Mode.Rated() {
 		lg.g.Winner = team
 		lg.mu.Unlock()
 		snap, err := m.finishCasual(lg, actor)
