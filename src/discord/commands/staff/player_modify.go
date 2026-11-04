@@ -10,6 +10,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
 )
 
@@ -183,6 +184,7 @@ func executePlayerModifyCommand(s *discordgo.Session, i *discordgo.InteractionCr
 		if _, rankErr := helpers.SyncRankForElo(actor, i.GuildID, pid, seasonID, previousRank, newVal); rankErr != nil {
 			return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerModifyEmbed(i))
 		}
+		ratings.RefreshRankRoles(i.GuildID, target.ID) // the rank role and the nickname (which shows the ELO) follow every ELO change
 	} else if subcommand == "set" {
 		absolute := value
 		if absolute < 0 {

@@ -435,7 +435,17 @@ func (m *GameManager) Launch(group *queue.QueueGroup) (Game, error) {
 		return Game{}, err
 	}
 	go m.RunPreGame(g.ID)
+	go m.refreshProfiles(g)
 	return g, nil
+}
+
+// refreshProfiles brings every player's nickname (it shows their ELO) and rank role in line with their rating in the game's
+// season. A new season starts everyone over, and nothing else rewrites the nickname until their first result there, so it
+// would keep showing last season's ELO through the draft.
+func (m *GameManager) refreshProfiles(g Game) {
+	for _, p := range g.Players {
+		ratings.RefreshRankRoles(g.GuildID, p.UserID)
+	}
 }
 
 // Start validates the lobby, creates the game and its participant rows, and

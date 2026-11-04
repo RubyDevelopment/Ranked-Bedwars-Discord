@@ -9,6 +9,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
 )
 
@@ -136,6 +137,8 @@ func executeGameLossCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorGameLossEmbed(i))
 	}
+	// The rank role and the nickname (which shows the ELO) follow every ELO change, not only a new rank name.
+	ratings.RefreshRankRoles(i.GuildID, target.ID)
 
 	// 10. Update Loss Stats if requested
 	if countStats {

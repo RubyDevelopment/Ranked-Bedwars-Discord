@@ -136,6 +136,8 @@ func executeGameWinCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorGameWinEmbed(i))
 	}
+	// The rank role and the nickname (which shows the ELO) follow every ELO change, not only a new rank name.
+	ratings.RefreshRankRoles(i.GuildID, target.ID)
 
 	// 10. Update Win Stats if requested
 	if countStats {

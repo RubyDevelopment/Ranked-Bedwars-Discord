@@ -139,7 +139,8 @@ func ClaimEloSuccessEmbed(i *discordgo.InteractionCreate, username string, c *ra
 // ClaimEloUsedEmbed explains why the grant is closed, quoting the stored claim
 // record when it was already claimed.
 func ClaimEloUsedEmbed(username, guildID, userID string) *discordgo.MessageEmbed {
-	description := "You can only claim starting ELO before your first ranked game of the season."
+	title := "Starting ELO Closed"
+	description := "You can only claim starting ELO before your first ranked game of the season. A perk's starting ELO is also paid automatically with your first ranked game."
 	if st, err := database.Must().Stats.Get(guildID, userID, 0); err == nil && st.StartingEloClaimed {
 		description = fmt.Sprintf("You already claimed **%d** ELO", st.StartingEloClaimedAmount)
 		if st.StartingEloClaimedAt != nil {
@@ -149,9 +150,10 @@ func ClaimEloUsedEmbed(username, guildID, userID string) *discordgo.MessageEmbed
 			description += fmt.Sprintf(" from **%s**", st.StartingEloClaimedPerks)
 		}
 		description += " this season."
+		title = "Already Claimed"
 	}
 	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Already Claimed",
+		Title:       title,
 		Description: description,
 		Thumbnail:   helpers.MinecraftBustAvatarURL(username),
 	})
