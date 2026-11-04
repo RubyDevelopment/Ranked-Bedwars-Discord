@@ -502,8 +502,8 @@ func memberHasRole(s *discordgo.Session, guildID, userID, roleID string) bool {
 	return false
 }
 
-// sendQueueAlert tells a member why they were turned away, by direct message (they stay in the queue channel, just not queued;
-// there is no alerts channel to post to).
+// sendQueueAlert tells a member why they were turned away: in the guild's alerts channel when one is set (see Alert), else by direct
+// message (they stay in the queue channel, just not queued).
 func sendQueueAlert(s *discordgo.Session, guildID, userID string, embed *discordgo.MessageEmbed) {
 	// The member stays in the channel, so the same refusal is told once per stay, not on every sweep or rejoin.
 	alertedMu.Lock()
@@ -514,12 +514,15 @@ func sendQueueAlert(s *discordgo.Session, guildID, userID string, embed *discord
 	if already {
 		return
 	}
-	dm, err := s.UserChannelCreate(userID)
-	if err == nil {
-		_, err = s.ChannelMessageSendEmbed(dm.ID, embed)
-	}
-	if err != nil {
-		queueLogger.Warn(fmt.Sprintf("Failed to send queue alert to %s in guild %s: %v", userID, guildID, err))
+	// The alerts channel pings them there already: a direct message as well would tell them twice.
+	if posts := Queues.deps.AlertPosts; posts == nil || !posts(guildID, "queue_denied") {
+		dm, err := s.UserChannelCreate(userID)
+		if err == nil {
+			_, err = s.ChannelMessageSendEmbed(dm.ID, embed)
+		}
+		if err != nil {
+			queueLogger.Warn(fmt.Sprintf("Failed to send queue alert to %s in guild %s: %v", userID, guildID, err))
+		}
 	}
 	// Staff hear about it too when the server asked for queue-denied alerts (Game phases > Post-game > Results and alerts).
 	Queues.deps.Alert(s, guildID, "queue_denied", []string{userID}, fmt.Sprintf("<@%s> was refused a place in the queue.", userID), &discordgo.MessageEmbedField{Name: "Why", Value: base.FirstNonEmpty(embed.Description, "No reason given")})
@@ -593,6 +596,7 @@ type QueueDeps struct {
 	FlowMaxParty    func(guildID string, mode types.Mode) *int // the game flow's cap on a party's size; nil = none
 	Launch          func(group *QueueGroup) error              // starts the game of a full lobby
 	Alert           func(s *discordgo.Session, guildID, key string, pingUserIDs []string, description string, fields ...*discordgo.MessageEmbedField)
+	AlertPosts      func(guildID, key string) bool // whether Alert posts that kind in a channel; nil = never
 }
 
 // Wire sets dependencies that live in packages built on top of this one (games).

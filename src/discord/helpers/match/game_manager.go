@@ -70,6 +70,7 @@ func init() {
 		}
 		d.Launch = func(group *queue.QueueGroup) error { _, err := Games.Launch(group); return err }
 		d.Alert = StaffAlertPinging
+		d.AlertPosts = StaffAlertPosts
 	})
 	partymgr.Parties.Wire(func(d *partymgr.PartyDeps) { d.InGame = Games.InGame })
 	ratings.Elo.Wire(func(d *ratings.EloDeps) { d.InGame = Games.InGame })

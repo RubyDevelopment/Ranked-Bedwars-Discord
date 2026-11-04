@@ -72,6 +72,18 @@ func (f guildFlow) alertOn(key string) bool {
 	return !listed || on
 }
 
+// StaffAlertPosts says whether a staff alert of this kind is posted in a channel of the guild (an alerts channel is set and this kind is on).
+func StaffAlertPosts(guildID, key string) bool {
+	flow := flowOf(guildID)
+	if _, known := AlertKinds[key]; !known {
+		return false
+	}
+	if strings.TrimSpace(flow.Delivery.AlertsChannel) == "" {
+		flow.Delivery.AlertsChannel = helpers.EventRequirementID(guildID, helpers.HostGameEventName, types.ReqChannel, types.GameAlertsKey)
+	}
+	return flow.alertOn(key)
+}
+
 // StaffAlertPinging is StaffAlert that also pings the given users (the players the alert is about) in the message.
 func StaffAlertPinging(s *discordgo.Session, guildID, key string, pingUserIDs []string, description string, fields ...*discordgo.MessageEmbedField) {
 	if s == nil {
