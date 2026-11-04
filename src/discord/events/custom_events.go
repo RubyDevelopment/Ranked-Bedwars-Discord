@@ -41,6 +41,9 @@ type CustomEventAction struct {
 	WithinMinutes int    `json:"within_minutes"` // delete_recent: only those from the last this many minutes
 	Scope         string `json:"scope"`          // delete_recent: "guild" (every channel, the default) or "channel" (only where it happened)
 	Minutes       int    `json:"minutes"`        // timeout: for how long
+	Punishment    string `json:"punishment"`     // punish: warning, chat_mute, vc_mute, queue_ban or server_ban
+	PunishMinutes int    `json:"punish_minutes"` // punish: for how long (0 = permanent; a warning has no length)
+	Reason        string `json:"reason"`         // punish: the reason recorded and shown in the punishment channels (variables allowed)
 }
 
 type CustomEvent struct {
@@ -225,6 +228,11 @@ func runEventAction(s *discordgo.Session, guildID string, c types.EventCtx, a Cu
 			return nil
 		}
 		return timeoutMember(s, guildID, c.User.ID, a.Minutes)
+	case "punish":
+		if c.User == nil {
+			return nil
+		}
+		return punishMember(s, guildID, c.User, a, fill)
 	}
 	return nil
 }

@@ -16,6 +16,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/types"
 )
 
@@ -179,7 +180,10 @@ func isModerator(s *discordgo.Session, guildID, channelID, userID string) bool {
 // isRegistered: a player registered with the bot. When the database cannot say, they count as registered: nobody is acted on for a guess.
 func isRegistered(guildID, userID string) bool {
 	_, err := database.Must().Player.Get(guildID, userID)
-	return err == nil || !sdk.IsNotFound(err)
+	if err == nil {
+		return !hasGuardPunishment(guildID, userID)
+	}
+	return !sdk.IsNotFound(err)
 }
 
 // guardAllows is whether the sender and message of an event pass the guard.
@@ -399,6 +403,56 @@ func deleteRecent(s *discordgo.Session, guildID, userID, channelID string, a Cus
 	}
 	recentMessages.forget(guildID, userID, items)
 	return deleted
+}
+
+// guardReasonPrefix starts the reason of every punishment the guard hands out, so it can be told apart from staff's own.
+const guardReasonPrefix = "[Account guard] "
+
+// punishMember punishes the member through the server's own punishment system (the same one /mute, /warn, /ban and /serverban use), so the
+// punishment is recorded in their history, announced in that punishment's log and alerts channels in the same format, and its role is
+// given and taken off again when it ends. The bot is the one who punished them.
+func punishMember(s *discordgo.Session, guildID string, user *discordgo.User, a CustomEventAction, fill func(string) string) error {
+	spec := punish.LadderActionSpec(a.Punishment)
+	if spec == nil {
+		return fmt.Errorf("unknown punishment %q", a.Punishment)
+	}
+	bot := s.State.User.ID
+	playerID, profile, err := helpers.EnsureModerationTarget(bot, guildID, user)
+	if err != nil {
+		return err
+	}
+	username := user.Username
+	if profile != nil && profile.Username != "" {
+		username = profile.Username
+	}
+	reason := strings.TrimSpace(fill(a.Reason))
+	if reason == "" {
+		reason = "Suspected compromised account"
+	}
+	expiresAt, label := "", "Permanent"
+	if spec.Duration && a.PunishMinutes > 0 {
+		span := time.Duration(min(a.PunishMinutes, 365*24*60)) * time.Minute
+		expiresAt, label = time.Now().Add(span).UTC().Format(time.RFC3339), helpers.FormatSpan(span)
+	}
+	if _, ok := punish.ApplyPunishmentTo(s, guildID, bot, user, playerID, username, guardReasonPrefix+reason, spec, "", expiresAt, label); !ok {
+		return fmt.Errorf("%s was not applied to %s (already active, or they cannot be moderated)", a.Punishment, user.ID)
+	}
+	return nil
+}
+
+// hasGuardPunishment: the member is under a punishment the guard gave them. Punishing someone registers them (a placeholder, if they had no
+// profile), and that must not exempt them from the guard's "players registered with the bot" rule afterwards.
+func hasGuardPunishment(guildID, userID string) bool {
+	active, err := database.Must().Punishments.ByPlayer(guildID, userID, true, "", sdk.Page{})
+	if err != nil {
+		return false
+	}
+	for _, p := range active.Data {
+		if strings.HasPrefix(p.Reason, guardReasonPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // timeoutMember mutes the member for a number of minutes (Discord allows up to 28 days).
