@@ -33,7 +33,6 @@ var PlayerUnwipeCommand = &types.Command{
 	Description:  "Undoes a wipe and restores the player's stats.",
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "user", Description: "Player to unwipe", Type: discordgo.ApplicationCommandOptionUser, Required: true},
 			{Name: "wipe_id", Description: "Wipe to undo (defaults to the player's latest wipe this season that is still in effect)", Type: discordgo.ApplicationCommandOptionInteger, Required: false, MinValue: ptrToFloat64(1)},

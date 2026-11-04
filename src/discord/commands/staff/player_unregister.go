@@ -31,7 +31,6 @@ var PlayerUnregisterCommand = &types.Command{
 	Description:  "Unlinks a player's Minecraft account and clears their guild roles.",
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "user",

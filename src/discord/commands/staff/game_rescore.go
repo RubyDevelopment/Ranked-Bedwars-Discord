@@ -30,7 +30,6 @@ var GameRescoreCommand = &types.Command{
 	Description:  "Recalculates ELO for a completed or voided game after a dispute or correction.",
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:         "game",

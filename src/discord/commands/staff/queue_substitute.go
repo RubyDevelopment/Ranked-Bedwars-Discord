@@ -30,7 +30,6 @@ var QueueSubstituteCommand = &types.Command{
 	Description:  "Swaps a player in a hosted game for a substitute on the same team.",
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:         "game",

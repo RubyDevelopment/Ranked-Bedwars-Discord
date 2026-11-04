@@ -37,7 +37,6 @@ var GameHostCommand = &types.Command{
 	Description:  "Creates a custom game with a setup panel, or manages the hosted games that are running.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "create", Description: "Set up a custom game step by step: mode, options, teams, voice channels, then start.", Type: discordgo.ApplicationCommandOptionSubCommand},
 			{Name: "list", Description: "List the hosted games that are running.", Type: discordgo.ApplicationCommandOptionSubCommand},

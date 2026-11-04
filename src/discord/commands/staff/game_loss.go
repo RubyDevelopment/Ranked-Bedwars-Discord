@@ -31,7 +31,6 @@ var GameLossCommand = &types.Command{
 	Description:  "Removes loss-equivalent ELO from a registered player without recording a game.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "user", Description: "Player to remove ELO from", Type: discordgo.ApplicationCommandOptionUser, Required: true},
 			{Name: "amount", Description: "How many losses worth of ELO to remove", Type: discordgo.ApplicationCommandOptionInteger, Required: true, MinValue: ptrToFloat64(1), MaxValue: 25},

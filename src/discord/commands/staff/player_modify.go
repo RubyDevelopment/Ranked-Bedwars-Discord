@@ -32,7 +32,6 @@ var PlayerModifyCommand = &types.Command{
 	Description:  "Manually adjusts a player's seasonal statistics.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "add",

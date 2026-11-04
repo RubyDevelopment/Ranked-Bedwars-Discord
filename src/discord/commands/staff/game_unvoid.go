@@ -32,7 +32,6 @@ var GameUnvoidCommand = &types.Command{
 	Ephemeral:     true,
 	Cooldown:      3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:         "game",

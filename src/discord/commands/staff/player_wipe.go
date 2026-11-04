@@ -33,7 +33,6 @@ var PlayerWipeCommand = &types.Command{
 	Description:  "Wipes a player's stats for the active season, entirely or from a game onwards.",
 	Cooldown:     5 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "user", Description: "Player to wipe", Type: discordgo.ApplicationCommandOptionUser, Required: true},
 			{Name: "from_game", Description: "Only wipe this game number and every game after it (leave empty to wipe everything)", Type: discordgo.ApplicationCommandOptionInteger, Required: false, MinValue: ptrToFloat64(1)},

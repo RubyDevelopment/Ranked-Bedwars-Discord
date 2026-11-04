@@ -31,7 +31,6 @@ var GameScoreCommand = &types.Command{
 	Description:  "Scores a game in progress by marking the winning team.",
 	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
-		DefaultMemberPermissions: helpers.AdministratorPermission(),
 		Options: []*discordgo.ApplicationCommandOption{
 			{
 				Name:        "winner",
