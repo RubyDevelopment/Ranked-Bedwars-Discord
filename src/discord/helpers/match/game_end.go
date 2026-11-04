@@ -89,8 +89,14 @@ func (m *GameManager) Submit(id uint, userID string) (SubmitOutcome, error) {
 	lg.mu.Lock()
 	lg.g.End, lg.g.Winner, lg.g.StaffCategoryID = EndStaffPending, team, category
 	m.transitionLocked(lg, GamePostGame)
+	voice := lg.g.Channels
+	voice.Text = ""
+	lg.g.Channels.Voice = nil // the team voice channels go now; the chat stays until the game is scored
 	snap = lg.g.clone()
 	lg.mu.Unlock()
+	if fn := m.fx().DeleteChannels; fn != nil && len(voice.Voice) > 0 {
+		go fn(g.GuildID, voice)
+	}
 	m.sync(lg)
 	m.notify(snap, GameEvent{Kind: EventStaffPending})
 	return SubmitOutcome{End: EndStaffPending, Team: team, Game: snap}, nil
