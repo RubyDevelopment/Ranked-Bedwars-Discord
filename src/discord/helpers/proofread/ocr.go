@@ -24,9 +24,6 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// ErrNoOCR means the text reader (Tesseract) is not installed on this machine, so screenshots cannot be read.
-var ErrNoOCR = errors.New("tesseract is not installed")
-
 const maxImageBytes = 12 << 20
 
 func tesseractPath() (string, error) {
@@ -35,13 +32,13 @@ func tesseractPath() (string, error) {
 	}
 	p, err := exec.LookPath("tesseract")
 	if err != nil {
-		return "", ErrNoOCR
+		return "", errors.New("no tesseract program")
 	}
 	return p, nil
 }
 
-// Available reports whether screenshots can be read here.
-func Available() bool { _, err := tesseractPath(); return err == nil }
+// Available reports whether screenshots can be read here: always, as a Tesseract is built in when none is installed.
+func Available() bool { return true }
 
 // Download fetches an image the bot was handed as a Discord attachment. Only Discord's own CDN is allowed: the address is a user's input.
 func Download(ctx context.Context, rawURL string) ([]byte, error) {
@@ -73,10 +70,7 @@ func Download(ctx context.Context, rawURL string) ([]byte, error) {
 // scale only changes how big the letters are, not where they are. If `enough` says what was read is not enough, it tries again enlarged
 // further with another page-layout mode, and last reads the whole picture. A clear screenshot therefore costs one quick read.
 func ReadLines(ctx context.Context, data []byte, enough func([]string) bool) ([]string, error) {
-	bin, err := tesseractPath()
-	if err != nil {
-		return nil, err
-	}
+	bin, _ := tesseractPath() // "" when none is installed: the built-in reader is used
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("the image could not be read: %w", err)
@@ -174,6 +168,11 @@ func prepare(src image.Image, scale float64) image.Image {
 }
 
 func recognise(ctx context.Context, bin string, img image.Image, psm string) ([]string, error) {
+	if bin == "" {
+		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+		return recogniseWASM(ctx, img, psm)
+	}
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, err

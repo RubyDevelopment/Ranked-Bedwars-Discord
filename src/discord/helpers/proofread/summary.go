@@ -6,11 +6,8 @@ import (
 	"strings"
 )
 
-// Check downloads the screenshot, reads its chat and analyses it. It returns ErrNoOCR when this machine cannot read images.
+// Check downloads the screenshot, reads its chat and analyses it.
 func Check(ctx context.Context, imageURL string, profile Profile, roster []Member, claimed string, colors map[string]string) (Result, error) {
-	if !Available() {
-		return Result{}, ErrNoOCR
-	}
 	data, err := Download(ctx, imageURL)
 	if err != nil {
 		return Result{}, err
