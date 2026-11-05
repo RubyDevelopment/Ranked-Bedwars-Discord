@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"strings"
 	"time"
+
+	"ranked-bedwars/src/discord/helpers/skins"
 )
 
 // HTML banners (the Banner Builder's HTML and CSS mode) need a layout engine, which the bot does not have, so the engine draws them: the bot
@@ -37,6 +40,12 @@ func renderRemote(b *Banner, vars Vars) ([]byte, error) {
 		return nil, errors.New("html banner without a guild")
 	}
 	assets := b.assetsUsed(vars)
+	// The skin pictures are fetched here, through the providers, and sent as data: the engine then has nothing to download (and its own
+	// fetch of a link stays the fallback for any picture no provider could give).
+	if pictures := skins.FetchAll(vars); len(pictures) > 0 {
+		vars = maps.Clone(vars) // the caller's variables stay as they were: it may draw another banner from them
+		maps.Copy(vars, pictures)
+	}
 	params, err := json.Marshal(map[string]any{"html": b.HTML, "css": b.CSS, "width": b.Width, "height": b.Height, "vars": map[string]string(vars), "assets": assets})
 	if err != nil {
 		return nil, err

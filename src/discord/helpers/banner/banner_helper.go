@@ -50,6 +50,7 @@ import (
 
 	"ranked-bedwars/src/config"
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/skins"
 	"ranked-bedwars/src/types"
 )
 
@@ -413,6 +414,15 @@ var client = &http.Client{
 }
 
 func download(url string) (image.Image, error) {
+	// A player's face or body comes through the skin providers (fastest first, with fallbacks), not from the one address in the link.
+	if kind, name, ok := skins.Parse(url); ok {
+		skin, err := skins.Fetch(kind, name)
+		if err != nil {
+			return nil, err
+		}
+		img, _, err := image.Decode(bytesReader(skin.Data))
+		return img, err
+	}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package banner
 
 import (
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
@@ -230,4 +231,22 @@ func TestBannerDocumentIsParsedOnce(t *testing.T) {
 	if !sameBytes(raw, raw) || sameBytes(raw, same) {
 		t.Fatal("sameBytes must tell one buffer from an equal copy")
 	}
+}
+
+// A banner's own variables must come back from the engine call unchanged: the caller may draw the built-in card from them next.
+func TestRemoteRenderLeavesTheCallersVariablesAlone(t *testing.T) {
+	old := EngineControl
+	defer func() { EngineControl = old }()
+	var sent string
+	EngineControl = func(guild, action string, params json.RawMessage) RemoteResult {
+		sent = string(params)
+		return RemoteResult{Error: "stop here"}
+	}
+	vars := Vars{"player.head": "https://nmsr.nickac.dev/face/Steve", "player.name": "Steve"}
+	b := &Banner{guildID: "1", Mode: "html", HTML: "<img src=\"{player.head}\"/>", Width: 100, Height: 100}
+	_, _ = renderRemote(b, vars)
+	if vars["player.head"] != "https://nmsr.nickac.dev/face/Steve" {
+		t.Fatalf("the caller's variable was changed to %q", vars["player.head"])
+	}
+	_ = sent
 }
