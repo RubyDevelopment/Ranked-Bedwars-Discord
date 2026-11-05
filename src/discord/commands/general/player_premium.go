@@ -1,52 +1,13 @@
 package general
 
 import (
-	"time"
-
 	"ranked-bedwars/src/discord/helpers"
-	"ranked-bedwars/src/types"
-
-	"github.com/bwmarrin/discordgo"
+	"ranked-bedwars/src/discord/helpers/division"
 )
-
-// ============================================================================
-// Globals & Initialization
-// ============================================================================
 
 func init() {
 	helpers.Register(PlayerPremiumCommand)
 }
 
-// ============================================================================
-// Command Definition
-// ============================================================================
-
-// PlayerPremiumCommand Manages premium status perks, benefits, and subscription features.
-var PlayerPremiumCommand = &types.Command{
-	Name:        "premium",
-	Description: "Manages premium status perks, benefits, and subscription features.",
-	Cooldown:    3 * time.Second,
-	Data:        &discordgo.ApplicationCommand{},
-	Execute:     executePlayerPremiumCommand,
-}
-
-// ============================================================================
-// Command Execution
-// ============================================================================
-
-func executePlayerPremiumCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	// TODO: Implement premium management logic and status overview embed
-	return helpers.EditInteractionEmbed(s, i, PlayerPremiumUnavailableEmbed(i))
-}
-
-// ============================================================================
-// Helper functions
-// ============================================================================
-
-func PlayerPremiumUnavailableEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
-	return helpers.Preset("info", types.PresetOptions{
-		Title:       "Premium Features",
-		Description: "Premium management features are currently under development. Check back soon for subscription benefits, perk overrides, and custom styling options.",
-		Thumbnail:   helpers.ThumbSprout,
-	})
-}
+// PlayerPremiumCommand manages the Premium division: add, remove, spec roles and the roster (it has no vote).
+var PlayerPremiumCommand = division.NewCommand(division.Premium)

@@ -1062,12 +1062,13 @@ func SkinName(name string) string {
 	return name
 }
 
-// Minecraft heads and bodies come from mc-heads.net, by the player's registered username.
+// Minecraft heads and bodies come from NMSR, by the player's registered username (a name with no account gets Steve). mc-heads.net is not
+// used here: it answers 403 to servers (the engine's and Go's HTTP clients) while browsers get the picture, so every banner showed Steve.
 func HeadURL(name string) string {
-	return "https://mc-heads.net/avatar/" + url.PathEscape(SkinName(name))
+	return "https://nmsr.nickac.dev/face/" + url.PathEscape(SkinName(name))
 }
 func BodyURL(name string) string {
-	return "https://mc-heads.net/body/" + url.PathEscape(SkinName(name))
+	return "https://nmsr.nickac.dev/fullbody/" + url.PathEscape(SkinName(name))
 }
 
 // EntryVars are the fields of one leaderboard row ("lb.3.") or of the invoker's own row ("me."), as the
