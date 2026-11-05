@@ -115,11 +115,13 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 				topList = append(topList, p)
 			}
 		}
+		matched := false
 		for _, rt := range rules {
 			groups, ok := rt.match.test(line)
 			if !ok {
 				continue
 			}
+			matched = true
 			res.RulesHit++
 			for n, a := range rt.actions {
 				field := func(key string) string { return expand(a.Fields, key, groups) }
@@ -143,6 +145,13 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 				events = append(events, ev)
 			}
 			break
+		}
+		if !matched && profile.InferKills {
+			if ev, ok := inferKill(line, profile, roster, finalDefault); ok {
+				res.RulesHit++
+				events = append(events, ev)
+				seen[strings.ToLower(ev.victim.Name)], seen[strings.ToLower(ev.actor.Name)] = *ev.victim, *ev.actor
+			}
 		}
 	}
 
@@ -270,6 +279,40 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 		}
 	}
 	return res
+}
+
+// inferKill reads a death line no rule knows as a kill, the way the engine's tracker does: a player of the game opens the line, and a player of
+// another team is named somewhere in it ("AloneSky was drowned in the sea with the help of zorev"). Chat lines, which hold a skip token such
+// as ":", are never read this way.
+func inferKill(line string, profile Profile, roster []Member, final *compiled) (event, bool) {
+	for _, skip := range profile.InferKillSkip {
+		if skip != "" && strings.Contains(line, skip) {
+			return event{}, false
+		}
+	}
+	words := strings.Fields(line)
+	if len(words) < 3 {
+		return event{}, false
+	}
+	victim := resolve(words[0], roster, true)
+	if victim == nil {
+		return event{}, false
+	}
+	var killer *Member
+	for _, w := range wordsOf(strings.Join(words[1:], " ")) {
+		if m := resolve(w, roster, false); m != nil && m.Team != victim.Team {
+			killer = m
+			break
+		}
+	}
+	if killer == nil {
+		return event{}, false
+	}
+	ev := event{kind: "kill", victim: victim, actor: killer}
+	if final != nil {
+		_, ev.final = final.test(line)
+	}
+	return ev, true
 }
 
 // topKillerLine is a line of the end-of-game ranking, "#1 Killer [Diamond] zorev · 2 · 2": the player is the last name before the two counts,

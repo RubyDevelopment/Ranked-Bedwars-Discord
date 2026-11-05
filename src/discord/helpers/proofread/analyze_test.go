@@ -7,7 +7,7 @@ import (
 )
 
 // The rules are the Pika profile's own (Engine defaults.js), so the test reads chat the way a game is tracked.
-const pikaServer = `{"profile":{"tracking":{"teamAliases":{"aqua":["cyan"]},"finalKill":{"type":"includes","value":"FINAL KILL"}},"rules":[
+const pikaServer = `{"profile":{"tracking":{"teamAliases":{"aqua":["cyan"]},"inferKills":true,"inferKillSkip":[":"," > "],"finalKill":{"type":"includes","value":"FINAL KILL"}},"rules":[
  {"id":"bed","on":"chat","match":{"type":"regex","value":"^(?:⚠\\s+)?(?<team>[A-Za-z]+)\\s+Team'?s?\\s+Bed\\b.*?\\b(?:by|from|of|under|at|than)\\s+(?<player>[A-Za-z0-9_]{3,16})\\b"},"actions":[{"type":"track","kind":"bed","fields":{"team":"{team}","player":"{player}"}}]},
  {"id":"kill","on":"chat","match":{"type":"regex","value":"^(?<victim>[A-Za-z0-9_]{3,16}) has been killed by (?<killer>[A-Za-z0-9_]{3,16})"},"actions":[{"type":"track","kind":"kill","fields":{"victim":"{victim}","killer":"{killer}"},"final":{"type":"includes","value":"FINAL KILL"}}]},
  {"id":"elim","on":"chat","match":{"type":"regex","value":"^⚠\\s+Team\\s+(?<team>[A-Za-z]+)\\s+has been eliminated"},"actions":[{"type":"track","kind":"eliminated","fields":{"team":"{team}"}}]},
@@ -134,5 +134,25 @@ func TestEndBannerAloneNamesWinnerAndMVP(t *testing.T) {
 	// Without the map's colors nothing in the banner says which team is Blue.
 	if res := Analyze(lines, profile(t), roster, "Team B", nil); res.Winner != "" {
 		t.Fatalf("a winner %q with no way to know the color", res.Winner)
+	}
+}
+
+// Jartex has no rule for most deaths: the engine reads a line that opens with a player of the game and names a player of another team as a kill.
+func TestInferredKillsLikeTheEngine(t *testing.T) {
+	jartex := []Member{{"zorev", "Team A"}, {"GunsNRosez", "Team A"}, {"AloneSky", "Team B"}, {"HECKERTJ001", "Team B"}}
+	lines := []string{
+		"AloneSky was drowned in the sea with the help of zorev",
+		"BLUE GunsNRosez: hi heck and alone", // chat: has a colon, never a kill
+		"HECKERTJ001 froze to death",         // nobody of the other team is named
+		"HECKERTJ001 was shot into the void by zorev FINAL KILL",
+	}
+	res := Analyze(lines, profile(t), jartex, "", nil)
+	if res.MVP.Name != "zorev" || !strings.Contains(res.MVPBy, "most kills (2)") {
+		t.Fatalf("mvp %+v by %q", res.MVP, res.MVPBy)
+	}
+	off := profile(t)
+	off.InferKills = false
+	if res := Analyze(lines, off, jartex, "", nil); res.MVP.Name != "" {
+		t.Fatalf("inferred a kill with inference off: %+v", res.MVP)
 	}
 }

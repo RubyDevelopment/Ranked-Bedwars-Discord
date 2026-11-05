@@ -37,6 +37,10 @@ type Profile struct {
 	Rules     []Rule
 	Aliases   map[string][]string // team color synonyms (aqua = cyan)
 	FinalKill *Matcher
+	// InferKills reads a death line no rule knows ("AloneSky was drowned in the sea with the help of zorev") as a kill: a player of the game opens it
+	// and a player of another team is named in it. Lines holding any of InferKillSkip (":" for chat) are left alone. As the engine does.
+	InferKills    bool
+	InferKillSkip []string
 }
 
 // LoadProfile reads the `server` game config ({"profile": {"rules": [...], "tracking": {...}}}). Missing parts are empty.
@@ -45,15 +49,18 @@ func LoadProfile(raw json.RawMessage) Profile {
 		Profile struct {
 			Rules    []Rule `json:"rules"`
 			Tracking struct {
-				TeamAliases map[string][]string `json:"teamAliases"`
-				FinalKill   *Matcher            `json:"finalKill"`
+				TeamAliases   map[string][]string `json:"teamAliases"`
+				FinalKill     *Matcher            `json:"finalKill"`
+				InferKills    bool                `json:"inferKills"`
+				InferKillSkip []string            `json:"inferKillSkip"`
 			} `json:"tracking"`
 		} `json:"profile"`
 	}
 	if json.Unmarshal(raw, &server) != nil {
 		return Profile{}
 	}
-	return Profile{Rules: server.Profile.Rules, Aliases: server.Profile.Tracking.TeamAliases, FinalKill: server.Profile.Tracking.FinalKill}
+	t := server.Profile.Tracking
+	return Profile{Rules: server.Profile.Rules, Aliases: t.TeamAliases, FinalKill: t.FinalKill, InferKills: t.InferKills, InferKillSkip: t.InferKillSkip}
 }
 
 // compiled is a matcher ready to test lines; groups come only from a regex.
