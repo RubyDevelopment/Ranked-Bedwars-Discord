@@ -33,7 +33,8 @@ var (
 	Premium = Div{"premium", "Premium", false}
 	Pugs    = Div{"pugs", "PUGS", true}
 	Pups    = Div{"pups", "PUPS", true}
-	All     = []Div{Premium, Pugs, Pups}
+	Pit     = Div{"pit", "Pit", true}
+	All     = []Div{Premium, Pugs, Pups, Pit}
 )
 
 // Setting is one role or channel a division is configured with.
