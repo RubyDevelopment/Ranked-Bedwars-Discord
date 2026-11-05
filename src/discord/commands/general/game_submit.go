@@ -95,20 +95,25 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 	}
 
-	// 3. Validate the Game State
+		// Whatever the answer is, the screenshot they sent is shown with it.
+	fail := func(e *discordgo.MessageEmbed) error {
+		return helpers.EditInteractionEmbed(s, i, helpers.WithProofImage(e, proofURL))
+	}
+
+// 3. Validate the Game State
 	if game.State != match.GameInGame {
-		return helpers.EditInteractionEmbed(s, i, SubmitResultNotInProgressEmbed(i))
+		return fail(SubmitResultNotInProgressEmbed(i))
 	}
 	if !game.StartedAt.IsZero() {
 		if elapsed := time.Since(game.StartedAt); elapsed < minResultDuration {
-			return helpers.EditInteractionEmbed(s, i, SubmitResultTooEarlyEmbed(i, minResultDuration-elapsed))
+			return fail(SubmitResultTooEarlyEmbed(i, minResultDuration-elapsed))
 		}
 	}
 	if game.End == match.EndStaffPending {
-		return helpers.EditInteractionEmbed(s, i, SubmitResultAlreadySubmittedEmbed(i))
+		return fail(SubmitResultAlreadySubmittedEmbed(i))
 	}
 	if player.Team == "" {
-		return helpers.EditInteractionEmbed(s, i, SubmitResultNoTeamEmbed(i))
+		return fail(SubmitResultNoTeamEmbed(i))
 	}
 
 	// 4. Read the screenshot's chat: the winners, the losers, the bed and the MVP are checked against the game, for staff to see.
@@ -117,7 +122,7 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	flow := match.SubmitFlowOf(i.GuildID)
 	if attachment != nil && flow.Mode != match.SubmitManual && proofread.Available() {
 		helpers.ChainPrefixReplies(i)                                         // the result below replaces this message instead of following it
-		_ = helpers.EditInteractionEmbed(s, i, SubmitResultProcessingEmbed()) // shown while the picture is read
+		_ = helpers.EditInteractionEmbed(s, i, helpers.WithProofImage(SubmitResultProcessingEmbed(), proofURL)) // shown while the picture is read
 		check, err := readScreenshot(s, attachment.URL, game, player.Team)
 		switch {
 		case err != nil:
@@ -134,13 +139,13 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			if unread {
 				e.Fields = append(e.Fields, &discordgo.MessageEmbedField{Name: "Screenshot reading", Value: "The game chat could not be read from this screenshot, so staff score the game by hand."})
 			}
-			return helpers.EditInteractionEmbed(s, i, e)
+			return fail(e)
 		}
 		e.Fields = append(e.Fields, reviewFields(game, *review)...)
 		if staffReview {
 			return helpers.EditInteractionComponents(s, i, e, reviewButtons(game, *review))
 		}
-		return helpers.EditInteractionEmbed(s, i, e)
+		return fail(e)
 	}
 
 	// 5. Auto mode scores a clear reading at once; anything unclear goes to staff to verify, with the reason
@@ -148,7 +153,7 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		if why := autoScoreBlocker(game, *review, player.Team, flow.MinPlayersPercent); why == "" {
 			result, err := match.Games.Score(sdk.SystemActor, i.GuildID, game.ID, review.Winner, match.ScoreOptions{MVP: mvpOf(game, *review)})
 			if err == nil {
-				return helpers.EditInteractionEmbed(s, i, autoScoredEmbed(game, actor, review.Winner, result.Results, *review, proofURL))
+				return fail(autoScoredEmbed(game, actor, review.Winner, result.Results, *review, proofURL))
 			}
 			log.Printf("[Submit] could not auto-score game %d: %v", game.ID, err)
 			review.Mismatch = "automatic scoring failed: " + err.Error()
@@ -161,12 +166,12 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	if game.Mode.Rated() {
 		// The claim is recorded on the game: it moves to staff scoring and its players are free to queue again.
 		if _, err := match.Games.Submit(game.ID, actor); err != nil {
-			return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("submit the result", err))
+			return fail(match.GameActionErrorEmbed("submit the result", err))
 		}
 		return reply(helpers.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL), true)
 	}
 	if _, err := match.Games.Score(actor, i.GuildID, game.ID, player.Team, match.ScoreOptions{}); err != nil {
-		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("score the casual match", err))
+		return fail(match.GameActionErrorEmbed("score the casual match", err))
 	}
 	return reply(helpers.SubmitResultCasualEmbed(i, game.Number, player.Team, proofURL), false)
 }

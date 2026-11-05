@@ -301,6 +301,26 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 		partyCfg = m.deps.Party(in.GuildID)
 	}
 
+	// Every player's stats are fetched at once: one call each, and waiting for them one after another is what made scoring slow.
+	type fetched struct {
+		st  *models.PlayerStatsModel
+		err error
+	}
+	stats := make(map[string]*fetched, len(present))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for id := range present {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			st, err := m.API().StatsInSeason(in.GuildID, id, in.SeasonID)
+			mu.Lock()
+			stats[id] = &fetched{st, err}
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
 	results := make([]EloResult, 0, len(present))
 	seen := map[string]bool{}
 	score := func(id string, win bool) error {
@@ -308,10 +328,11 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 			return nil
 		}
 		seen[id] = true
-		st, err := m.API().StatsInSeason(in.GuildID, id, in.SeasonID)
-		if err != nil {
-			return fmt.Errorf("stats for %s: %w", id, err)
+		f := stats[id]
+		if f.err != nil {
+			return fmt.Errorf("stats for %s: %w", id, f.err)
 		}
+		st, err := f.st, error(nil)
 		res := EloResult{UserID: id, SeasonID: st.SeasonID, Win: win, MVP: win && id == in.MVP}
 		if !ranked {
 			res.EloOutcome = EloOutcome{Before: st.Elo, After: st.Elo, RankBefore: st.Rank, RankAfter: st.Rank}
@@ -354,11 +375,19 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 // ELO itself is already saved and SyncRank can repair a rank later.
 func (m *EloManager) ApplyRanks(actor, guildID string, results []EloResult) {
 	decayWatch.Track(guildID)
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, 4) // a few at a time: each is a database call and the Discord role and nickname edits
 	for _, r := range results {
-		if _, err := m.SyncRank(actor, guildID, r.UserID); err != nil {
-			m.logf("rank sync %s/%s: %v", guildID, r.UserID, err)
-		}
+		wg.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer func() { <-slots; wg.Done() }()
+			if _, err := m.SyncRank(actor, guildID, r.UserID); err != nil {
+				m.logf("rank sync %s/%s: %v", guildID, r.UserID, err)
+			}
+		}()
 	}
+	wg.Wait()
 }
 
 // ============================================================================

@@ -194,7 +194,7 @@ func handleSubmitReview(s *discordgo.Session, i *discordgo.InteractionCreate, cu
 	}
 	game, ok := match.Games.Get(uint(raw))
 	if !ok || game.GuildID != i.GuildID {
-		update(helpers.SimpleErrorEmbed("This game is already over, or no longer exists."))
+		update(helpers.SimpleErrorEmbed("This game was already scored or closed (by staff, or by the engine when the match ended), so there is nothing left to confirm. Check the results channel."))
 		return true
 	}
 	actor := helpers.InteractionUserID(i)

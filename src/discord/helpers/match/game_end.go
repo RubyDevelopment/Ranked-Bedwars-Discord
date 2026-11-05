@@ -152,7 +152,7 @@ func (m *GameManager) Score(actor, guildID string, id uint, winningTeam string, 
 		lg.mu.Unlock()
 	}()
 
-	results, err := m.commitRanked(actor, g, team, o.MVP, false)
+	results, after, err := m.commitRankedDeferred(actor, g, team, o.MVP, false)
 	if err != nil {
 		return ScoreResult{}, err
 	}
@@ -168,6 +168,7 @@ func (m *GameManager) Score(actor, guildID string, id uint, winningTeam string, 
 	m.sync(lg)
 	m.notify(snap, GameEvent{Kind: EventScored})
 	m.finish(lg, snap)
+	go after() // ranks, nicknames and roles go last, beside everything else: the game is already saved and its channels are on their way out
 	return ScoreResult{Game: snap, Results: results}, nil
 }
 
@@ -203,6 +204,18 @@ func mvpFor(g Game, winners []string, staffPick string) string {
 // results are only committed if CompleteGame succeeds; the follow-ups are
 // best effort because the scoring itself is already durable.
 func (m *GameManager) commitRanked(actor string, g Game, winningTeam, staffMVP string, rescore bool) ([]ratings.EloResult, error) {
+	results, after, err := m.commitRankedDeferred(actor, g, winningTeam, staffMVP, rescore)
+	if err != nil {
+		return nil, err
+	}
+	after()
+	return results, nil
+}
+
+// commitRankedDeferred is commitRanked up to the moment the result is saved. The follow-ups (ranks, nicknames and roles, which are many
+// slow Discord and database calls, one per player) are handed back as a function for the caller to run when it chooses: a scored game
+// does not wait for them.
+func (m *GameManager) commitRankedDeferred(actor string, g Game, winningTeam, staffMVP string, rescore bool) ([]ratings.EloResult, func(), error) {
 	var winners, losers []string
 	for _, p := range g.Players {
 		if strings.EqualFold(p.Team, winningTeam) {
@@ -212,13 +225,13 @@ func (m *GameManager) commitRanked(actor string, g Game, winningTeam, staffMVP s
 		}
 	}
 	if len(winners) == 0 || len(losers) == 0 {
-		return nil, fmt.Errorf("%w: %s has %d winners and %d losers", ErrUnknownTeam, winningTeam, len(winners), len(losers))
+		return nil, nil, fmt.Errorf("%w: %s has %d winners and %d losers", ErrUnknownTeam, winningTeam, len(winners), len(losers))
 	}
 	mvp := mvpFor(g, winners, staffMVP)
 	mode := g.Mode
 	results, err := m.deps.Elo.ScoreGame(ratings.ScoreInput{GuildID: g.GuildID, SeasonID: g.SeasonID, Winners: winners, Losers: losers, MVP: mvp, Parties: g.Parties, Mode: &mode})
 	if err != nil {
-		return nil, fmt.Errorf("score: %w", err)
+		return nil, nil, fmt.Errorf("score: %w", err)
 	}
 	byUser := make(map[string]ratings.EloResult, len(results))
 	for _, r := range results {
@@ -234,17 +247,18 @@ func (m *GameManager) commitRanked(actor string, g Game, winningTeam, staffMVP s
 		rows = append(rows, row)
 	}
 	if _, err := m.completeGame(actor, g, sdk.CompleteGameRequest{Status: string(types.GameStatusCompleted), Scoring: "ranked", Participants: rows}); err != nil {
-		return nil, fmt.Errorf("complete game: %w", err)
+		return nil, nil, fmt.Errorf("complete game: %w", err)
 	}
 
-	m.deps.Elo.RecordStartingGrants(actor, g.GuildID, results)
-	m.deps.Elo.ApplyRanks(actor, g.GuildID, results)
-	if !rescore && m.deps.Parties != nil {
-		for _, pg := range g.Parties {
-			m.deps.Parties.RecordGame(g.GuildID, pg.Leader)
+	return results, func() {
+		m.deps.Elo.RecordStartingGrants(actor, g.GuildID, results)
+		m.deps.Elo.ApplyRanks(actor, g.GuildID, results)
+		if !rescore && m.deps.Parties != nil {
+			for _, pg := range g.Parties {
+				m.deps.Parties.RecordGame(g.GuildID, pg.Leader)
+			}
 		}
-	}
-	return results, nil
+	}, nil
 }
 
 func participantRow(g Game, p GamePlayer) models.GamePlayersModel {

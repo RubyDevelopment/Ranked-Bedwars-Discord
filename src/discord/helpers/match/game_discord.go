@@ -152,7 +152,7 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.post(s, g, "matchEnded", embedData{Vars: ev.Vars})
 	case EventStaffPending:
 		d.scheduleTeamStatuses(s, g, true)
-		d.post(s, g, "staffPending", embedData{})
+		// no "Win Submitted" post: the submitter already got the result embed, with the screenshot, as the reply to their submit
 		d.forget(g.ID)
 	case EventCasualDone:
 		d.scheduleTeamStatuses(s, g, true)

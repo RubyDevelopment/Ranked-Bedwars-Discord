@@ -552,6 +552,11 @@ const (
 
 // withProofImage shows a submitted screenshot in full below the embed when the proof is a picture (an attachment or an
 // image link); any other link stays a link in the text.
+// WithProofImage shows a submitted screenshot as the embed image (nothing when the link is not an image).
+func WithProofImage(emb *discordgo.MessageEmbed, proofURL string) *discordgo.MessageEmbed {
+	return withProofImage(emb, proofURL)
+}
+
 func withProofImage(emb *discordgo.MessageEmbed, proofURL string) *discordgo.MessageEmbed {
 	link := strings.TrimSpace(proofURL)
 	path, _, _ := strings.Cut(link, "?")
