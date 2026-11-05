@@ -251,6 +251,16 @@ func renderLeaderboardBanner(s *discordgo.Session, ask leaderboardAsk, rows []sd
 		return nil, nil
 	}
 
+	// The viewer's own row is looked up while the page's players are (it does not depend on them).
+	youVars := banner.Vars{}
+	youDone := make(chan struct{})
+	go func() {
+		defer close(youDone)
+		if verr == nil {
+			you(s, ask.guildID, invoker, view, seasonID, ask.stat, youVars)
+		}
+	}()
+
 	vars := banner.GuildVars(s, ask.guildID, invoker)
 	vars["lb.title"] = fmt.Sprintf("%s Leaderboard", season)
 	vars["lb.stat"], vars["lb.stat_short"] = ask.stat.label, ask.stat.short
@@ -261,9 +271,8 @@ func renderLeaderboardBanner(s *discordgo.Session, ask leaderboardAsk, rows []sd
 		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(ask.stat.value(&rows[n].PlayerStatsModel))
 	}
 	vars["page.number"], vars["page.total"] = fmt.Sprint(ask.page), fmt.Sprint(totalPages)
-	if verr == nil {
-		you(s, ask.guildID, invoker, view, seasonID, ask.stat, vars)
-	}
+	<-youDone
+	maps.Copy(vars, youVars)
 	return banner.RenderBanner(chosen, vars)
 }
 
@@ -380,6 +389,42 @@ func LeaderboardOverviewEmbed(i *discordgo.InteractionCreate, rows []sdk.Leaderb
 
 // you adds the viewer's own row: their stats, their value of the chosen stat (me.value) and where they stand on that stat.
 func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, stat leaderboardStat, vars banner.Vars) {
+	// Turning pages asks for the same viewer row again and again (and for a stat the database does not rank, finding the position reads
+	// thousands of players), so it is kept for a short while.
+	key := fmt.Sprintf("%s|%d|%d|%s", guildID, seasonID, view.Player.ID, stat.key)
+	youCache.Lock()
+	hit, ok := youCache.m[key]
+	youCache.Unlock()
+	if ok && time.Now().Before(hit.until) {
+		maps.Copy(vars, hit.vars)
+		return
+	}
+	mine := banner.Vars{}
+	youFresh(guildID, invoker, view, seasonID, stat, mine)
+	if len(mine) > 0 {
+		youCache.Lock()
+		if len(youCache.m) > 500 {
+			clear(youCache.m)
+		}
+		youCache.m[key] = youEntry{vars: mine, until: time.Now().Add(youCacheFor)}
+		youCache.Unlock()
+	}
+	maps.Copy(vars, mine)
+}
+
+const youCacheFor = 45 * time.Second
+
+type youEntry struct {
+	vars  banner.Vars
+	until time.Time
+}
+
+var youCache = struct {
+	sync.Mutex
+	m map[string]youEntry
+}{m: map[string]youEntry{}}
+
+func youFresh(guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, stat leaderboardStat, vars banner.Vars) {
 	playerID := sdk.UintToString(view.Player.ID)
 	position := make(chan int, 1) // the position is asked for while the stats load
 	go func() { position <- positionOn(guildID, seasonID, view.Player.ID, stat) }()
