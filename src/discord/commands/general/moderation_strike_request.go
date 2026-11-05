@@ -28,6 +28,7 @@ func init() {
 // ModerationStrikeRequestCommand requests a strike review for a player.
 var ModerationStrikeRequestCommand = &types.Command{
 	Name:          "strikerequest",
+	Requirements:  types.StrikeAlertRequirements,
 	Description:   "Requests a strike review for a player who broke the rules.",
 	PrefixAliases: []string{"sr"},
 	Ephemeral:     true,

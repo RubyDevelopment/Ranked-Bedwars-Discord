@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	PartyCmdName   = "party_group"
+	PartyCmdName   = "party"
 	PartyAlertsKey = "party_alerts"
 )
 

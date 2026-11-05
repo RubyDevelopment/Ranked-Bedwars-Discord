@@ -25,9 +25,10 @@ func init() {
 
 // QueueCallCommand grants another player access to the invoker's team voice channel.
 var QueueCallCommand = &types.Command{
-	Name:        "call",
-	Description: "Adds a player to your team voice channel.",
-	Cooldown:    3 * time.Second,
+	Name:         "call",
+	Requirements: types.CallRequirements,
+	Description:  "Adds a player to your team voice channel.",
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

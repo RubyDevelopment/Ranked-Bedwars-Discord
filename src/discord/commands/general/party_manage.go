@@ -29,9 +29,10 @@ func init() {
 
 // PartyManageCommand Manages party matching, custom party groups, and team formations.
 var PartyManageCommand = &types.Command{
-	Name:        "party",
-	Description: "Manages party matching, custom party groups, and team formations.",
-	Cooldown:    3 * time.Second,
+	Name:         "party",
+	Requirements: types.PartyRequirements,
+	Description:  "Manages party matching, custom party groups, and team formations.",
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "create", Description: "Create a new party group", Type: discordgo.ApplicationCommandOptionSubCommand},

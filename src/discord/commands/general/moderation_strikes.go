@@ -27,9 +27,10 @@ func init() {
 
 // ModerationStrikesCommand lists the strike history of a player.
 var ModerationStrikesCommand = &types.Command{
-	Name:        "strikes",
-	Description: "Displays the strike history of a player.",
-	Cooldown:    3 * time.Second,
+	Name:         "strikes",
+	Requirements: types.StrikeAlertRequirements,
+	Description:  "Displays the strike history of a player.",
+	Cooldown:     3 * time.Second,
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{

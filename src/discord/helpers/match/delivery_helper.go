@@ -86,6 +86,11 @@ func StaffAlertPosts(guildID, key string) bool {
 
 // StaffAlertPinging is StaffAlert that also pings the given users (the players the alert is about) in the message.
 func StaffAlertPinging(s *discordgo.Session, guildID, key string, pingUserIDs []string, description string, fields ...*discordgo.MessageEmbedField) {
+	staffAlertPingingTo(s, guildID, key, "", pingUserIDs, description, fields...)
+}
+
+// staffAlertPingingTo is StaffAlertPinging posting to channel when one is given (a command's own alerts channel) instead of the profile's.
+func staffAlertPingingTo(s *discordgo.Session, guildID, key, channel string, pingUserIDs []string, description string, fields ...*discordgo.MessageEmbedField) {
 	if s == nil {
 		return
 	}
@@ -95,6 +100,9 @@ func StaffAlertPinging(s *discordgo.Session, guildID, key string, pingUserIDs []
 		return
 	}
 	embed := &discordgo.MessageEmbed{Title: kind.Title, Description: description, Color: kind.Color, Fields: fields}
+	if channel != "" {
+		flow.Delivery.AlertsChannel = channel
+	}
 	if strings.TrimSpace(flow.Delivery.AlertsChannel) == "" { // the profile names none: the shared game_alerts channel
 		flow.Delivery.AlertsChannel = helpers.EventRequirementID(guildID, helpers.HostGameEventName, types.ReqChannel, types.GameAlertsKey)
 	}
@@ -203,13 +211,18 @@ func voidAlert(g Game, reason string) (string, []*discordgo.MessageEmbedField) {
 // player gets a direct message instead so they always hear about it.
 func NotifyTeamCall(s *discordgo.Session, guildID, actorID, targetID, voiceID string, gameNumber int) {
 	text := fmt.Sprintf("<@%s> added you to <#%s> for game **#%d**.", actorID, voiceID, gameNumber)
+	// /call's own alerts channel comes first, then the game profile's, then the shared game alerts channel.
+	callChannel, _ := helpers.RequirementSlotID(guildID, "call", types.ReqChannel, types.CallAlertsKey)
 	flow := flowOf(guildID)
-	channel := strings.TrimSpace(flow.Delivery.AlertsChannel)
+	channel := callChannel
+	if channel == "" {
+		channel = strings.TrimSpace(flow.Delivery.AlertsChannel)
+	}
 	if channel == "" {
 		channel = helpers.EventRequirementID(guildID, helpers.HostGameEventName, types.ReqChannel, types.GameAlertsKey)
 	}
 	if channel != "" {
-		StaffAlertPinging(s, guildID, "team_call", []string{targetID}, text)
+		staffAlertPingingTo(s, guildID, "team_call", callChannel, []string{targetID}, text)
 		return
 	}
 	embed := &discordgo.MessageEmbed{Title: "Team Call Added", Description: text, Color: AlertKinds["team_call"].Color}

@@ -28,6 +28,7 @@ func init() {
 // ModerationPunishmentsCommand lists the punishment history of a player.
 var ModerationPunishmentsCommand = &types.Command{
 	Name:          "punishments",
+	Requirements:  types.PunishmentAlertRequirements(),
 	Description:   "Views the active bans, mutes, and disciplinary history of a player.",
 	PrefixAliases: []string{"puns", "hist", "history"},
 	Ephemeral:     true,

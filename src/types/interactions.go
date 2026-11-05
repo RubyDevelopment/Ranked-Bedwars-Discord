@@ -302,3 +302,30 @@ func RequiresRole(reqs []Requirement, key string) bool {
 func StaffRegistrationRequirements() []Requirement {
 	return append(append([]Requirement{}, StaffRequirements...), RegistrationRequirements...)
 }
+
+// Alert channels of commands that tell a player something in a channel instead of (or as well as) replying: each is the alert key the
+// command posts to, so assigning it on one command, or on the event that shares it, assigns it everywhere.
+const (
+	CallAlertsKey   = "call_alerts"   // /call: the player added to a team voice channel is told here
+	PartyAlertsKey  = "party_alerts"  // /party: invitations and party changes are posted here
+	StrikeAlertsKey = "strike_alerts" // strikes: the struck player is told here
+)
+
+// CallRequirements is the optional alerts channel of /call.
+var CallRequirements = []Requirement{{Type: ReqChannel, Key: CallAlertsKey, Optional: true}}
+
+// PartyRequirements is the optional alerts channel of /party.
+var PartyRequirements = []Requirement{{Type: ReqChannel, Key: PartyAlertsKey, Optional: true}}
+
+// StrikeAlertRequirements is the strike alerts channel, for the commands that show strikes.
+var StrikeAlertRequirements = []Requirement{{Type: ReqChannel, Key: StrikeAlertsKey, Optional: true}}
+
+// PunishmentAlertRequirements is every punishment's alerts channel (mute, vc mute, queue ban, server ban, warn, kick, strike), for the
+// commands that show or manage punishments as a whole. The keys are the punishment commands' own.
+func PunishmentAlertRequirements() []Requirement {
+	var reqs []Requirement
+	for _, k := range []string{"chat_mute", "vc_mute", "queue_ban", "server_ban", "warn", "server_kick", "strike"} {
+		reqs = append(reqs, Requirement{Type: ReqChannel, Key: k + "_alerts", Optional: true})
+	}
+	return reqs
+}
