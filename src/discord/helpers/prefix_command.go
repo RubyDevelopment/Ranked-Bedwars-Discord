@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bytes"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/types"
 	"slices"
 	"strconv"
@@ -69,7 +70,7 @@ func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 		Reference: &discordgo.MessageReference{
 			MessageID: messageID,
 			ChannelID: i.ChannelID,
-			GuildID:   i.GuildID,
+			GuildID:   guildlink.ReplyGuild(i.ID, i.GuildID),
 		},
 	})
 	return err
@@ -88,7 +89,7 @@ func EditInteractionFile(s *discordgo.Session, i *discordgo.InteractionCreate, c
 			Content:    content,
 			Files:      []*discordgo.File{file},
 			Components: components,
-			Reference:  &discordgo.MessageReference{MessageID: messageID, ChannelID: i.ChannelID, GuildID: i.GuildID},
+			Reference:  &discordgo.MessageReference{MessageID: messageID, ChannelID: i.ChannelID, GuildID: guildlink.ReplyGuild(i.ID, i.GuildID)},
 		})
 		return err
 	}

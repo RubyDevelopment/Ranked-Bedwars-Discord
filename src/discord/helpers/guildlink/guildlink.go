@@ -10,6 +10,7 @@ package guildlink
 import (
 	"log"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -122,10 +123,23 @@ func remember(id, venueID string) {
 
 // VenueOf is the secondary server an interaction was made in, or "" when it was made in the main guild itself.
 func VenueOf(interactionID string) string {
+	// A prefix command's interaction is "prefix:<message id>:<command>"; it is remembered by its message.
+	if rest, ok := strings.CutPrefix(interactionID, "prefix:"); ok {
+		interactionID = "prefix:" + strings.SplitN(rest, ":", 2)[0]
+	}
 	if v, ok := origins.Load(interactionID); ok {
 		return v.(origin).venueID
 	}
 	return ""
+}
+
+// ReplyGuild is the server a reply to this interaction is posted in: where it was asked (a secondary server), else guildID. A message
+// reference must name the guild the replied-to message is in, and that is not the main guild the command was run as.
+func ReplyGuild(interactionID, guildID string) string {
+	if venue := VenueOf(interactionID); venue != "" {
+		return venue
+	}
+	return guildID
 }
 
 // ============================================================================

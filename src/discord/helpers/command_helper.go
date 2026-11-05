@@ -1477,7 +1477,7 @@ func replyPrefixEmbed(s *discordgo.Session, m *discordgo.MessageCreate, emb *dis
 		Reference: &discordgo.MessageReference{
 			MessageID: m.ID,
 			ChannelID: m.ChannelID,
-			GuildID:   m.GuildID,
+			GuildID:   guildlink.ReplyGuild("prefix:"+m.ID, m.GuildID),
 		},
 	})
 }

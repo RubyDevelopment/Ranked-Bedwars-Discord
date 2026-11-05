@@ -15,6 +15,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers/partymgr"
 	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
@@ -220,7 +221,7 @@ func sendV2(s *discordgo.Session, i *discordgo.InteractionCreate, components []d
 		_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
 			Flags:      discordgo.MessageFlagsIsComponentsV2,
 			Components: components,
-			Reference:  &discordgo.MessageReference{MessageID: helpers.PrefixSourceMessageID(i), ChannelID: i.ChannelID, GuildID: i.GuildID},
+			Reference:  &discordgo.MessageReference{MessageID: helpers.PrefixSourceMessageID(i), ChannelID: i.ChannelID, GuildID: guildlink.ReplyGuild(i.ID, i.GuildID)},
 		})
 		return err
 	}
