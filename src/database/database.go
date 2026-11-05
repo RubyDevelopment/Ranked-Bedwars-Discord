@@ -22,6 +22,12 @@ import (
 
 var global atomic.Pointer[sdk.Services]
 
+// apiConn is what Leaderboard needs to call the API itself (the SDK keeps its HTTP client private).
+var apiConn struct {
+	baseURL, apiKey string
+	timeout         time.Duration
+}
+
 // apiLoggerAdapter routes the SDK's request/response tracing to the file-only
 // API logger, so it never spams the CLI.
 type apiLoggerAdapter struct{ logger utility.AppLogger }
@@ -93,6 +99,7 @@ func (m *Manager) Initialize() error {
 		return fmt.Errorf("database api health check failed: %w", err)
 	}
 
+	apiConn.baseURL, apiConn.apiKey, apiConn.timeout = baseURL, apiKey, timeout
 	m.Services = svc
 	Set(svc)
 	m.Logger.Info("Database SDK initialized successfully.")

@@ -180,26 +180,24 @@ func buildLeaderboard(s *discordgo.Session, ask leaderboardAsk) *leaderboardView
 	if seasonKey == "" {
 		return failed(LeaderboardNoActiveSeasonEmbed(nil))
 	}
-	rows, err := database.Must().Stats.Leaderboard(ask.guildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: (ask.page - 1) * leaderboardPerPage, Sort: ask.stat.key})
+	rowData, total, err := database.Leaderboard(ask.guildID, seasonID, leaderboardPerPage, (ask.page-1)*leaderboardPerPage, ask.stat.key)
 	if err != nil {
+		log.Printf("leaderboard for guild %s: %v", ask.guildID, err)
 		return failed(UnexpectedErrorLeaderboardEmbed(nil))
 	}
-	if len(rows.Data) == 0 {
+	if len(rowData) == 0 {
 		if ask.page > 1 {
 			return failed(LeaderboardEmptyPageEmbed(nil, ask.page))
 		}
 		return failed(LeaderboardEmptyEmbed(nil, seasonKey))
 	}
-	totalPages := 1
-	if rows.Total != nil && *rows.Total > 0 {
-		totalPages = int((*rows.Total + leaderboardPerPage - 1) / leaderboardPerPage)
-	}
+	totalPages := max(1, (total+leaderboardPerPage-1)/leaderboardPerPage)
 
 	view := &leaderboardView{components: pagination.BuildPageRow(ask.page, totalPages,
 		func(target int) string { return fmt.Sprintf("%s%d|%s", leaderboardPagePrefix, target, ask.stat.key) },
 		func(slot string) string { return leaderboardPagePrefix + "off-" + slot })}
 
-	img, err := renderLeaderboardBanner(s, ask, rows.Data, seasonKey, seasonID, totalPages)
+	img, err := renderLeaderboardBanner(s, ask, rowData, seasonKey, seasonID, totalPages)
 	if img != nil {
 		view.png = img
 		if totalPages > 1 {
@@ -214,7 +212,7 @@ func buildLeaderboard(s *discordgo.Session, ask leaderboardAsk) *leaderboardView
 	if ask.stat.key != "elo" {
 		title += " · " + ask.stat.label
 	}
-	view.embed = LeaderboardOverviewEmbed(nil, rows.Data, title, ask.page, totalPages)
+	view.embed = LeaderboardOverviewEmbed(nil, rowData, title, ask.page, totalPages)
 	return view
 }
 
