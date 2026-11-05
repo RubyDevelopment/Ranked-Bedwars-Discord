@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -55,6 +57,20 @@ func IsDeferredSlashInteraction(i *discordgo.InteractionCreate) bool {
 	return ok
 }
 
+// chainedPrefixReplies holds, for prefix commands that asked for it, the reply sent so far (nil until the first one), so the next reply
+// edits it instead of posting another, as a slash command's deferred response is edited.
+var chainedPrefixReplies sync.Map // interaction id -> *discordgo.Message
+
+// ChainPrefixReplies makes every reply of this prefix command after the first edit the first one. Slash commands already work that way.
+func ChainPrefixReplies(i *discordgo.InteractionCreate) {
+	if !IsPrefixInteraction(i) {
+		return
+	}
+	id := i.Interaction.ID
+	chainedPrefixReplies.Store(id, (*discordgo.Message)(nil))
+	time.AfterFunc(10*time.Minute, func() { chainedPrefixReplies.Delete(id) })
+}
+
 // sendPrefixReply sends a reply to a prefix command message.
 func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
 	messageID := PrefixSourceMessageID(i)
@@ -63,6 +79,25 @@ func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 	}
 	content = strings.TrimSpace(content)
 	trimEmbeds(embeds)
+	if v, chained := chainedPrefixReplies.Load(i.Interaction.ID); chained {
+		if first, _ := v.(*discordgo.Message); first != nil {
+			if components == nil {
+				components = []discordgo.MessageComponent{} // an edit keeps old buttons unless told there are none
+			}
+			_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				ID: first.ID, Channel: first.ChannelID, Content: &content, Embeds: &embeds, Components: &components,
+			})
+			return err
+		}
+		sent, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+			Content: content, Embeds: embeds, Components: components,
+			Reference: &discordgo.MessageReference{MessageID: messageID, ChannelID: i.ChannelID, GuildID: guildlink.ReplyGuild(i.ID, i.GuildID)},
+		})
+		if err == nil {
+			chainedPrefixReplies.Store(i.Interaction.ID, sent)
+		}
+		return err
+	}
 	_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
 		Content:    content,
 		Embeds:     embeds,

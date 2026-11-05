@@ -125,7 +125,7 @@ func mvpOf(game match.Game, res proofread.Result) string {
 		return ""
 	}
 	for _, p := range game.TeamPlayers(res.Winner) {
-		if strings.EqualFold(p.Username, res.MVP.Name) {
+		if p.UserID == res.MVP.ID || res.MVP.ID == "" && strings.EqualFold(proofread.PlainName(p.Username), res.MVP.Name) {
 			return p.UserID
 		}
 	}

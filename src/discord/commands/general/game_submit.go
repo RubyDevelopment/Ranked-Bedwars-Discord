@@ -113,21 +113,27 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	// 4. Read the screenshot's chat: the winners, the losers, the bed and the MVP are checked against the game, for staff to see.
 	var review *proofread.Result
+	unread := false
 	flow := match.SubmitFlowOf(i.GuildID)
 	if attachment != nil && flow.Mode != match.SubmitManual && proofread.Available() {
+		helpers.ChainPrefixReplies(i)                                         // the result below replaces this message instead of following it
 		_ = helpers.EditInteractionEmbed(s, i, SubmitResultProcessingEmbed()) // shown while the picture is read
-		check, err := readScreenshot(attachment.URL, game, player.Team)
+		check, err := readScreenshot(s, attachment.URL, game, player.Team)
 		switch {
 		case err != nil:
 			log.Printf("[Submit] could not read the screenshot of game %d: %v", game.ID, err)
+			unread = true
 		case !check.HasEvidence():
-			return helpers.EditInteractionEmbed(s, i, SubmitResultNoChatEmbed(i))
+			unread = true // the submission still goes through: staff see the screenshot and score it
 		default:
 			review = &check
 		}
 	}
 	reply := func(e *discordgo.MessageEmbed, staffReview bool) error {
 		if review == nil {
+			if unread {
+				e.Fields = append(e.Fields, &discordgo.MessageEmbedField{Name: "Screenshot reading", Value: "The game chat could not be read from this screenshot, so staff score the game by hand."})
+			}
 			return helpers.EditInteractionEmbed(s, i, e)
 		}
 		e.Fields = append(e.Fields, reviewFields(game, *review)...)
@@ -207,20 +213,42 @@ func teamColorsOf(game match.Game) map[string]string {
 }
 
 // readScreenshot reads the chat of the screenshot against the game's roster, using the server profile's own chat rules.
-func readScreenshot(imageURL string, game match.Game, claimedTeam string) (proofread.Result, error) {
+func readScreenshot(s *discordgo.Session, imageURL string, game match.Game, claimedTeam string) (proofread.Result, error) {
 	var profile proofread.Profile
 	if raw, err := database.Must().GameConfig.Field(game.GuildID, "server"); err == nil {
 		profile = proofread.LoadProfile(raw)
 	}
-	roster := make([]proofread.Member, 0, len(game.Players))
-	for _, p := range game.Players {
-		if p.Username != "" {
-			roster = append(roster, proofread.Member{Name: p.Username, Team: p.Team})
-		}
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	return proofread.Check(ctx, imageURL, profile, roster, claimedTeam, teamColorsOf(game))
+	return proofread.Check(ctx, imageURL, profile, rosterOf(s, game), claimedTeam, teamColorsOf(game))
+}
+
+// rosterOf lists every name each player of the game goes by, since chat shows their Minecraft name while the game records their server nickname:
+// the nickname without its [elo] tags, the Minecraft name the guild has on file, and their Discord nickname, display name and username.
+func rosterOf(s *discordgo.Session, game match.Game) []proofread.Member {
+	var roster []proofread.Member
+	for _, p := range game.Players {
+		seen := map[string]bool{}
+		add := func(name string) {
+			name = proofread.PlainName(name)
+			if k := strings.ToLower(name); name != "" && !seen[k] {
+				seen[k] = true
+				roster = append(roster, proofread.Member{Name: name, Team: p.Team, ID: p.UserID})
+			}
+		}
+		if view, err := database.Must().Player.Get(game.GuildID, p.UserID); err == nil {
+			add(view.Config.Username) // the Minecraft name is what chat shows, so it comes first and is how the player is reported
+		}
+		add(p.Username)
+		if m, _ := helpers.FetchGuildMember(s, game.GuildID, p.UserID); m != nil {
+			add(m.Nick)
+			if m.User != nil {
+				add(m.User.GlobalName)
+				add(m.User.Username)
+			}
+		}
+	}
+	return roster
 }
 
 func isImageAttachment(contentType, filename string) bool {
@@ -267,14 +295,6 @@ func SubmitResultInvalidAttachmentEmbed(i *discordgo.InteractionCreate) *discord
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Invalid Attachment",
 		Description: "The attachment must be an image file (PNG, JPG, GIF or WebP).",
-		Thumbnail:   helpers.ThumbFlag,
-	})
-}
-
-func SubmitResultNoChatEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "No Game Chat Found",
-		Description: "The screenshot does not show the game chat, or it cannot be read. Send a screenshot with the **game chat open** (the kills, bed breaks and the win message), so staff can check the result.",
 		Thumbnail:   helpers.ThumbFlag,
 	})
 }

@@ -76,21 +76,26 @@ func ReadLines(ctx context.Context, data []byte, enough func([]string) bool) ([]
 		return nil, fmt.Errorf("the image could not be read: %w", err)
 	}
 	b := img.Bounds()
-	chat := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*30/100, b.Max.X, b.Min.Y+b.Dy()*98/100))
+	// Chat is narrow (about 40% of the width at most) and low: a tighter piece has less of the scene to confuse the reader.
+	chat := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*35/100, b.Min.X+b.Dx()*52/100, b.Min.Y+b.Dy()*99/100))
+	wide := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*30/100, b.Max.X, b.Min.Y+b.Dy()*98/100))
 	fit := clamp(2200/float64(b.Dy()), 1.5, 4.5)
 	passes := []struct {
 		src   image.Image
 		scale float64
 		psm   string
+		prep  func(image.Image, float64) image.Image
 	}{
-		{chat, fit, "6"},
-		{chat, clamp(fit*1.6, 2, 6), "11"},
-		{img, clamp(1800/float64(b.Dy()), 1, 3), "11"},
+		{chat, fit, "6", textOnly}, // only the pixels that are one of the game's text colors: the scene drops away
+		{chat, fit, "6", prepare},
+		{chat, clamp(fit*1.6, 2, 6), "4", textOnly},
+		{wide, fit, "11", prepare},
+		{img, clamp(1800/float64(b.Dy()), 1, 3), "11", prepare},
 	}
 	var out []string
 	seen := map[string]bool{}
 	for _, p := range passes {
-		lines, err := recognise(ctx, bin, prepare(p.src, p.scale), p.psm)
+		lines, err := recognise(ctx, bin, p.prep(p.src, p.scale), p.psm)
 		if err != nil {
 			return nil, err
 		}

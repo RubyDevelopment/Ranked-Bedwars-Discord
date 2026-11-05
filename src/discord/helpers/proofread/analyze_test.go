@@ -14,8 +14,8 @@ const pikaServer = `{"profile":{"tracking":{"teamAliases":{"aqua":["cyan"]},"inf
  {"id":"win","on":"chat","match":{"type":"regex","value":"^(?<team>\\w+)\\s+won\\s+the\\s+game!"},"actions":[{"type":"track","kind":"win","fields":{"team":"{team}"}}]}]}}`
 
 var roster = []Member{
-	{"bummyyyyy", "Team A"}, {"EGIRLMEI", "Team A"}, {"Raahim_Playz", "Team A"}, {"EnderBlast313", "Team A"},
-	{"deloid_AK", "Team B"}, {"HowYouFeeling", "Team B"}, {"HT206", "Team B"}, {"cat1lol", "Team B"},
+	{"bummyyyyy", "Team A", ""}, {"EGIRLMEI", "Team A", ""}, {"Raahim_Playz", "Team A", ""}, {"EnderBlast313", "Team A", ""},
+	{"deloid_AK", "Team B", ""}, {"HowYouFeeling", "Team B", ""}, {"HT206", "Team B", ""}, {"cat1lol", "Team B", ""},
 }
 
 // The chat of the second screenshot, as the reader gives it (the chat mod's [COPY] buttons included, one letter misread).
@@ -107,7 +107,7 @@ func TestResolveToleratesAMisreadLetterButNotAmbiguity(t *testing.T) {
 	if m := resolve("HT2O6", roster, false); m != nil {
 		t.Fatal("a stray word was matched loosely")
 	}
-	twins := []Member{{"Player1", "Team A"}, {"Player2", "Team B"}}
+	twins := []Member{{"Player1", "Team A", ""}, {"Player2", "Team B", ""}}
 	if m := resolve("Player3", twins, true); m != nil {
 		t.Fatalf("ambiguous name -> %v", m)
 	}
@@ -139,7 +139,7 @@ func TestEndBannerAloneNamesWinnerAndMVP(t *testing.T) {
 
 // Jartex has no rule for most deaths: the engine reads a line that opens with a player of the game and names a player of another team as a kill.
 func TestInferredKillsLikeTheEngine(t *testing.T) {
-	jartex := []Member{{"zorev", "Team A"}, {"GunsNRosez", "Team A"}, {"AloneSky", "Team B"}, {"HECKERTJ001", "Team B"}}
+	jartex := []Member{{"zorev", "Team A", ""}, {"GunsNRosez", "Team A", ""}, {"AloneSky", "Team B", ""}, {"HECKERTJ001", "Team B", ""}}
 	lines := []string{
 		"AloneSky was drowned in the sea with the help of zorev",
 		"BLUE GunsNRosez: hi heck and alone", // chat: has a colon, never a kill

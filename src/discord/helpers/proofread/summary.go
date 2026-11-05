@@ -12,7 +12,7 @@ func Check(ctx context.Context, imageURL string, profile Profile, roster []Membe
 	if err != nil {
 		return Result{}, err
 	}
-	lines, err := ReadLines(ctx, data, func(lines []string) bool { return Analyze(lines, profile, roster, claimed, colors).RulesHit >= 2 })
+	lines, err := ReadLines(ctx, data, func(lines []string) bool { return Analyze(lines, profile, roster, claimed, colors).Winner != "" })
 	if err != nil {
 		return Result{}, err
 	}

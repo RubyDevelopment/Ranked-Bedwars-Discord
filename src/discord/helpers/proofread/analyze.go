@@ -8,8 +8,9 @@ import (
 	"strings"
 )
 
-// Member is a player of the game and the team they were put on.
-type Member struct{ Name, Team string }
+// Member is a player of the game and the team they were put on. A player may be listed several times under other names they go by (their
+// Minecraft name, their server nickname, their Discord name), all with the same ID: the first entry is the one a match is reported as.
+type Member struct{ Name, Team, ID string }
 
 // Result is what the chat of a screenshot says. Empty fields mean "could not tell", never "no".
 type Result struct {
@@ -102,26 +103,13 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 
 	var events []event
 	var topList []*Member // the end-of-game "Top Final Kills and Kills" list, best first
-	for _, raw := range lines {
-		line := cleanLine(raw)
-		if line == "" {
-			continue
-		}
-		for _, name := range wordsOf(line) { // a player named anywhere in the line counts as seen
-			findAs(name, false)
-		}
-		if m := topKillerLine.FindStringSubmatch(line); m != nil {
-			if p := find(m[1]); p != nil {
-				topList = append(topList, p)
-			}
-		}
-		matched := false
+	// apply runs a line through the profile's rules; the first rule that reads it adds its events.
+	apply := func(line string) bool {
 		for _, rt := range rules {
 			groups, ok := rt.match.test(line)
 			if !ok {
 				continue
 			}
-			matched = true
 			res.RulesHit++
 			for n, a := range rt.actions {
 				field := func(key string) string { return expand(a.Fields, key, groups) }
@@ -144,13 +132,40 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 				}
 				events = append(events, ev)
 			}
-			break
+			return true
+		}
+		return false
+	}
+	vocab := ruleWords(profile)
+
+	for _, raw := range lines {
+		line := cleanLine(raw)
+		if line == "" {
+			continue
+		}
+		for _, name := range wordsOf(line) { // a player named anywhere in the line counts as seen
+			findAs(name, false)
+		}
+		if m := topKillerLine.FindStringSubmatch(line); m != nil {
+			if p := find(m[1]); p != nil {
+				topList = append(topList, p)
+			}
+		}
+		matched := false
+		cands := variants(line, vocab, roster)
+		for _, cand := range cands {
+			if matched = apply(cand); matched {
+				break
+			}
 		}
 		if !matched && profile.InferKills {
-			if ev, ok := inferKill(line, profile, roster, finalDefault); ok {
-				res.RulesHit++
-				events = append(events, ev)
-				seen[strings.ToLower(ev.victim.Name)], seen[strings.ToLower(ev.actor.Name)] = *ev.victim, *ev.actor
+			for _, cand := range cands {
+				if ev, ok := inferKill(cand, profile, roster, finalDefault); ok {
+					res.RulesHit++
+					events = append(events, ev)
+					seen[strings.ToLower(ev.victim.Name)], seen[strings.ToLower(ev.actor.Name)] = *ev.victim, *ev.actor
+					break
+				}
 			}
 		}
 	}
@@ -188,10 +203,21 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 				vote(ev.team, other(ev.actor.Team))
 			}
 		case "eliminated": // the final kills just before it were of that team's players
+			voted := false
 			for j := max(0, i-6); j < i; j++ {
 				if p := events[j]; p.kind == "kill" && p.final && p.victim != nil {
 					vote(ev.team, p.victim.Team)
+					voted = true
 				}
+			}
+			if !voted { // the reader may have missed the "FINAL KILL" words: the kill just before it is the one that did it
+				if p := lastKill(events, i); p != nil && p.victim != nil {
+					vote(ev.team, p.victim.Team)
+				}
+			}
+		case "win": // the kill just before the win was made by a player of the team that won
+			if p := lastKill(events, i); p != nil && p.actor != nil {
+				vote(ev.team, p.actor.Team)
 			}
 		}
 	}
@@ -435,6 +461,13 @@ func resolve(name string, roster []Member, fuzzy bool) *Member {
 	if ambiguous {
 		return nil
 	}
+	if hit != nil && hit.ID != "" { // one of the names a player goes by: report them by their first one
+		for i := range roster {
+			if roster[i].ID == hit.ID {
+				return &roster[i]
+			}
+		}
+	}
 	return hit
 }
 
@@ -468,4 +501,19 @@ func abs(n int) int {
 		return -n
 	}
 	return n
+}
+
+var nameTag = regexp.MustCompile(`^\s*\[[^\]]*\]\s*|\s*\[[^\]]*\]\s*$`)
+
+// PlainName is a player's name without the tags a server nickname carries around it ("[155] kingyamx" -> "kingyamx"); chat only shows the name.
+func PlainName(s string) string { return strings.TrimSpace(nameTag.ReplaceAllString(s, "")) }
+
+// lastKill is the latest kill among the few events before events[i] that names both players, or nil.
+func lastKill(events []event, i int) *event {
+	for j := i - 1; j >= max(0, i-6); j-- {
+		if p := &events[j]; p.kind == "kill" && p.actor != nil && p.victim != nil {
+			return p
+		}
+	}
+	return nil
 }

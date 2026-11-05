@@ -68,6 +68,10 @@ type compiled struct {
 	test func(line string) (map[string]string, bool)
 }
 
+// looseSymbols finds the symbols a chat rule expects before a message (the server's "»" or "⚠", often stored garbled). A screenshot's text reader
+// gets such a symbol wrong or drops it, so in a rule they are replaced by "up to four of any characters, maybe followed by space".
+var looseSymbols = regexp.MustCompile(`[^\x00-\x7f]+(?:\\s[+*])?`)
+
 // compile turns a matcher into a test. A regex Go cannot run (a lookahead, a backreference) gives nil: that rule is skipped.
 func compile(m Matcher) *compiled {
 	ci := m.Type == "regex"
@@ -91,7 +95,7 @@ func compile(m Matcher) *compiled {
 	case "includes":
 		return &compiled{func(l string) (map[string]string, bool) { return nil, strings.Contains(fold(l), want) }}
 	case "regex":
-		src := m.Value
+		src := looseSymbols.ReplaceAllLiteralString(m.Value, `(?:\S{0,4}\s*)?`)
 		if ci {
 			src = "(?i)" + src
 		}

@@ -137,10 +137,12 @@ func HandleQueue(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 	if Queues.GroupOf(guildID, userID) != nil {
 		return // already allocated to a pending lobby
 	}
+	// The place in line is taken the moment they join, before the checks: those take a moment, and someone who joined later but was checked faster
+	// must not be put ahead. A member the checks refuse is left out of the lobby later on, whatever their place.
+	Queues.RecordJoin(newChannel, userID)
 	if !admitMember(s, guildID, userID, newChannel, snap, bind) {
 		return
 	}
-	Queues.RecordJoin(newChannel, userID)
 	warnOversizedParty(s, guildID, userID, newChannel, bind)
 	SweepQueueChannel(s, guildID, newChannel)
 }
