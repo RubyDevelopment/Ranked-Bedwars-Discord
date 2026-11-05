@@ -21,7 +21,6 @@ import (
 //	⚠️ 3/8 queued · 2 ineligible           some were refused a place (not registered, banned, rank gate…)
 //	⏸️ Queue paused
 //	⛔ Queue disabled                      the queue is switched off on the dashboard (only while someone is in the channel)
-//	📈 / 💤 estimated activity             nobody is in the channel: when games usually happen (see queue_activity.go); nothing if there is too little history
 //
 // It is written 3 seconds after the last change in the channel (see base.ScheduleVoiceStatus): every join or leave starts that wait over,
 // so a run of members joining back to back is one update, made once things have settled.
@@ -55,7 +54,7 @@ func voiceStatusText(s *discordgo.Session, guildID, channelID string, bind Queue
 	}
 	roster := voiceRoster(s, guildID, channelID)
 	if len(roster) == 0 {
-		return estimatedActivity(guildID) // nobody in the channel: when games usually happen (nothing, if there is too little history)
+		return "" // nobody in the channel: no status
 	}
 	var queued, inGame, ineligible int
 	for _, userID := range roster {
