@@ -82,7 +82,7 @@ func (v *vote) link() string {
 // embed is the vote message while open (status "") and its result once a manager closed it ("approved", "denied" or "tied", by <@id>).
 func (v *vote) embed(status, by string) *discordgo.MessageEmbed {
 	yes, no := v.counts()
-	preset, title, result := "default", fmt.Sprintf("%s Vote · %s", v.div.Label, v.name), ""
+	preset, title, result := "default", v.div.Label+" Vote", ""
 	switch status {
 	case "approved":
 		preset, result = "success", fmt.Sprintf("Closed by <@%s>: **Approved**. No role was added: a manager can add them with `/%s add`.", by, v.div.Key)
@@ -91,7 +91,8 @@ func (v *vote) embed(status, by string) *discordgo.MessageEmbed {
 	case "tied":
 		preset, result = "info", fmt.Sprintf("Closed by <@%s>: **Tied**.", by)
 	}
-	desc := fmt.Sprintf("<@%s> was nominated for **%s** by <@%s>.\n**Reason:** %s\n\nVote Approve or Deny. A manager closes the vote.", v.targetID, v.div.Label, v.nominator, v.reason)
+	desc := fmt.Sprintf("<@%s> (**%s**) was nominated for **%s**.\n\n> **Nominated by:** <@%s>\n> **Division:** `%s`\n> **Reason:** %s\n\nPress Approve or Deny below. You can change your vote until a manager closes it.",
+		v.targetID, v.name, v.div.Label, v.nominator, v.div.Label, v.reason)
 	if result != "" {
 		desc += "\n\n" + result
 	}
@@ -142,13 +143,9 @@ func statsCard(s *discordgo.Session, guildID string, target, nominator *discordg
 		return nil, name, nil, err
 	}
 	playerID := sdk.UintToString(view.Player.ID)
-	stats, err := database.Must().Stats.GetOrCreate(guildID, playerID, seasonID)
+	stats, position, err := helpers.StatsAndRank(guildID, playerID, seasonID)
 	if err != nil {
 		return nil, name, nil, err
-	}
-	position := 0
-	if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
-		position = rank.Position
 	}
 	doc := banner.LoadBanners(guildID)
 	viewer := banner.BannerViewer(target.ID, banner.LookupMember(s, guildID, target.ID))
@@ -245,8 +242,8 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	open.by[sent.ID] = v
 	v.save("", "")
 	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Vote Started",
-		Description: fmt.Sprintf("The %s vote for <@%s> is open in <#%s>.\n%s", d.Label, target.ID, cfg.VoteChannel, v.link()),
+		Title:       d.Label + " Vote Started",
+		Description: fmt.Sprintf("The %s vote for <@%s> (**%s**) is open.\n\n> **Player:** <@%s>\n> **Division:** `%s`\n> **Channel:** <#%s>\n> **Vote:** %s", d.Label, target.ID, name, target.ID, d.Label, cfg.VoteChannel, v.link()),
 		Thumbnail:   helpers.MinecraftBustAvatarURL(name),
 	})
 }

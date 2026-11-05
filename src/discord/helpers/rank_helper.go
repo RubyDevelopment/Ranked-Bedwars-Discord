@@ -1,11 +1,14 @@
 package helpers
 
 import (
+	"sync"
+	"time"
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
 	"sort"
 	"strings"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
 )
@@ -38,21 +41,47 @@ func RankForElo(ranks []types.Rank, elo int) *types.Rank {
 
 // ActiveSeasonKey retrieves the active season key for a guild. An unavailable
 // database or a guild with no active season both return ("", 0, nil).
+//
+// Every stats card, leaderboard and game result asks for it, and it changes once a season, so the answer is kept for a few seconds.
 func ActiveSeasonKey(guildID string) (string, uint, error) {
 	svc := database.Get()
 	if svc == nil {
 		return "", 0, nil
 	}
 
+	seasons.mu.Lock()
+	if e, ok := seasons.by[guildID]; ok && time.Now().Before(e.expires) {
+		seasons.mu.Unlock()
+		return e.name, e.id, nil
+	}
+	seasons.mu.Unlock()
+
+	name, id := "", uint(0)
 	season, err := svc.Season.Active(guildID)
-	if err != nil {
-		if sdk.IsNotFound(err) {
-			return "", 0, nil
-		}
+	switch {
+	case err == nil:
+		name, id = season.Name, season.ID
+	case !sdk.IsNotFound(err):
 		return "", 0, err
 	}
-	return season.Name, season.ID, nil
+	seasons.mu.Lock()
+	seasons.by[guildID] = activeSeason{name: name, id: id, expires: time.Now().Add(seasonTTL)}
+	seasons.mu.Unlock()
+	return name, id, nil
 }
+
+type activeSeason struct {
+	name    string
+	id      uint
+	expires time.Time
+}
+
+const seasonTTL = 10 * time.Second
+
+var seasons = struct {
+	mu sync.Mutex
+	by map[string]activeSeason
+}{by: map[string]activeSeason{}}
 
 // AdministratorPermission returns the permission bit for administrators.
 func AdministratorPermission() *int64 {
@@ -325,4 +354,29 @@ func ResolveUserOption(s *discordgo.Session, i *discordgo.InteractionCreate, nam
 		return i.Member.User
 	}
 	return i.User
+}
+
+// StatsAndRank loads a player's stats for the season (creating them when they have none yet) and their position on the leaderboard.
+// The two are separate calls to the database; they are made together, so a stats card waits for one round trip instead of two.
+func StatsAndRank(guildID, playerID string, seasonID uint) (*models.PlayerStatsModel, int, error) {
+	position := make(chan int, 1)
+	go func() {
+		if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
+			position <- rank.Position
+			return
+		}
+		position <- -1
+	}()
+	stats, err := database.Must().Stats.GetOrCreate(guildID, playerID, seasonID)
+	pos := <-position
+	if err != nil {
+		return nil, 0, err
+	}
+	if pos < 0 { // a player with no stats yet has no position until they exist: ask again now that they do
+		pos = 0
+		if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
+			pos = rank.Position
+		}
+	}
+	return stats, pos, nil
 }

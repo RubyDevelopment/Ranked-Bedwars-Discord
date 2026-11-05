@@ -32,10 +32,7 @@ func renderRemote(b *Banner, vars Vars) ([]byte, error) {
 	if b.guildID == "" {
 		return nil, errors.New("html banner without a guild")
 	}
-	assets := map[string]Asset{}
-	for id, a := range b.assets {
-		assets[id] = a
-	}
+	assets := b.assetsUsed(vars)
 	params, err := json.Marshal(map[string]any{"html": b.HTML, "css": b.CSS, "width": b.Width, "height": b.Height, "vars": map[string]string(vars), "assets": assets})
 	if err != nil {
 		return nil, err
@@ -63,4 +60,29 @@ func renderRemote(b *Banner, vars Vars) ([]byte, error) {
 		return nil, errors.New("html banner: the engine did not answer with a picture")
 	}
 	return png, nil
+}
+
+// assetsUsed are the uploaded pictures this banner refers to (`asset:<id>` in its HTML or CSS, or in the value of a variable). A guild's
+// document holds every picture of every banner, megabytes of base64, and the engine would otherwise be sent and would parse all of it
+// for each banner it draws.
+func (b *Banner) assetsUsed(vars Vars) map[string]Asset {
+	out := map[string]Asset{}
+	if len(b.assets) == 0 {
+		return out
+	}
+	var text strings.Builder
+	text.WriteString(b.HTML)
+	text.WriteString(b.CSS)
+	for _, v := range vars {
+		if strings.Contains(v, "asset:") {
+			text.WriteString(v)
+		}
+	}
+	all := text.String()
+	for id, a := range b.assets {
+		if strings.Contains(all, "asset:"+id) {
+			out[id] = a
+		}
+	}
+	return out
 }

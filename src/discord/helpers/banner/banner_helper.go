@@ -14,7 +14,6 @@ import (
 	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
-	"image/png"
 	"io"
 	"math"
 	"net"
@@ -46,6 +45,7 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/gofont/gosmallcaps"
 	"golang.org/x/image/font/gofont/gosmallcapsitalic"
+	"golang.org/x/image/math/fixed"
 	_ "golang.org/x/image/webp"
 
 	"ranked-bedwars/src/config"
@@ -380,44 +380,6 @@ func faceFor(preset string, bold, italic bool, size float64) (font.Face, error) 
 	return face, nil
 }
 
-const (
-	maxImageBytes = 5 << 20
-	maxImageSide  = 4096
-	imageTTL      = 15 * time.Minute
-	imageCacheMax = 128
-)
-
-type cachedImage struct {
-	img     image.Image
-	expires time.Time
-}
-
-var (
-	imageMu    sync.Mutex
-	imageCache = map[string]cachedImage{}
-)
-
-// fetchImage loads an https image (an avatar, a background). It is a variable so tests can serve images without a network.
-var fetchImage = func(url string) (image.Image, error) {
-	imageMu.Lock()
-	if c, ok := imageCache[url]; ok && time.Now().Before(c.expires) {
-		imageMu.Unlock()
-		return c.img, nil
-	}
-	imageMu.Unlock()
-
-	img, err := download(url)
-	if err != nil {
-		return nil, err
-	}
-	imageMu.Lock()
-	if len(imageCache) >= imageCacheMax {
-		clear(imageCache)
-	}
-	imageCache[url] = cachedImage{img: img, expires: time.Now().Add(imageTTL)}
-	imageMu.Unlock()
-	return img, nil
-}
 
 // Banner image links are written by guild staff, so the bot only follows https links to public hosts.
 var client = &http.Client{
@@ -524,9 +486,7 @@ func decodeDataURL(data string) (image.Image, error) {
 		return nil, err
 	}
 	imageMu.Lock()
-	if len(imageCache) >= imageCacheMax {
-		clear(imageCache)
-	}
+	evictImages()
 	imageCache[key] = cachedImage{img: img, expires: time.Now().Add(24 * time.Hour)}
 	imageMu.Unlock()
 	return img, nil
@@ -545,19 +505,16 @@ func RenderBanner(b *Banner, vars Vars) ([]byte, error) {
 	if w < 50 || h < 50 || w > maxSide || h > maxSide {
 		return nil, errors.New("banner size is out of range")
 	}
-	dc := gg.NewContext(w, h)
-	drawBackground(dc, b, vars)
+	b.prefetch(vars) // every head and picture is fetched at once, not one after the other
+	canvas := b.background(vars)
+	dc := gg.NewContextForRGBA(canvas)
 	for _, l := range b.Layers {
 		if l == nil || l.W < 1 || l.H < 1 || l.W > 6000 || l.H > 6000 {
 			continue
 		}
 		drawLayer(dc, b, l, vars)
 	}
-	var out bytes.Buffer
-	if err := png.Encode(&out, dc.Image()); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
+	return encodePNG(canvas)
 }
 
 func nrgba(s string, def color.NRGBA) color.NRGBA {
@@ -567,45 +524,9 @@ func nrgba(s string, def color.NRGBA) color.NRGBA {
 	return def
 }
 
-// gradient is the CSS linear-gradient(angle, a, b) over a box: 0deg points up, 90deg right.
-func gradient(x, y, w, h, angle float64, a, b color.Color) gg.Gradient {
-	rad := angle * math.Pi / 180
-	dx, dy := math.Sin(rad), -math.Cos(rad)
-	half := (math.Abs(w*math.Sin(rad)) + math.Abs(h*math.Cos(rad))) / 2
-	cx, cy := x+w/2, y+h/2
-	g := gg.NewLinearGradient(cx-dx*half, cy-dy*half, cx+dx*half, cy+dy*half)
-	g.AddColorStop(0, a)
-	g.AddColorStop(1, b)
-	return g
-}
-
-func drawBackground(dc *gg.Context, b *Banner, vars Vars) {
-	bg := b.Background
-	w, h := float64(b.Width), float64(b.Height)
-	c1 := nrgba(bg.Color, color.NRGBA{27, 29, 38, 255})
-	dc.DrawRectangle(0, 0, w, h)
-	if c2, ok := parseColor(bg.Color2); ok && bg.Color2 != "" {
-		dc.SetFillStyle(gradient(0, 0, w, h, bg.Angle, c1, c2))
-	} else {
-		dc.SetColor(c1)
-	}
-	dc.Fill()
-	if bg.Image != "" {
-		if img, err := b.source(vars.fill(bg.Image)); err == nil {
-			paintImage(dc, img, 0, 0, w, h, bg.Fit, bg.Blur)
-		}
-	}
-	if bg.OverlayOpacity > 0 {
-		c := nrgba(bg.Overlay, color.NRGBA{0, 0, 0, 255})
-		c.A = uint8(float64(c.A) * math.Min(1, bg.OverlayOpacity))
-		dc.SetColor(c)
-		dc.DrawRectangle(0, 0, w, h)
-		dc.Fill()
-	}
-}
-
-// paintImage draws img into the box (x, y, w, h) like CSS object-fit, resampled once for a clean edge.
-func paintImage(dc *gg.Context, img image.Image, x, y, w, h float64, fit string, blur float64) {
+// paintImage draws img into dst, inside the box (x, y, w, h) like CSS object-fit, resampled once for a clean edge. The picture never
+// leaves the box; mask (optional, in dst's coordinates) rounds its corners.
+func paintImage(dst *image.RGBA, mask image.Image, img image.Image, x, y, w, h float64, fit string, blur float64) {
 	b := img.Bounds()
 	iw, ih := float64(b.Dx()), float64(b.Dy())
 	if iw == 0 || ih == 0 {
@@ -624,7 +545,18 @@ func paintImage(dc *gg.Context, img image.Image, x, y, w, h float64, fit string,
 	if blur > 0 {
 		blurImage(scaled, blur)
 	}
-	dc.DrawImage(scaled, int(math.Round(x+(w-float64(tw))/2)), int(math.Round(y+(h-float64(th))/2)))
+	px, py := int(math.Round(x+(w-float64(tw))/2)), int(math.Round(y+(h-float64(th))/2))
+	box := image.Rect(int(math.Floor(x)), int(math.Floor(y)), int(math.Ceil(x+w)), int(math.Ceil(y+h)))
+	at := image.Rect(px, py, px+tw, py+th).Intersect(box).Intersect(dst.Bounds())
+	if at.Empty() {
+		return
+	}
+	from := at.Min.Sub(image.Pt(px, py))
+	if mask != nil {
+		draw.DrawMask(dst, at, scaled, from, mask, at.Min, draw.Over)
+		return
+	}
+	draw.Draw(dst, at, scaled, from, draw.Over)
 }
 
 // drawLayer paints a layer on its own canvas (with room for its shadow), then places it on the banner with
@@ -634,24 +566,38 @@ func drawLayer(dc *gg.Context, b *Banner, src *Layer, vars Vars) {
 	if l.Hidden {
 		return
 	}
+	// Most layers have no shadow, fade or rotation: text and blocks are then drawn straight onto the banner, with no canvas of their own.
+	if (l.Kind == "text" || l.Kind == "shape") && !l.Shadow.On && l.Rotation == 0 && (l.Opacity == nil || *l.Opacity >= 1) {
+		at := rect{math.Round(l.X), math.Round(l.Y), l.W, l.H}
+		if l.Kind == "text" {
+			drawText(dc.Image().(*image.RGBA), l, at, vars)
+		} else {
+			drawShape(dc, l, at)
+		}
+		return
+	}
 	pad := 0
 	if l.Shadow.On {
 		pad = int(math.Ceil(l.Shadow.Blur*2+math.Max(math.Abs(l.Shadow.X), math.Abs(l.Shadow.Y)))) + 2
 	}
 	lw, lh := int(math.Ceil(l.W))+2*pad, int(math.Ceil(l.H))+2*pad
-	lc := gg.NewContext(lw, lh)
 	box := rect{float64(pad), float64(pad), l.W, l.H}
+	var img *image.RGBA
 	switch l.Kind {
 	case "text":
-		drawText(lc, l, box, vars)
+		img = image.NewRGBA(image.Rect(0, 0, lw, lh))
+		drawText(img, l, box, vars)
 	case "image":
+		lc := gg.NewContext(lw, lh)
 		drawImageLayer(lc, b, l, box, vars)
+		img = lc.Image().(*image.RGBA)
 	case "shape":
+		lc := gg.NewContext(lw, lh)
 		drawShape(lc, l, box)
+		img = lc.Image().(*image.RGBA)
 	default:
 		return
 	}
-	img := lc.Image().(*image.RGBA)
 	if l.Shadow.On {
 		img = withShadow(img, l.Shadow)
 	}
@@ -710,13 +656,13 @@ func border(dc *gg.Context, l *Layer, r rect) {
 
 func drawShape(dc *gg.Context, l *Layer, r rect) {
 	c1 := nrgba(l.Color, color.NRGBA{39, 42, 55, 255})
-	shapePath(dc, l.Shape == "ellipse", r, l.Radius)
 	if c2, ok := parseColor(l.Color2); ok && l.Color2 != "" {
-		dc.SetFillStyle(gradient(r.x, r.y, r.w, r.h, l.Angle, c1, c2))
+		fillShapeGradient(dc.Image().(*image.RGBA), l, r, c1, c2)
 	} else {
+		shapePath(dc, l.Shape == "ellipse", r, l.Radius)
 		dc.SetColor(c1)
+		dc.Fill()
 	}
-	dc.Fill()
 	border(dc, l, r)
 }
 
@@ -728,10 +674,15 @@ func drawImageLayer(dc *gg.Context, b *Banner, l *Layer, r rect, vars Vars) {
 		dc.Fill()
 		return
 	}
-	shapePath(dc, false, r, l.Radius)
-	dc.Clip()
-	paintImage(dc, img, r.x, r.y, r.w, r.h, l.Fit, l.Blur)
-	dc.ResetClip()
+	var mask image.Image
+	if l.Radius > 0 { // rounded corners: the picture is composited through the box's own anti-aliased outline
+		mc := gg.NewContext(dc.Width(), dc.Height())
+		shapePath(mc, false, r, l.Radius)
+		mc.SetColor(color.White)
+		mc.Fill()
+		mask = mc.AsMask()
+	}
+	paintImage(dc.Image().(*image.RGBA), mask, img, r.x, r.y, r.w, r.h, l.Fit, l.Blur)
 	border(dc, l, r)
 }
 
@@ -739,13 +690,18 @@ func drawImageLayer(dc *gg.Context, b *Banner, l *Layer, r rect, vars Vars) {
 
 const lineHeight = 1.15
 
-func drawText(dc *gg.Context, l *Layer, r rect, vars Vars) {
+// drawText writes the layer's text into dst, inside the box r (in dst's own coordinates). The glyphs are drawn through a sub-image
+// of the box, so the text is clipped to it without building a clip mask for the whole canvas.
+func drawText(dst *image.RGBA, l *Layer, r rect, vars Vars) {
 	face, err := faceFor(l.Font, l.Bold, l.Italic, l.Size)
 	if err != nil {
 		return
 	}
-	dc.SetFontFace(face)
-	dc.SetColor(nrgba(l.Color, color.NRGBA{255, 255, 255, 255}))
+	clip := image.Rect(int(math.Floor(r.x)), int(math.Floor(r.y)), int(math.Ceil(r.x+r.w)), int(math.Ceil(r.y+r.h))).Intersect(dst.Bounds())
+	if clip.Empty() {
+		return
+	}
+	d := font.Drawer{Dst: dst.SubImage(clip).(*image.RGBA), Src: image.NewUniform(nrgba(l.Color, color.NRGBA{255, 255, 255, 255})), Face: face}
 	m := face.Metrics()
 	ascent, descent := float64(m.Ascent)/64, float64(m.Descent)/64
 	step := l.Size * lineHeight
@@ -759,8 +715,6 @@ func drawText(dc *gg.Context, l *Layer, r rect, vars Vars) {
 	case "bottom":
 		top = r.h - total
 	}
-	dc.DrawRectangle(r.x, r.y, r.w, r.h)
-	dc.Clip()
 	for i, line := range lines {
 		width := measure(face, line, l.LetterSpacing)
 		x := r.x
@@ -772,9 +726,8 @@ func drawText(dc *gg.Context, l *Layer, r rect, vars Vars) {
 		}
 		// The line box is `step` tall; the glyphs sit centred in it, like CSS line-height.
 		base := r.y + top + float64(i)*step + (step-(ascent+descent))/2 + ascent
-		drawString(dc, face, line, x, base, l.LetterSpacing)
+		drawString(&d, line, x, base, l.LetterSpacing)
 	}
-	dc.ResetClip()
 }
 
 func measure(face font.Face, s string, spacing float64) float64 {
@@ -785,14 +738,19 @@ func measure(face font.Face, s string, spacing float64) float64 {
 	return w
 }
 
-func drawString(dc *gg.Context, face font.Face, s string, x, base, spacing float64) {
+func drawString(d *font.Drawer, s string, x, base, spacing float64) {
+	at := func(x float64) fixed.Point26_6 {
+		return fixed.Point26_6{X: fixed.Int26_6(math.Round(x * 64)), Y: fixed.Int26_6(math.Round(base * 64))}
+	}
 	if spacing == 0 {
-		dc.DrawString(s, x, base)
+		d.Dot = at(x)
+		d.DrawString(s)
 		return
 	}
 	for _, r := range s {
-		dc.DrawString(string(r), x, base)
-		x += float64(font.MeasureString(face, string(r)))/64 + spacing
+		d.Dot = at(x)
+		d.DrawString(string(r))
+		x += float64(font.MeasureString(d.Face, string(r)))/64 + spacing
 	}
 }
 
@@ -941,12 +899,27 @@ func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
 // (/stats, /leaderboard): who the viewer is, which styles they may use, and which one they picked.
 
 // LoadBanners reads the guild's banner styles. An unreadable document counts as none: the commands fall back to their embeds.
+//
+// The document holds every picture the guild uploaded (as base64), so it can be megabytes: it is parsed once and reused for as long as
+// the saved text does not change, instead of on every /stats, /leaderboard and game result. The returned document is shared: callers
+// only read it.
 func LoadBanners(guildID string) *Doc {
 	cfg, err := database.Must().GuildConfig.Get(guildID)
 	if err != nil {
 		return &Doc{}
 	}
-	doc, err := ParseBanners([]byte(cfg.BannerLayouts))
+	raw := []byte(cfg.BannerLayouts)
+
+	docs.mu.Lock()
+	if e, ok := docs.by[guildID]; ok && (sameBytes(e.raw, raw) || bytes.Equal(e.raw, raw)) {
+		e.raw = raw // the config was fetched again, with the same content: remember the newer copy so the next check is instant
+		docs.by[guildID] = e
+		docs.mu.Unlock()
+		return e.doc
+	}
+	docs.mu.Unlock()
+
+	doc, err := ParseBanners(raw)
 	if err != nil {
 		return &Doc{}
 	}
@@ -955,7 +928,25 @@ func LoadBanners(guildID string) *Doc {
 			b.guildID = guildID
 		}
 	}
+	docs.mu.Lock()
+	docs.by[guildID] = parsedDoc{raw: raw, doc: doc}
+	docs.mu.Unlock()
 	return doc
+}
+
+type parsedDoc struct {
+	raw []byte
+	doc *Doc
+}
+
+var docs = struct {
+	mu sync.Mutex
+	by map[string]parsedDoc
+}{by: map[string]parsedDoc{}}
+
+// sameBytes reports whether a and b are the very same bytes in memory (the config cache hands out copies of one row).
+func sameBytes(a, b []byte) bool {
+	return len(a) == len(b) && (len(a) == 0 || &a[0] == &b[0])
 }
 
 // BannerViewer is who a banner is chosen for. The bot has no perk system yet, so no perks are passed.
@@ -1116,15 +1107,8 @@ func LeaderboardRowVars(s *discordgo.Session, guildID string, rows []sdk.Leaderb
 		wg.Add(1)
 		go func(n int, row sdk.LeaderboardEntry) {
 			defer wg.Done()
-			name, avatar := fmt.Sprintf("Player %d", row.PlayerID), ""
-			if global, err := database.Must().Player.GetGlobal(sdk.UintToString(row.PlayerID)); err == nil {
-				if view, err := database.Must().Player.Get(guildID, global.SnowflakeID); err == nil {
-					name = view.Config.Username
-				}
-				if m := LookupMember(s, guildID, global.SnowflakeID); m != nil {
-					avatar = AvatarOf(m.User)
-				}
-			}
+			who := rowPlayer(s, guildID, row.PlayerID)
+			name, avatar := who.name, who.avatar
 			mu.Lock()
 			EntryVars(vars, fmt.Sprintf("lb.%d.", n), row.Position, name, avatar, &row.PlayerStatsModel)
 			mu.Unlock()

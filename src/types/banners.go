@@ -16,6 +16,8 @@ type Background struct {
 	Blur           float64 `json:"blur"`
 	Overlay        string  `json:"overlay"`
 	OverlayOpacity float64 `json:"overlayOpacity"`
+	// Glows are soft radial lights painted over the fill (the built-in cards use them; the panel's builder does not set them).
+	Glows []Glow `json:"glows,omitempty"`
 }
 
 // Layer is one drawn element. Every kind uses the fields it needs and ignores the rest.
@@ -91,4 +93,13 @@ type Viewer struct {
 	// PerkIDs are the perks the player has. The bot has no perk system yet, so callers pass none and
 	// banners limited to a perk stay closed to everyone until it exists.
 	PerkIDs []string
+}
+
+// Glow is a soft radial light: Color at the centre (X, Y) fading to nothing at Radius, Opacity (0 to 1) at its strongest.
+type Glow struct {
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Radius  float64 `json:"radius"`
+	Color   string  `json:"color"`
+	Opacity float64 `json:"opacity"`
 }

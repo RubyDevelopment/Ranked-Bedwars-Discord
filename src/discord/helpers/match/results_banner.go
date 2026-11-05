@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
@@ -53,6 +54,28 @@ func resultsTeams(g Game, outcome string) []banner.ResultsTeam {
 		byUser[r.UserID] = r
 	}
 	unrated := outcome == outcomeVoid || outcome == outcomeCasual
+	// Nothing was scored, so each player's card line shows where they stand now: asked for all of them at once, not one by one.
+	type standing struct {
+		rank string
+		elo  int
+	}
+	standings := map[string]standing{}
+	if unrated {
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		for _, id := range g.PlayerIDs() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if st, err := database.Must().Stats.Get(g.GuildID, id, 0); err == nil {
+					mu.Lock()
+					standings[id] = standing{st.Rank, st.Elo}
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+	}
 	var out []banner.ResultsTeam
 	for _, name := range g.Teams {
 		team := banner.ResultsTeam{Name: name, Label: outcomeLabels[outcome]}
@@ -64,8 +87,8 @@ func resultsTeams(g Game, outcome string) []banner.ResultsTeam {
 			team.Win = r.Win
 			if unrated {
 				// Nothing was scored: show where the player stands now (rank and ELO on both sides, no change).
-				if st, err := database.Must().Stats.Get(g.GuildID, p.UserID, 0); err == nil {
-					r.RankBefore, r.RankAfter, r.Before, r.After = st.Rank, st.Rank, st.Elo, st.Elo
+				if st, ok := standings[p.UserID]; ok {
+					r.RankBefore, r.RankAfter, r.Before, r.After = st.rank, st.rank, st.elo, st.elo
 				}
 			}
 			team.Players = append(team.Players, banner.ResultsPlayer{

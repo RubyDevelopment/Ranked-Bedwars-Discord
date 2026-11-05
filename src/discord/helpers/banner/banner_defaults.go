@@ -4,21 +4,30 @@ import (
 	"fmt"
 )
 
-// The banners every server gets before it designs its own in the panel's Banner Builder: the old bot's purple
-// stats card, leaderboard and match-results cards, drawn with the same layers the builder uses. A server that
-// saves a banner of its own for a command replaces the default of that command.
+// The banners every server gets before it designs its own in the panel's Banner Builder: the stats card, the leaderboard and the
+// match-results card, drawn with the same layers the builder uses. A server that saves a banner of its own for a command replaces
+// the default of that command. All three are 1400 wide (1400 x 800 for stats and the leaderboard, and for results unless a game has
+// so many players that the rows need more room).
 
 const (
-	bnBackdrop = "#1c1838"
-	bnDeep     = "#32146a"
-	bnCard     = "#251d4d"
-	bnBorder   = "#43347a"
+	bnWidth  = 1400
+	bnHeight = 800
+
+	bnBackdrop = "#171232"
+	bnDeep     = "#33166e"
+	bnCard     = "#2a2058d9" // translucent, so the glows of the background show through
+	bnCardEnd  = "#1c1642d9"
+	bnRow      = "#ffffff0d"
+	bnBorder   = "#4c3a8c"
 	bnFrame    = "#8b5cf6"
-	bnAccent   = "#a855f7"
-	bnMain     = "#e2d9f3"
-	bnMuted    = "#8b7fb0"
+	bnAccent   = "#b072fb"
+	bnMain     = "#f1ebff"
+	bnMuted    = "#9a8dc4"
 	bnWin      = "#4ade80"
 	bnLoss     = "#f87171"
+	bnGold     = "#fbbf24"
+	bnSilver   = "#d1d5db"
+	bnBronze   = "#cd7f32"
 )
 
 type bnOpt func(*Layer)
@@ -28,6 +37,16 @@ func bnRight(l *Layer)         { l.Align = "right" }
 func bnCenter(l *Layer)        { l.Align = "center" }
 func bnRadius(r float64) bnOpt { return func(l *Layer) { l.Radius = r } }
 func bnStroke(c string) bnOpt  { return func(l *Layer) { l.Stroke, l.StrokeWidth = c, 2 } }
+
+// bnFont picks one of the preset fonts (Rajdhani gives the cards their sharp, game-like numbers).
+func bnFont(name string) bnOpt { return func(l *Layer) { l.Font = name } }
+
+// bnSpace spreads the letters of a label.
+func bnSpace(px float64) bnOpt { return func(l *Layer) { l.LetterSpacing = px } }
+
+// bnGrad fills a block with a gradient from its colour to c2.
+func bnGrad(c2 string, angle float64) bnOpt { return func(l *Layer) { l.Color2, l.Angle = c2, angle } }
+
 func bnRule(v, op, val string, set RuleSet) bnOpt {
 	return func(l *Layer) { l.Rules = append(l.Rules, Rule{Var: v, Op: op, Value: val, Set: set}) }
 }
@@ -35,7 +54,7 @@ func colorPtr(c string) *string { return &c }
 func truePtr() *bool            { t := true; return &t }
 
 func bnTxt(id string, x, y, w, h float64, text string, size float64, col string, opts ...bnOpt) *Layer {
-	l := &Layer{ID: id, Kind: "text", X: x, Y: y, W: w, H: h, Text: text, Size: size, Color: col, Font: "sans", VAlign: "middle"}
+	l := &Layer{ID: id, Kind: "text", X: x, Y: y, W: w, H: h, Text: text, Size: size, Color: col, Font: "rajdhani", VAlign: "middle"}
 	for _, o := range opts {
 		o(l)
 	}
@@ -58,12 +77,12 @@ func bnPic(id string, x, y, w, h float64, src, fit string, opts ...bnOpt) *Layer
 	return l
 }
 
-// base is the purple canvas and frame every default card sits on.
-func bnBase(id, command string, w, h int, layers ...*Layer) *Banner {
-	all := []*Layer{bnBox("frame", 12, 12, float64(w-24), float64(h-24), "#00000000", bnRadius(14), bnStroke(bnFrame))}
+// bnBase is the purple canvas and frame every default card sits on, with the glows that give it depth.
+func bnBase(id, command string, w, h int, glows []Glow, layers ...*Layer) *Banner {
+	all := []*Layer{bnBox("frame", 14, 14, float64(w-28), float64(h-28), "#00000000", bnRadius(24), bnStroke(bnFrame))}
 	return &Banner{
 		ID: id, Name: "Default", Command: command, Enabled: true, Width: w, Height: h,
-		Background: Background{Color: bnBackdrop, Color2: bnDeep, Angle: 135},
+		Background: Background{Color: bnBackdrop, Color2: bnDeep, Angle: 135, Glows: glows},
 		Layers:     append(all, layers...),
 	}
 }
@@ -80,59 +99,118 @@ func DefaultBanner(command string) *Banner {
 }
 
 func defaultStatsBanner() *Banner {
+	const (
+		left   = 468.0 // where the right-hand side begins
+		tileW  = 203.0
+		tileH  = 136.0
+		gap    = 24.0
+		rowGap = 16.0
+	)
 	layers := []*Layer{
-		bnPic("body", 40, 36, 190, 428, "{player.body}", "contain"),
-		bnTxt("name", 262, 36, 640, 70, "{player.name}", 54, bnMain, bnBold),
-		bnTxt("rank", 262, 104, 640, 40, "{stats.rank}  ·  #{stats.position}", 28, bnAccent, bnBold),
-		bnTxt("elo", 880, 36, 280, 70, "{stats.elo}", 58, bnMain, bnBold, bnRight),
-		bnTxt("elo-label", 880, 100, 280, 34, "ELO  (peak {stats.highest_elo})", 22, bnMuted, bnRight),
+		// The player, on the left.
+		bnBox("side", 48, 48, 380, 704, bnCard, bnGrad(bnCardEnd, 160), bnRadius(26), bnStroke(bnBorder)),
+		bnPic("body", 78, 74, 320, 520, "{player.body}", "contain"),
+		bnBox("rank-pill", 88, 612, 300, 60, "#8b5cf62e", bnRadius(30), bnStroke(bnFrame)),
+		bnTxt("rank", 88, 612, 300, 60, "{stats.rank}", 36, bnMain, bnBold, bnCenter, bnSpace(1)),
+		bnTxt("position", 78, 686, 320, 44, "#{stats.position} on the leaderboard", 24, bnMuted, bnCenter),
+
+		// The header.
+		bnTxt("name", left, 50, 540, 100, "{player.name}", 76, bnMain, bnBold),
+		bnTxt("season", left, 146, 540, 40, "{season.name}  ·  {stats.games_played} games played", 28, bnMuted),
+		bnTxt("elo-label", 1040, 52, 312, 32, "ELO", 26, bnMuted, bnBold, bnRight, bnSpace(5)),
+		bnTxt("elo", 960, 78, 392, 104, "{stats.elo}", 96, bnMain, bnBold, bnRight),
+		bnTxt("peak", 960, 178, 392, 34, "PEAK {stats.highest_elo}", 26, bnAccent, bnBold, bnRight, bnSpace(2)),
+		bnBox("rule", left, 226, 884, 2, bnBorder),
 	}
-	tiles := [][2]string{
-		{"WINS", "{stats.wins}"}, {"LOSSES", "{stats.losses}"}, {"W/L", "{stats.wlr}"}, {"WIN STREAK", "{stats.win_streak}"},
-		{"KILLS", "{stats.kills}"}, {"FINAL KILLS", "{stats.final_kills}"}, {"BEDS BROKEN", "{stats.beds_destroyed}"}, {"MVPS", "{stats.mvp_count}"},
+	type tile struct{ label, value, color string }
+	tiles := []tile{
+		{"WINS", "{stats.wins}", bnWin}, {"LOSSES", "{stats.losses}", bnLoss}, {"W/L", "{stats.wlr}", bnMain}, {"WIN RATE", "{stats.win_rate}", bnMain},
+		{"KILLS", "{stats.kills}", bnMain}, {"FINAL KILLS", "{stats.final_kills}", bnMain}, {"K/D", "{stats.kdr}", bnMain}, {"FKDR", "{stats.fkdr}", bnMain},
+		{"BEDS BROKEN", "{stats.beds_destroyed}", bnMain}, {"BEDS LOST", "{stats.beds_lost}", bnMain}, {"MVPS", "{stats.mvp_count}", bnMain}, {"WIN STREAK", "{stats.win_streak}", bnMain},
 	}
 	for i, t := range tiles {
-		x, y := 262+float64(i%4)*226, 170+float64(i/4)*130
+		x, y := left+float64(i%4)*(tileW+gap), 250+float64(i/4)*(tileH+rowGap)
 		layers = append(layers,
-			bnBox(fmt.Sprintf("tile%d", i), x, y, 210, 112, bnCard, bnRadius(10), bnStroke(bnBorder)),
-			bnTxt(fmt.Sprintf("tile%d-label", i), x+16, y+12, 178, 30, t[0], 20, bnMuted, bnBold),
-			bnTxt(fmt.Sprintf("tile%d-value", i), x+16, y+44, 178, 56, t[1], 40, bnMain, bnBold),
+			bnBox(fmt.Sprintf("tile%d", i), x, y, tileW, tileH, bnCard, bnGrad(bnCardEnd, 160), bnRadius(18), bnStroke(bnBorder)),
+			bnBox(fmt.Sprintf("tile%d-bar", i), x+18, y+22, 4, 24, bnFrame, bnRadius(2)),
+			bnTxt(fmt.Sprintf("tile%d-label", i), x+32, y+16, tileW-44, 36, t.label, 22, bnMuted, bnBold, bnSpace(2)),
+			bnTxt(fmt.Sprintf("tile%d-value", i), x+20, y+56, tileW-36, 66, t.value, 56, t.color, bnBold),
 		)
 	}
 	layers = append(layers,
-		bnTxt("footer-left", 262, 438, 440, 34, "{season.name}  ·  {stats.games_played} games  ·  K/D {stats.kdr}", 22, bnMuted),
-		bnTxt("footer-bnRight", 712, 438, 448, 34, "Last played {stats.last_played}", 22, bnMuted, bnRight),
+		bnTxt("footer-left", left, 716, 440, 36, "Best win streak {stats.highest_win_streak}", 24, bnMuted),
+		bnTxt("footer-right", left+444, 716, 440, 36, "Last played {stats.last_played}", 24, bnMuted, bnRight),
 	)
-	return bnBase("default-stats", "stats", 1200, 500, layers...)
+	glows := []Glow{
+		{X: 238, Y: 330, Radius: 300, Color: "#a855f7", Opacity: 0.5},
+		{X: 1240, Y: 90, Radius: 460, Color: "#7c3aed", Opacity: 0.28},
+		{X: 700, Y: 800, Radius: 380, Color: "#6d28d9", Opacity: 0.18},
+	}
+	return bnBase("default-stats", "stats", bnWidth, bnHeight, glows, layers...)
 }
 
 func defaultLeaderboardBanner() *Banner {
-	const rows = 10
+	const (
+		rows   = 10
+		rowY   = 142.0
+		rowH   = 50.0
+		pitch  = 55.0
+		left   = 56.0
+		inner  = 1288.0 // the width of the table: 1400 less the margins
+		tableR = left + inner
+	)
 	layers := []*Layer{
-		bnTxt("title", 40, 28, 920, 64, "{lb.title}", 44, bnMain, bnBold),
-		bnTxt("page", 640, 40, 320, 40, "Page {page.number}/{page.total}", 24, bnMuted, bnRight),
-		bnTxt("h-name", 150, 96, 360, 28, "PLAYER", 18, bnMuted, bnBold),
-		bnTxt("h-rank", 520, 96, 160, 28, "RANK", 18, bnMuted, bnBold, bnCenter),
-		bnTxt("h-elo", 690, 96, 120, 28, "ELO", 18, bnMuted, bnBold, bnRight),
-		bnTxt("h-wl", 830, 96, 130, 28, "W / L", 18, bnMuted, bnBold, bnRight),
+		bnTxt("title", left, 36, 900, 72, "{lb.title}", 54, bnMain, bnBold),
+		bnBox("page-pill", tableR-210, 48, 210, 48, "#8b5cf62e", bnRadius(24), bnStroke(bnFrame)),
+		bnTxt("page", tableR-210, 48, 210, 48, "PAGE {page.number} / {page.total}", 22, bnMain, bnBold, bnCenter, bnSpace(2)),
+		bnTxt("h-pos", left+8, 108, 70, 28, "#", 20, bnMuted, bnBold, bnCenter, bnSpace(2)),
+		bnTxt("h-name", left+118, 108, 340, 28, "PLAYER", 20, bnMuted, bnBold, bnSpace(2)),
+		bnTxt("h-rank", 640, 108, 170, 28, "RANK", 20, bnMuted, bnBold, bnCenter, bnSpace(2)),
+		bnTxt("h-elo", 820, 108, 110, 28, "ELO", 20, bnMuted, bnBold, bnRight, bnSpace(2)),
+		bnTxt("h-peak", 944, 108, 110, 28, "PEAK", 20, bnMuted, bnBold, bnRight, bnSpace(2)),
+		bnTxt("h-wl", 1070, 108, 110, 28, "W / L", 20, bnMuted, bnBold, bnRight, bnSpace(2)),
+		bnTxt("h-wlr", 1196, 108, 124, 28, "W/L RATIO", 20, bnMuted, bnBold, bnRight, bnSpace(2)),
 	}
 	for n := 1; n <= rows; n++ {
-		y := 130 + float64(n-1)*62
-		hide := bnRule(fmt.Sprintf("lb.%d.name", n), "eq", "", RuleSet{Hidden: truePtr()})
+		y := rowY + float64(n-1)*pitch
 		p := func(f string) string { return fmt.Sprintf("{lb.%d.%s}", n, f) }
+		pos := fmt.Sprintf("lb.%d.position", n)
+		hide := bnRule(fmt.Sprintf("lb.%d.name", n), "eq", "", RuleSet{Hidden: truePtr()})
+		// The top three positions (on any page) get a medal colour.
+		gold := bnRule(pos, "eq", "1", RuleSet{Color: colorPtr(bnGold)})
+		silver := bnRule(pos, "eq", "2", RuleSet{Color: colorPtr(bnSilver)})
+		bronze := bnRule(pos, "eq", "3", RuleSet{Color: colorPtr(bnBronze)})
+		goldEdge := bnRule(pos, "eq", "1", RuleSet{Stroke: colorPtr(bnGold)})
+		silverEdge := bnRule(pos, "eq", "2", RuleSet{Stroke: colorPtr(bnSilver)})
+		bronzeEdge := bnRule(pos, "eq", "3", RuleSet{Stroke: colorPtr(bnBronze)})
 		layers = append(layers,
-			bnBox(fmt.Sprintf("row%d", n), 40, y, 920, 54, bnCard, bnRadius(8), bnStroke(bnBorder), hide),
-			bnTxt(fmt.Sprintf("pos%d", n), 52, y, 70, 54, "#"+p("position"), 26, bnAccent, bnBold, hide),
-			bnPic(fmt.Sprintf("head%d", n), 118, y+7, 40, 40, p("head"), "cover", hide),
-			bnTxt(fmt.Sprintf("name%d", n), 168, y, 340, 54, p("name"), 26, bnMain, bnBold, hide),
-			bnTxt(fmt.Sprintf("rank%d", n), 520, y, 160, 54, p("rank"), 22, bnAccent, bnCenter, hide),
-			bnTxt(fmt.Sprintf("elo%d", n), 690, y, 120, 54, p("elo"), 26, bnMain, bnBold, bnRight, hide),
-			bnTxt(fmt.Sprintf("wl%d", n), 830, y, 118, 54, p("wins")+" / "+p("losses"), 22, bnMuted, bnRight, hide),
+			bnBox(fmt.Sprintf("row%d", n), left, y, inner, rowH, bnCard, bnGrad(bnCardEnd, 90), bnRadius(14), bnStroke(bnBorder), hide, goldEdge, silverEdge, bronzeEdge),
+			bnTxt(fmt.Sprintf("pos%d", n), left+8, y, 70, rowH, "#"+p("position"), 28, bnAccent, bnBold, bnCenter, hide, gold, silver, bronze),
+			bnPic(fmt.Sprintf("head%d", n), left+88, y+5, 40, 40, p("head"), "cover", bnRadius(10), hide),
+			bnTxt(fmt.Sprintf("name%d", n), left+146, y, 400, rowH, p("name"), 30, bnMain, bnBold, hide),
+			bnTxt(fmt.Sprintf("rank%d", n), 640, y, 170, rowH, p("rank"), 24, bnAccent, bnBold, bnCenter, hide),
+			bnTxt(fmt.Sprintf("elo%d", n), 820, y, 110, rowH, p("elo"), 30, bnMain, bnBold, bnRight, hide),
+			bnTxt(fmt.Sprintf("peak%d", n), 944, y, 110, rowH, p("peak"), 24, bnMuted, bnBold, bnRight, hide),
+			bnTxt(fmt.Sprintf("wl%d", n), 1070, y, 110, rowH, p("wins")+" / "+p("losses"), 24, bnMuted, bnBold, bnRight, hide),
+			bnTxt(fmt.Sprintf("wlr%d", n), 1196, y, 124, rowH, p("wlr"), 26, bnMain, bnBold, bnRight, hide),
 		)
 	}
-	layers = append(layers, bnTxt("me", 40, 764, 920, 36, "You: #{me.position}  {me.name}  ·  {me.elo} ELO  ·  {me.rank}", 22, bnMuted,
-		bnRule("me.name", "eq", "", RuleSet{Hidden: truePtr()})))
-	return bnBase("default-leaderboard", "leaderboard", 1000, 820, layers...)
+	hideMe := bnRule("me.name", "eq", "", RuleSet{Hidden: truePtr()})
+	layers = append(layers,
+		bnBox("me-card", left, 712, inner, 56, "#8b5cf633", bnGrad("#8b5cf60d", 90), bnRadius(16), bnStroke(bnFrame), hideMe),
+		bnTxt("me-label", left+20, 712, 110, 56, "YOU", 22, bnAccent, bnBold, bnSpace(3), hideMe),
+		bnTxt("me-pos", left+120, 712, 90, 56, "#{me.position}", 30, bnAccent, bnBold, hideMe),
+		bnTxt("me-name", left+222, 712, 420, 56, "{me.name}", 30, bnMain, bnBold, hideMe),
+		bnTxt("me-rank", 640, 712, 170, 56, "{me.rank}", 24, bnAccent, bnBold, bnCenter, hideMe),
+		bnTxt("me-elo", 820, 712, 110, 56, "{me.elo}", 30, bnMain, bnBold, bnRight, hideMe),
+		bnTxt("me-wl", 1070, 712, 110, 56, "{me.wins} / {me.losses}", 24, bnMuted, bnBold, bnRight, hideMe),
+		bnTxt("me-wlr", 1196, 712, 124, 56, "{me.wlr}", 26, bnMain, bnBold, bnRight, hideMe),
+	)
+	glows := []Glow{
+		{X: 1250, Y: 60, Radius: 520, Color: "#7c3aed", Opacity: 0.3},
+		{X: 120, Y: 800, Radius: 420, Color: "#a855f7", Opacity: 0.2},
+	}
+	return bnBase("default-leaderboard", "leaderboard", bnWidth, bnHeight, glows, layers...)
 }
 
 // ResultsTeam is one team of a finished match, as the results card shows it.
@@ -179,6 +257,8 @@ func ResultsVars(number int, season, mode, mapName string, teams []ResultsTeam) 
 }
 
 // DefaultResultsBannerFor is DefaultResultsBanner, with the rank and ELO columns left out when the game has no rating (showElo false).
+// The card is 1400 x 800: the team panels share that height, and a game with so many players that its rows would get too small
+// makes the card taller instead.
 func DefaultResultsBannerFor(teams []ResultsTeam, showElo bool) *Banner {
 	perRow := 2
 	if len(teams) == 1 {
@@ -189,52 +269,80 @@ func DefaultResultsBannerFor(teams []ResultsTeam, showElo bool) *Banner {
 		maxPlayers = max(maxPlayers, len(t.Players))
 	}
 	const (
-		pad    = 40.0
-		rowH   = 56.0
-		headH  = 96.0
-		panelW = 780.0
+		pad = 48.0
+		gap = 24.0
+
+		headH   = 76.0 // a panel's title strip
+		foot    = 14.0
+		maxRowH = 84.0
+		minRowH = 38.0
 	)
-	panelH := 70 + float64(maxPlayers)*rowH + 16
+	top := 164.0 // where the panels may begin
+	panelW := (bnWidth - pad*2 - gap*float64(perRow-1)) / float64(perRow)
 	panelRows := (len(teams) + perRow - 1) / perRow
-	w := int(pad*2 + float64(perRow)*panelW + float64(perRow-1)*24)
-	h := int(160 + float64(panelRows)*(panelH+24))
+
+	// Fit the panels into the card's 800: rows shrink (down to minRowH) before the card grows, and panels with few players
+	// hug their rows and sit in the middle of the space instead of stretching.
+	h := float64(bnHeight)
+	avail := h - top - pad
+	panelH := (avail - gap*float64(panelRows-1)) / float64(panelRows)
+	rowH := min(maxRowH, (panelH-headH-foot)/float64(maxPlayers))
+	if rowH < minRowH {
+		rowH = minRowH
+		h = top + float64(panelRows)*(headH+foot+float64(maxPlayers)*rowH) + gap*float64(panelRows-1) + pad
+		avail = h - top - pad
+	}
+	panelH = headH + foot + float64(maxPlayers)*rowH
+	top += max(0, (avail-(float64(panelRows)*panelH+gap*float64(panelRows-1)))/2)
 
 	layers := []*Layer{
-		bnTxt("match", pad, 28, 700, 70, "MATCH #{match.number}", 52, bnMain, bnBold),
-		bnTxt("season", float64(w)-pad-600, 28, 600, 40, "{match.season}", 28, bnAccent, bnBold, bnRight),
-		bnTxt("detail", float64(w)-pad-600, 70, 600, 36, "{match.mode}  ·  {match.map}", 22, bnMuted, bnRight),
-		bnBox("rule", pad, headH+20, float64(w)-pad*2, 2, bnFrame),
+		bnTxt("match", pad, 34, 760, 84, "MATCH #{match.number}", 66, bnMain, bnBold),
+		bnTxt("season", bnWidth-pad-560, 38, 560, 44, "{match.season}", 32, bnAccent, bnBold, bnRight, bnSpace(2)),
+		bnTxt("detail", bnWidth-pad-560, 80, 560, 40, "{match.mode}  ·  {match.map}", 26, bnMuted, bnRight),
+		bnBox("rule", pad, 130, bnWidth-pad*2, 3, bnFrame, bnGrad("#8b5cf600", 90)),
 	}
 	for t := range teams {
 		pre := fmt.Sprintf("t%d.", t+1)
-		x := pad + float64(t%perRow)*(panelW+24)
-		y := 160 + float64(t/perRow)*(panelH+24)
+		x := pad + float64(t%perRow)*(panelW+gap)
+		y := top + float64(t/perRow)*(panelH+gap)
+		// A winning team's panel has a green edge and a losing team's a red one; its result text takes the same colour.
+		wonEdge := bnRule(pre+"result", "eq", "VICTORY", RuleSet{Stroke: colorPtr(bnWin)})
+		lostEdge := bnRule(pre+"result", "eq", "DEFEAT", RuleSet{Stroke: colorPtr(bnLoss)})
 		won := bnRule(pre+"result", "eq", "VICTORY", RuleSet{Color: colorPtr(bnWin)})
 		lost := bnRule(pre+"result", "eq", "DEFEAT", RuleSet{Color: colorPtr(bnLoss)})
 		layers = append(layers,
-			bnBox(fmt.Sprintf("panel%d", t), x, y, panelW, panelH, bnCard, bnRadius(12), bnStroke(bnBorder)),
-			bnTxt(fmt.Sprintf("team%d", t), x+24, y+10, 440, 50, "{"+pre+"name}", 32, bnMain, bnBold),
-			bnTxt(fmt.Sprintf("result%d", t), x+panelW-264, y+10, 240, 50, "{"+pre+"result}", 30, bnMuted, bnBold, bnRight, won, lost),
+			bnBox(fmt.Sprintf("panel%d", t), x, y, panelW, panelH, bnCard, bnGrad(bnCardEnd, 160), bnRadius(22), bnStroke(bnBorder), wonEdge, lostEdge),
+			bnTxt(fmt.Sprintf("team%d", t), x+28, y+10, panelW-300, headH-14, "{"+pre+"name}", 42, bnMain, bnBold),
+			bnTxt(fmt.Sprintf("result%d", t), x+panelW-300, y+10, 272, headH-14, "{"+pre+"result}", 38, bnMuted, bnBold, bnRight, bnSpace(3), won, lost),
 		)
 		for p := range teams[t].Players {
 			q := fmt.Sprintf("%sp%d.", pre, p+1)
-			ry := y + 70 + float64(p)*rowH
+			ry := y + headH + float64(p)*rowH
+			inner := rowH - 8
+			head := min(inner-10, 60)
 			up := bnRule(q+"change", "gte", "0", RuleSet{Color: colorPtr(bnWin)})
 			down := bnRule(q+"change", "lt", "0", RuleSet{Color: colorPtr(bnLoss)})
+			mvpEdge := bnRule(q+"mvp", "eq", "MVP", RuleSet{Stroke: colorPtr(bnGold)})
 			layers = append(layers,
-				bnPic(fmt.Sprintf("head%d_%d", t, p), x+24, ry+6, 44, 44, "{"+q+"head}", "cover"),
-				bnTxt(fmt.Sprintf("name%d_%d", t, p), x+80, ry, 250, rowH, "{"+q+"name}", 26, bnMain, bnBold),
-				bnTxt(fmt.Sprintf("mvp%d_%d", t, p), x+300, ry, 100, rowH, "{"+q+"mvp}", 18, "#facc15", bnBold),
+				bnBox(fmt.Sprintf("row%d_%d", t, p), x+14, ry, panelW-28, inner, bnRow, bnRadius(14), bnStroke("#ffffff00"), mvpEdge),
+				bnPic(fmt.Sprintf("head%d_%d", t, p), x+26, ry+(inner-head)/2, head, head, "{"+q+"head}", "cover", bnRadius(10)),
+				bnTxt(fmt.Sprintf("name%d_%d", t, p), x+26+head+14, ry, 232-(head-48), inner, "{"+q+"name}", 30, bnMain, bnBold),
 			)
 			if showElo {
 				layers = append(layers,
-					bnTxt(fmt.Sprintf("rank%d_%d", t, p), x+400, ry, 150, rowH, "{"+q+"rank}", 22, bnAccent, bnCenter),
-					bnTxt(fmt.Sprintf("elo%d_%d", t, p), x+556, ry, 120, rowH, "{"+q+"after}", 24, bnMain, bnBold, bnRight),
-					bnTxt(fmt.Sprintf("chg%d_%d", t, p), x+680, ry, 80, rowH, "{"+q+"change}", 24, bnMuted, bnBold, bnRight, up, down),
+					bnTxt(fmt.Sprintf("mvp%d_%d", t, p), x+panelW-330, ry, 56, inner, "{"+q+"mvp}", 22, bnGold, bnBold, bnCenter, bnSpace(1)),
+					bnTxt(fmt.Sprintf("rank%d_%d", t, p), x+panelW-270, ry, 100, inner, "{"+q+"rank}", 24, bnAccent, bnBold, bnCenter),
+					bnTxt(fmt.Sprintf("elo%d_%d", t, p), x+panelW-166, ry, 76, inner, "{"+q+"after}", 30, bnMain, bnBold, bnRight),
+					bnTxt(fmt.Sprintf("chg%d_%d", t, p), x+panelW-86, ry, 62, inner, "{"+q+"change}", 26, bnMuted, bnBold, bnRight, up, down),
 				)
+			} else {
+				layers = append(layers, bnTxt(fmt.Sprintf("mvp%d_%d", t, p), x+panelW-110, ry, 84, inner, "{"+q+"mvp}", 24, bnGold, bnBold, bnRight, bnSpace(1)))
 			}
 		}
 	}
-	b := bnBase("default-results", "results", w, h, layers...)
-	return b
+	glows := []Glow{
+		{X: 260, Y: 40, Radius: 520, Color: "#7c3aed", Opacity: 0.3},
+		{X: float64(bnWidth) - 200, Y: h, Radius: 520, Color: "#a855f7", Opacity: 0.22},
+	}
+	return bnBase("default-results", "results", bnWidth, int(h), glows, layers...)
 }

@@ -385,33 +385,57 @@ func change(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg Con
 		return unexpectedEmbed()
 	}
 
-	title, preset := "Demotion", "caution"
-	switch {
-	case add && !spec:
-		title, preset = "Promotion", "success"
-	case add:
-		title, preset = "Spec Added", "success"
-	case spec:
-		title = "Spec Removed"
-	}
-	fields := []*discordgo.MessageEmbedField{
-		{Name: "Player", Value: "<@" + target.ID + ">", Inline: true},
-		{Name: "By", Value: "<@" + helpers.InteractionUserID(i) + ">", Inline: true},
-		{Name: "Division", Value: d.Label, Inline: true},
-	}
-	if len(moved) > 0 {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Left", Value: strings.Join(moved, ", "), Inline: true})
-	}
-	if why != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Reason", Value: why})
-	}
-	thumb := helpers.MinecraftBustAvatarURL(playerName(i.GuildID, target))
+	username := playerName(i.GuildID, target)
+	actor := helpers.InteractionUserID(i)
+	notice := roleNotice{div: d, target: target, username: username, by: actor, roleID: roleID, add: add, spec: spec, reason: why, moved: moved}
 	if cfg.AlertChannel != "" {
-		_, _ = helpers.SendChannelMessage(s, i.GuildID, cfg.AlertChannel, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{
-			helpers.Preset(preset, types.PresetOptions{Title: fmt.Sprintf("%s · %s", title, d.Label), Fields: fields, Thumbnail: thumb}),
-		}})
+		_, _ = helpers.SendChannelMessage(s, i.GuildID, cfg.AlertChannel, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{notice.embed(true)}})
 	}
-	return helpers.Preset(preset, types.PresetOptions{Title: title, Description: fmt.Sprintf("<@%s> · **%s**", target.ID, d.Label), Fields: fields[1:], Thumbnail: thumb})
+	return notice.embed(false)
+}
+
+// roleNotice is a promotion, demotion or spec change, as the alert channel and the staff member who made it see it.
+type roleNotice struct {
+	div      Div
+	target   *discordgo.User
+	username string
+	by       string
+	roleID   string
+	add      bool
+	spec     bool
+	reason   string
+	moved    []string // the divisions the player left to join this one
+}
+
+// embed is the notice written the way the other commands write theirs: a title, a sentence, then the details as quoted lines with the
+// player's Minecraft bust beside them. The alert (alert true) leaves out the role line; the answer to the staff member shows it.
+func (n roleNotice) embed(alert bool) *discordgo.MessageEmbed {
+	who := fmt.Sprintf("<@%s> (**%s**)", n.target.ID, n.username)
+	title, preset, sentence := n.div.Label+" Demotion", "caution", fmt.Sprintf("%s was removed from **%s**.", who, n.div.Label)
+	switch {
+	case n.add && !n.spec:
+		title, preset, sentence = n.div.Label+" Promotion", "success", fmt.Sprintf("%s was added to **%s**.", who, n.div.Label)
+	case n.add:
+		title, preset, sentence = n.div.Label+" Spec Added", "success", fmt.Sprintf("%s was given the **%s** spec role.", who, n.div.Label)
+	case n.spec:
+		title, sentence = n.div.Label+" Spec Removed", fmt.Sprintf("%s lost the **%s** spec role.", who, n.div.Label)
+	}
+	lines := []string{
+		sentence, "",
+		fmt.Sprintf("> **Player:** %s", who),
+		fmt.Sprintf("> **Division:** `%s`", n.div.Label),
+	}
+	if !alert {
+		lines = append(lines, "> **Role:** <@&"+n.roleID+">")
+	}
+	if len(n.moved) > 0 {
+		lines = append(lines, "> **Left:** "+strings.Join(n.moved, ", "))
+	}
+	if n.reason != "" {
+		lines = append(lines, "> **Reason:** "+n.reason)
+	}
+	lines = append(lines, "> **By:** <@"+n.by+">")
+	return helpers.Preset(preset, types.PresetOptions{Title: title, Description: strings.Join(lines, "\n"), Thumbnail: helpers.MinecraftBustAvatarURL(n.username)})
 }
 
 // playerName is the player's registered username, or their Discord name when they have none.

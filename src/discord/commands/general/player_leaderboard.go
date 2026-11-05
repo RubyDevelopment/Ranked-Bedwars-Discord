@@ -3,6 +3,7 @@ package general
 import (
 	"fmt"
 	"log"
+	"maps"
 	"strings"
 	"time"
 
@@ -182,6 +183,13 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if invoker == nil {
 		return false, nil
 	}
+	// The ten rows' players are looked up while the rest (the viewer's own profile, their style, their position) is loaded.
+	rowVars := banner.Vars{}
+	rowsDone := make(chan struct{})
+	go func() {
+		defer close(rowsDone)
+		banner.LeaderboardRowVars(s, i.GuildID, rows, rowVars)
+	}()
 	doc := banner.LoadBanners(i.GuildID)
 	viewer := banner.BannerViewer(invoker.ID, i.Member)
 
@@ -211,7 +219,8 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	vars["lb.title"] = fmt.Sprintf("%s Leaderboard", season)
 	vars["lb.stat"] = stat.label
 	vars["season.name"] = season
-	banner.LeaderboardRowVars(s, i.GuildID, rows, vars)
+	<-rowsDone
+	maps.Copy(vars, rowVars)
 	for n := range rows {
 		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(stat.value(&rows[n].PlayerStatsModel))
 	}
@@ -233,15 +242,20 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, vars banner.Vars) {
 	playerID := sdk.UintToString(view.Player.ID)
+	position := make(chan int, 1) // the position is asked for while the stats load
+	go func() {
+		pos := 0
+		if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
+			pos = rank.Position
+		}
+		position <- pos
+	}()
 	st, err := database.Must().Stats.Get(guildID, playerID, seasonID)
+	pos := <-position
 	if err != nil {
 		return
 	}
-	position := 0
-	if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
-		position = rank.Position
-	}
-	banner.EntryVars(vars, "me.", position, view.Config.Username, banner.AvatarOf(invoker), st)
+	banner.EntryVars(vars, "me.", pos, view.Config.Username, banner.AvatarOf(invoker), st)
 }
 
 // ============================================================================

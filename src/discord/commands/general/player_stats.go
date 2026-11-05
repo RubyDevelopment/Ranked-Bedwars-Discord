@@ -91,13 +91,9 @@ func executePlayerStatsCommand(s *discordgo.Session, i *discordgo.InteractionCre
 
 	// Use GetOrCreate to create stats on-demand if they don't exist
 	playerID := sdk.UintToString(view.Player.ID)
-	stats, err := database.Must().Stats.GetOrCreate(i.GuildID, playerID, seasonID)
+	stats, position, err := helpers.StatsAndRank(i.GuildID, playerID, seasonID) // creates the stats on demand if they do not exist
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPlayerStatsEmbed(i))
-	}
-	position := 0
-	if rank, err := database.Must().Stats.Rank(i.GuildID, playerID, seasonID); err == nil {
-		position = rank.Position
 	}
 
 	sent, err := sendStatsBanner(s, i, target, invoker, config, stats, position, seasonKey, seasonID)
