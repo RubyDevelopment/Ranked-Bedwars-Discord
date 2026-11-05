@@ -67,6 +67,7 @@ func (manager *Manager) Initialize() error {
 		discordgo.IntentsGuildMessages |
 		discordgo.IntentsGuildMessageReactions |
 		discordgo.IntentsGuildVoiceStates |
+		discordgo.IntentsGuildPresences |
 		discordgo.IntentsMessageContent |
 		// The dashboard's custom events: bans, invites, Discord's scheduled events and AutoMod actions.
 		discordgo.IntentsGuildBans |

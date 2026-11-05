@@ -329,3 +329,9 @@ func PunishmentAlertRequirements() []Requirement {
 	}
 	return reqs
 }
+
+// StaffListRequirements is the staff role for a command that lists the staff (/staff): it is configured for the command, but a member
+// does not need to hold it to run it. The role is the same setting as the staff commands' own.
+var StaffListRequirements = []Requirement{
+	{Type: ReqRole, Key: StaffRoleKey, Grants: true},
+}

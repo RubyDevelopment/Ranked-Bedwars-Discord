@@ -1796,7 +1796,7 @@ func roleGateFor(settings types.GuildSettings, commandName string) roleGate {
 	}
 	gate := roleGate{openByDefault: cmd.Category == "general"}
 	// Every command in the staff category needs the staff role, whether or not it still declares the requirement.
-	if cmd.Category == "staff" || types.HasRequirementKey(cmd.Requirements, types.ReqRole, types.StaffRoleKey) {
+	if cmd.Category == "staff" || types.RequiresRole(cmd.Requirements, types.StaffRoleKey) {
 		gate.staff = true
 		gate.staffID = settings.Commands[commandName].RequiredRoles[types.StaffRoleKey].ID
 	}
