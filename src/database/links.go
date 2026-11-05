@@ -156,3 +156,9 @@ func GuildHasData(guildID string) (bool, error) {
 func DeleteGuild(guildID string) error {
 	return apiCall(http.MethodDelete, "/v1/guilds/"+url.PathEscape(guildID)+"/", nil, nil)
 }
+
+// IsNotFound says whether err is the API answering 404 (nothing there).
+func IsNotFound(err error) bool {
+	var api *APIStatusError
+	return errors.As(err, &api) && api.Status == http.StatusNotFound
+}
