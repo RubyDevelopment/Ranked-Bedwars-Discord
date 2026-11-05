@@ -15,6 +15,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/types"
 	baseutility "ranked-bedwars/src/utility"
 )
@@ -103,7 +104,13 @@ func GuildStateRoles(guildID string) (map[string]types.DiscordRole, error) {
 // scaffolds) and rebuilds the Discord role/channel snapshot. It is idempotent
 // and self-healing: calling it again on an already-registered guild is a no-op
 // that also backfills any of those rows that went missing.
+// ErrSecondaryGuild is returned for a linked secondary server: it has no guild record of its own and never gets one.
+var ErrSecondaryGuild = fmt.Errorf("this server is linked to a main server as a secondary server")
+
 func EnsureGuildSetup(s *discordgo.Session, guildID string) (*types.SetupResult, error) {
+	if guildlink.IsSecondary(guildID) {
+		return nil, ErrSecondaryGuild
+	}
 	result := &types.SetupResult{}
 
 	if database.Get() == nil {
@@ -636,6 +643,9 @@ func HandleGuildSetup(s *discordgo.Session, r *discordgo.Ready) {
 			continue
 		}
 
+		if guildlink.IsSecondary(guild.ID) {
+			continue // a secondary server is part of its main guild: no record of its own
+		}
 		result, err := EnsureGuildSetup(s, guild.ID)
 		if err != nil {
 			logger.Error(fmt.Sprintf("Failed to set up guild %s (%s): %v", guild.Name, guild.ID, err))

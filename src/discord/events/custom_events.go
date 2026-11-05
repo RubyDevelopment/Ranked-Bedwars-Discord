@@ -20,6 +20,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
@@ -1107,7 +1108,7 @@ func (r *runner) commandList(category string) (string, string) {
 		if perm, ok := gc.Settings.Commands[name]; ok && perm.Disabled != nil && *perm.Disabled {
 			continue
 		}
-		if !helpers.CheckSlashAccess(gc.Settings, r.i.GuildID, name, "", r.i.ChannelID, r.i.Member, admin).Allowed {
+		if !helpers.CheckSlashAccess(gc.Settings, r.i.GuildID, name, "", helpers.ChannelForAccess(r.i.ID, r.i.ChannelID), r.i.Member, admin).Allowed {
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("`/%s` %s", name, c.Description))
@@ -1734,7 +1735,12 @@ func StartCustomCommandSync(s *discordgo.Session, appID, devGuildID string, base
 func syncGuild(s *discordgo.Session, appID, guildID, devGuildID string, base []*discordgo.ApplicationCommand) {
 	var desired []*discordgo.ApplicationCommand
 	customs := 0
-	for name, e := range entries(guildID) {
+	// A secondary (linked) server gets its main guild's custom commands: it runs the same community.
+	source := guildID
+	if home, ok := guildlink.Home(guildID); ok {
+		source = home
+	}
+	for name, e := range entries(source) {
 		if helpers.FindCommand(name) != nil || !e.cfg.IsEnabled || !e.cfg.IsSlashEnabled || e.cmd.Data == nil {
 			continue
 		}

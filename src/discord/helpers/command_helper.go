@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
 	apputil "ranked-bedwars/src/utility"
@@ -970,7 +971,7 @@ func RunSlashCommand(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 	}
 
 	subPath := SubcommandPathFromInteraction(i.ApplicationCommandData())
-	if decision := CheckSlashAccess(gc.Settings, i.GuildID, cmd.Name, subPath, i.ChannelID, i.Member, MemberIsAdministrator(s, i)); !decision.Allowed {
+	if decision := CheckSlashAccess(gc.Settings, i.GuildID, cmd.Name, subPath, ChannelForAccess(i.ID, i.ChannelID), i.Member, MemberIsAdministrator(s, i)); !decision.Allowed {
 		RespondAccessDenied(s, i, true, decision)
 		return
 	}
@@ -999,6 +1000,10 @@ func logCommandUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 		}
 		context += " " + opt.Name + ":" + val
 	}
+	location := "**Channel:** <#" + i.ChannelID + ">\n**ID:** `" + i.ChannelID + "`"
+	if venue := guildlink.VenueOf(i.ID); venue != "" { // used in a secondary server: say which, the channel is not one of this guild's
+		location = "**Server:** " + venueName(s, venue) + "\n" + location
+	}
 	_, _ = SendChannelMessage(s, i.GuildID, channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{Preset("info", types.PresetOptions{
 		Title:       "Command Log",
 		Description: "A command was run and logged by the system.",
@@ -1006,9 +1011,19 @@ func logCommandUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: "Executor", Value: "**User:** <@" + userID + ">\n**ID:** `" + userID + "`"},
 			{Name: "Command Details", Value: "**Command:** `/" + cmd.Name + "`\n**Context:** " + context},
-			{Name: "Location", Value: "**Channel:** <#" + i.ChannelID + ">\n**ID:** `" + i.ChannelID + "`"},
+			{Name: "Location", Value: location},
 		},
 	})}})
+}
+
+// venueName is the name of a secondary server, or its ID when the bot does not know it.
+func venueName(s *discordgo.Session, venueID string) string {
+	if s != nil && s.State != nil {
+		if g, err := s.State.Guild(venueID); err == nil && g != nil && g.Name != "" {
+			return g.Name
+		}
+	}
+	return "`" + venueID + "`"
 }
 
 // A guild's own custom commands live in package features, which imports helpers, so helpers reaches them through these
@@ -1389,7 +1404,7 @@ func HandlePrefixCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	isAdmin := MemberIsAdministrator(s, interaction)
-	if decision := CheckPrefixAccess(settings, m.GuildID, cmd.Name, route.SubcommandPath, m.ChannelID, interaction.Member, isAdmin); !decision.Allowed {
+	if decision := CheckPrefixAccess(settings, m.GuildID, cmd.Name, route.SubcommandPath, ChannelForAccess("prefix:"+m.ID, m.ChannelID), interaction.Member, isAdmin); !decision.Allowed {
 		replyPrefixEmbed(s, m, AccessDeniedEmbed(decision.Title, decision.Message))
 		return
 	}
@@ -2489,4 +2504,13 @@ func SendChannelMessage(s *discordgo.Session, guildID, channelID string, msg *di
 	trimMessageSend(msg)
 	WithGuildFooterIconForGuild(s, guildID, msg.Embeds...)
 	return s.ChannelMessageSendComplex(channelID, msg)
+}
+
+// ChannelForAccess is the channel a command's allowed and denied channel lists are checked against. Those lists name the main guild's
+// channels, so a command used in a secondary (linked) server is not held to them: it gets no channel to check.
+func ChannelForAccess(interactionID, channelID string) string {
+	if guildlink.VenueOf(interactionID) != "" {
+		return ""
+	}
+	return channelID
 }

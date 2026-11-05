@@ -11,6 +11,7 @@ import (
 	_ "ranked-bedwars/src/discord/commands/staff"
 	"ranked-bedwars/src/discord/events"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/utility"
 )
 
@@ -23,6 +24,8 @@ type Manager struct {
 	BotID   string
 	Session *discordgo.Session
 	Logger  utility.AppLogger
+
+	stopLinks chan struct{} // ends the refresh of the secondary servers
 }
 
 // NewClient initializes and returns a new Discord Manager instance.
@@ -79,6 +82,12 @@ func (manager *Manager) Initialize() error {
 		manager.syncSlashCommands(s, r.User.ID, os.Getenv("DEVELOPMENT_GUILD_ID"))
 	})
 
+	// The secondary servers are known before the first event is handled.
+	if err := guildlink.Refresh(); err != nil {
+		manager.Logger.Warn(fmt.Sprintf("Could not read the linked servers yet: %v", err))
+	}
+	manager.stopLinks = make(chan struct{})
+	go guildlink.Run(manager.stopLinks)
 	manager.registerEventHandlers()
 
 	if err := manager.Session.Open(); err != nil {
@@ -91,6 +100,10 @@ func (manager *Manager) Initialize() error {
 
 // Stop safely closes the active Discord session and cleans up resources.
 func (manager *Manager) Stop() error {
+	if manager.stopLinks != nil {
+		close(manager.stopLinks)
+		manager.stopLinks = nil
+	}
 	if manager.Session != nil {
 		if err := manager.Session.Close(); err != nil {
 			manager.Logger.Error("Failed to close Discord session.")
@@ -112,7 +125,7 @@ func (manager *Manager) registerEventHandlers() {
 			continue
 		}
 
-		manager.Session.AddHandler(event.Execute)
+		manager.Session.AddHandler(guildlink.Wrap(event.Execute))
 	}
 }
 
