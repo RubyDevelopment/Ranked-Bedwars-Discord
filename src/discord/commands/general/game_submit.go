@@ -185,6 +185,27 @@ func attachmentOption(i *discordgo.InteractionCreate, name string) *discordgo.Me
 	return nil
 }
 
+// teamColorsOf is the in-game color each team of the game was given by its map ("Team A" -> "Blue"); empty when the map has none.
+func teamColorsOf(game match.Game) map[string]string {
+	maps, err := helpers.GuildMetaMaps(game.GuildID)
+	if err != nil {
+		return nil
+	}
+	for _, cfg := range maps {
+		if !strings.EqualFold(strings.TrimSpace(cfg.Name), strings.TrimSpace(game.Map)) {
+			continue
+		}
+		out := map[string]string{}
+		for i, color := range cfg.TeamsFor(game.Mode.Name) {
+			if i < len(game.Teams) && strings.TrimSpace(color) != "" {
+				out[game.Teams[i]] = color
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 // readScreenshot reads the chat of the screenshot against the game's roster, using the server profile's own chat rules.
 func readScreenshot(imageURL string, game match.Game, claimedTeam string) (proofread.Result, error) {
 	var profile proofread.Profile
@@ -199,7 +220,7 @@ func readScreenshot(imageURL string, game match.Game, claimedTeam string) (proof
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	return proofread.Check(ctx, imageURL, profile, roster, claimedTeam)
+	return proofread.Check(ctx, imageURL, profile, roster, claimedTeam, teamColorsOf(game))
 }
 
 func isImageAttachment(contentType, filename string) bool {

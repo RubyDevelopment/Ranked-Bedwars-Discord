@@ -37,7 +37,7 @@ func profile(t *testing.T) Profile {
 }
 
 func TestAnalyzeReadsTheChatAgainstTheRoster(t *testing.T) {
-	res := Analyze(chat, profile(t), roster, "Team A")
+	res := Analyze(chat, profile(t), roster, "Team A", nil)
 	if res.Winner != "Team A" {
 		t.Fatalf("winner %q (%s)", res.Winner, res.WinnerBy)
 	}
@@ -60,7 +60,7 @@ func TestAnalyzeReadsTheChatAgainstTheRoster(t *testing.T) {
 }
 
 func TestMismatchWhenAnotherTeamClaimsTheWin(t *testing.T) {
-	res := Analyze(chat, profile(t), roster, "Team B")
+	res := Analyze(chat, profile(t), roster, "Team B", nil)
 	if res.Winner != "Team A" || res.Mismatch == "" {
 		t.Fatalf("winner %q mismatch %q", res.Winner, res.Mismatch)
 	}
@@ -69,32 +69,32 @@ func TestMismatchWhenAnotherTeamClaimsTheWin(t *testing.T) {
 func TestWinMessageNamesTheWinner(t *testing.T) {
 	lines := append(append([]string{}, chat...), "Red won the game!")
 	// Red cannot be Blue, the eliminated team, so Red is Team A and the win message agrees.
-	res := Analyze(lines, profile(t), roster, "")
+	res := Analyze(lines, profile(t), roster, "", nil)
 	if res.Winner != "Team A" || !strings.Contains(res.WinnerBy, "win message") {
 		t.Fatalf("winner %q by %q", res.Winner, res.WinnerBy)
 	}
 }
 
 func TestNoMVPWithoutKillsOrBeds(t *testing.T) {
-	res := Analyze([]string{"⚠ Team Blue has been eliminated from the game!"}, profile(t), roster, "")
+	res := Analyze([]string{"⚠ Team Blue has been eliminated from the game!"}, profile(t), roster, "", nil)
 	if res.MVP.Name != "" {
 		t.Fatalf("mvp %+v with nothing to judge by", res.MVP)
 	}
 }
 
 func TestMVPFallsBackToBedsThenNone(t *testing.T) {
-	res := Analyze([]string{"Blue Team's Bed has been destroyed by bummyyyyy"}, profile(t), roster, "")
+	res := Analyze([]string{"Blue Team's Bed has been destroyed by bummyyyyy"}, profile(t), roster, "", nil)
 	if res.MVP.Name != "bummyyyyy" || !strings.Contains(res.MVPBy, "bed") {
 		t.Fatalf("mvp %+v by %q", res.MVP, res.MVPBy)
 	}
-	tied := Analyze([]string{"deloid_AK has been killed by bummyyyyy", "HT206 has been killed by EGIRLMEI"}, profile(t), roster, "")
+	tied := Analyze([]string{"deloid_AK has been killed by bummyyyyy", "HT206 has been killed by EGIRLMEI"}, profile(t), roster, "", nil)
 	if tied.MVP.Name != "" {
 		t.Fatalf("a tie gave %+v", tied.MVP)
 	}
 }
 
 func TestNoChatMeansNoEvidence(t *testing.T) {
-	res := Analyze([]string{"Create or join a guild and", "BedWars Thu, Nov 05", "play.pika-network.net"}, profile(t), roster, "Team A")
+	res := Analyze([]string{"Create or join a guild and", "BedWars Thu, Nov 05", "play.pika-network.net"}, profile(t), roster, "Team A", nil)
 	if res.HasEvidence() {
 		t.Fatalf("evidence from a lobby: %+v", res)
 	}
@@ -110,5 +110,29 @@ func TestResolveToleratesAMisreadLetterButNotAmbiguity(t *testing.T) {
 	twins := []Member{{"Player1", "Team A"}, {"Player2", "Team B"}}
 	if m := resolve("Player3", twins, true); m != nil {
 		t.Fatalf("ambiguous name -> %v", m)
+	}
+}
+
+// The end-of-game banner alone (no kill or bed lines): "Blue won the game!" names the winner through the color the game's map gave Team B, and the
+// ranking underneath gives the MVP. OCR may read the dots between the counts as anything.
+func TestEndBannerAloneNamesWinnerAndMVP(t *testing.T) {
+	lines := []string{
+		"BedWars",
+		"Blue won the game!",
+		"Top Final Kills and Kills:",
+		"#1 Killer [Diamond] deloid_AK . 2 - 2",
+		"#2 Killer HT206 * 0 0",
+		"#3 Killer [Diamond] stranger99 - 0 - 0",
+	}
+	res := Analyze(lines, profile(t), roster, "Team B", map[string]string{"Team A": "Red", "Team B": "Blue"})
+	if res.Winner != "Team B" || !strings.Contains(res.WinnerBy, "win message") || res.Mismatch != "" {
+		t.Fatalf("winner %q by %q mismatch %q", res.Winner, res.WinnerBy, res.Mismatch)
+	}
+	if res.MVP.Name != "deloid_AK" || !strings.Contains(res.MVPBy, "ranking") {
+		t.Fatalf("mvp %+v by %q", res.MVP, res.MVPBy)
+	}
+	// Without the map's colors nothing in the banner says which team is Blue.
+	if res := Analyze(lines, profile(t), roster, "Team B", nil); res.Winner != "" {
+		t.Fatalf("a winner %q with no way to know the color", res.Winner)
 	}
 }

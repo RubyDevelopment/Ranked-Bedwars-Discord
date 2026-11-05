@@ -82,7 +82,7 @@ func ReadLines(ctx context.Context, data []byte, enough func([]string) bool) ([]
 		return nil, fmt.Errorf("the image could not be read: %w", err)
 	}
 	b := img.Bounds()
-	chat := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*30/100, b.Min.X+b.Dx()*65/100, b.Min.Y+b.Dy()*98/100))
+	chat := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*30/100, b.Max.X, b.Min.Y+b.Dy()*98/100))
 	fit := clamp(2200/float64(b.Dy()), 1.5, 4.5)
 	passes := []struct {
 		src   image.Image

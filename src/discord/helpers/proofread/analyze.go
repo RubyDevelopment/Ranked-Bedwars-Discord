@@ -2,6 +2,7 @@ package proofread
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -41,7 +42,8 @@ type event struct {
 }
 
 // Analyze reads chat lines through the profile's rules and checks them against the roster. `claimed` is the team that submitted.
-func Analyze(lines []string, profile Profile, roster []Member, claimed string) Result {
+// `colors` is the in-game color of each team ("Team A" -> "Blue"), when the game knows them: "Blue won the game!" then names a team by itself.
+func Analyze(lines []string, profile Profile, roster []Member, claimed string, colors map[string]string) Result {
 	type ruleTest struct {
 		match   *compiled
 		actions []Action
@@ -99,6 +101,7 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string) R
 	find := func(name string) *Member { return findAs(name, true) }
 
 	var events []event
+	var topList []*Member // the end-of-game "Top Final Kills and Kills" list, best first
 	for _, raw := range lines {
 		line := cleanLine(raw)
 		if line == "" {
@@ -106,6 +109,11 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string) R
 		}
 		for _, name := range wordsOf(line) { // a player named anywhere in the line counts as seen
 			findAs(name, false)
+		}
+		if m := topKillerLine.FindStringSubmatch(line); m != nil {
+			if p := find(m[1]); p != nil {
+				topList = append(topList, p)
+			}
 		}
 		for _, rt := range rules {
 			groups, ok := rt.match.test(line)
@@ -178,6 +186,11 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string) R
 			}
 		}
 	}
+	for team, color := range colors { // what the game says each color is outweighs anything guessed from the chat
+		for range 100 {
+			vote(canonColor(color, profile.Aliases), team)
+		}
+	}
 	best := func(color string) string {
 		top, topN := "", 0
 		for t, n := range votes[color] {
@@ -248,8 +261,20 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string) R
 		return res.BedBreaks[i].Name < res.BedBreaks[j].Name
 	})
 	res.MVP, res.MVPBy = pickMVP(members, kills, finals, beds, res.Winner)
+	if res.MVP.Name == "" { // no kills in view: the end banner ranks the players itself, best first
+		for _, p := range topList {
+			if res.Winner == "" || strings.EqualFold(p.Team, res.Winner) {
+				res.MVP, res.MVPBy = *p, "first in the end-of-game ranking"
+				break
+			}
+		}
+	}
 	return res
 }
+
+// topKillerLine is a line of the end-of-game ranking, "#1 Killer [Diamond] zorev · 2 · 2": the player is the last name before the two counts,
+// and the dots between them may be read as any punctuation.
+var topKillerLine = regexp.MustCompile(`^#?\d\s.*?([A-Za-z0-9_]{3,16})\s*[^\w\s]+\s*\d+\s*[^\w\s]+\s*\d+\s*$`)
 
 // pickMVP is the winning side's player with the most kills, then final kills, then bed breaks; no one when nothing separates them.
 func pickMVP(members map[string]Member, kills, finals, beds map[string]int, winner string) (Member, string) {

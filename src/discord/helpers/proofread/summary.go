@@ -7,7 +7,7 @@ import (
 )
 
 // Check downloads the screenshot, reads its chat and analyses it. It returns ErrNoOCR when this machine cannot read images.
-func Check(ctx context.Context, imageURL string, profile Profile, roster []Member, claimed string) (Result, error) {
+func Check(ctx context.Context, imageURL string, profile Profile, roster []Member, claimed string, colors map[string]string) (Result, error) {
 	if !Available() {
 		return Result{}, ErrNoOCR
 	}
@@ -15,11 +15,11 @@ func Check(ctx context.Context, imageURL string, profile Profile, roster []Membe
 	if err != nil {
 		return Result{}, err
 	}
-	lines, err := ReadLines(ctx, data, func(lines []string) bool { return Analyze(lines, profile, roster, claimed).RulesHit >= 2 })
+	lines, err := ReadLines(ctx, data, func(lines []string) bool { return Analyze(lines, profile, roster, claimed, colors).RulesHit >= 2 })
 	if err != nil {
 		return Result{}, err
 	}
-	return Analyze(lines, profile, roster, claimed), nil
+	return Analyze(lines, profile, roster, claimed, colors), nil
 }
 
 // Summary is the auto-check as the lines staff read under a submitted result.
