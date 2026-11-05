@@ -42,6 +42,21 @@ type giveawayDoc struct {
 	RequiredElo int    `json:"requiredElo"`
 	ChannelID   string `json:"channel_id"`
 	EndsAt      string `json:"ends_at"`
+	Description string `json:"description"`
+
+	// Rules made for ranked Bedwars (see giveaway_rules.go); every one is optional.
+	MaxElo             int            `json:"maxElo"`
+	MinRank            string         `json:"minRank"`
+	MaxRank            string         `json:"maxRank"`
+	MinGames           int            `json:"minGames"`
+	MinWins            int            `json:"minWins"`
+	RequiredRoleIDs    []string       `json:"requiredRoleIds"`
+	BlockedRoleIDs     []string       `json:"blockedRoleIds"`
+	NoActivePunishment bool           `json:"noActivePunishment"`
+	ExcludePastWinners bool           `json:"excludePastWinners"`
+	BonusRanks         map[string]int `json:"bonusRanks"`
+	BonusRoles         map[string]int `json:"bonusRoles"`
+	PrizeRoleID        string         `json:"prizeRoleId"`
 }
 
 type giveawayState struct {
@@ -50,6 +65,8 @@ type giveawayState struct {
 	Ended     bool     `json:"ended"`
 	Entries   []string `json:"entries"`
 	Winners   []string `json:"winners"`
+	// Weights is how many entries each member holds (the bonuses they qualified for when they entered); a member without one holds one.
+	Weights map[string]int `json:"weights,omitempty"`
 }
 
 var (
@@ -172,8 +189,11 @@ func sweepGuildGiveaways(s *discordgo.Session, guildID string) {
 func giveawayEmbed(g giveawayDoc, ends time.Time, ended bool, winners []string) map[string]any {
 	var d strings.Builder
 	fmt.Fprintf(&d, "**Prize:** %s\n**Winners:** %d\n", g.Prize, max(g.Winners, 1))
-	if g.RequiredElo > 0 {
-		fmt.Fprintf(&d, "**Required ELO:** %d\n", g.RequiredElo)
+	if text := strings.TrimSpace(g.Description); text != "" {
+		d.WriteString("\n" + text + "\n\n")
+	}
+	if rules := g.rulesText(); rules != "" {
+		d.WriteString("**Who can enter**\n" + rules + "\n\n")
 	}
 	title, color := "🎉 Giveaway", 0x55FFFF
 	if ended {
@@ -214,9 +234,8 @@ func postGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, ends time
 }
 
 func drawGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, st *giveawayState) {
-	entries := slices.Clone(st.Entries)
-	rand.Shuffle(len(entries), func(a, b int) { entries[a], entries[b] = entries[b], entries[a] })
-	winners := entries[:min(max(g.Winners, 1), len(entries))]
+	// Each entry has the chance its weight gives it (extra entries for rank or role).
+	winners := pickWinners(st.Entries, st.Weights, max(g.Winners, 1), rand.New(rand.NewSource(time.Now().UnixNano())))
 
 	// Record the result first: a draw that is announced twice would be worse than one that is not announced.
 	already := false
@@ -247,6 +266,19 @@ func drawGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, st *givea
 			mentions[idx] = "<@" + w + ">"
 		}
 		text = fmt.Sprintf("🎉 Congratulations %s! You won **%s**.", strings.Join(mentions, ", "), g.Prize)
+		if g.PrizeRoleID != "" {
+			given := 0
+			for _, w := range winners {
+				if err := s.GuildMemberRoleAdd(guildID, w, g.PrizeRoleID); err != nil {
+					panelLogger.Warn(fmt.Sprintf("giving the prize role of giveaway %s in %s to %s: %v", g.ID, guildID, w, err))
+					continue
+				}
+				given++
+			}
+			if given > 0 {
+				text += fmt.Sprintf("\nThe winners now have <@&%s>.", g.PrizeRoleID)
+			}
+		}
 	}
 	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content:         text,
@@ -294,23 +326,16 @@ func HandleGiveawayEntry(s *discordgo.Session, i *discordgo.InteractionCreate, c
 		return true
 	}
 
-	if g.RequiredElo > 0 {
-		view, err := database.Must().Player.Get(i.GuildID, userID)
-		if err != nil {
-			say(fmt.Sprintf("You must be registered and have at least **%d ELO** to enter. Register with `/register`.", g.RequiredElo))
-			return true
-		}
-		_, seasonID, _ := helpers.ActiveSeasonKey(i.GuildID)
-		stats, err := database.Must().Stats.GetOrCreate(i.GuildID, sdk.UintToString(view.Player.ID), seasonID)
-		if err != nil {
-			say("Something went wrong. Please try again in a moment.")
-			return true
-		}
-		if stats.Elo < g.RequiredElo {
-			say(fmt.Sprintf("You need at least **%d ELO** to enter this giveaway. You have **%d**.", g.RequiredElo, stats.Elo))
-			return true
-		}
+	entrantNow, rankOrder, err := gatherEntrant(i.GuildID, userID, memberRoles(i), *g, state)
+	if err != nil {
+		say("Something went wrong. Please try again in a moment.")
+		return true
 	}
+	if reason := g.check(entrantNow, rankOrder); reason != "" {
+		say(reason)
+		return true
+	}
+	weight := g.weight(entrantNow)
 
 	entered, count := false, 0
 	err = updateGiveawayState(i.GuildID, id, func(st *giveawayState) bool {
@@ -319,6 +344,12 @@ func HandleGiveawayEntry(s *discordgo.Session, i *discordgo.InteractionCreate, c
 			return false
 		}
 		st.Entries = append(st.Entries, userID)
+		if weight > 1 {
+			if st.Weights == nil {
+				st.Weights = map[string]int{}
+			}
+			st.Weights[userID] = weight
+		}
 		entered, count = true, len(st.Entries)
 		return true
 	})
@@ -517,6 +548,7 @@ func syncAllPanels(s *discordgo.Session) {
 }
 
 func syncGuildPanels(s *discordgo.Session, guildID string) {
+	ensureReactionRoleEmojis(s, guildID)
 	cfg, err := database.Must().GuildConfig.Get(guildID)
 	if err != nil {
 		return
