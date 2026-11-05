@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 )
 
 // HTML banners (the Banner Builder's HTML and CSS mode) need a layout engine, which the bot does not have, so the engine draws them: the bot
@@ -14,6 +15,9 @@ import (
 // and gets the PNG back. No address or secret to set up; the engine is the same one that hosts the games.
 
 const maxRemotePNG = 8 << 20
+
+// slowEngineBanner is how long an html banner may take before it is written to the log, with how long it took.
+const slowEngineBanner = 1500 * time.Millisecond
 
 // RemoteResult is the engine's answer to a banner.render request.
 type RemoteResult struct {
@@ -37,7 +41,11 @@ func renderRemote(b *Banner, vars Vars) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	asked := time.Now()
 	res := EngineControl(b.guildID, "banner.render", params)
+	if took := time.Since(asked); took > slowEngineBanner {
+		log.Printf("html banner %s: the engine took %s to answer (request %d KB)", b.ID, took.Round(time.Millisecond), len(params)/1024)
+	}
 	if !res.OK {
 		msg := res.Error
 		if msg == "" {
