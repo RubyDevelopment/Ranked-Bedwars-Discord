@@ -172,7 +172,7 @@ func PlayerForceTransferDestinationAlreadyRegisteredEmbed(i *discordgo.Interacti
 func PlayerForceTransferConflictEmbed(i *discordgo.InteractionCreate, user *discordgo.User) *discordgo.MessageEmbed {
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Already Registered",
-		Description: fmt.Sprintf("<@%s> already has a linked player record, so the transfer cannot overwrite it.", user.ID),
+		Description: fmt.Sprintf("<@%s> is registered in another server, so their Discord account cannot take over this link. Unregister them there first, or choose a different target user.", user.ID),
 		Thumbnail:   helpers.ThumbFlag,
 	})
 }
