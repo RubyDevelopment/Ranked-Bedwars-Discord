@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -409,7 +408,7 @@ func start() {
 	})
 }
 
-// Probe measures every provider (face and body) now and logs the result. It is called once at start and on a timer.
+// Probe measures every provider (face and body) now, silently. It is called once at start and on a timer.
 func probe() {
 	var wg sync.WaitGroup
 	for _, p := range providers {
@@ -425,14 +424,4 @@ func probe() {
 		}
 	}
 	wg.Wait()
-	var parts []string
-	for _, p := range ranked(Face) {
-		l, down := healths[p.name].snapshot()
-		state := l.Round(time.Millisecond).String()
-		if down {
-			state = "down"
-		}
-		parts = append(parts, p.name+" "+state)
-	}
-	log.Printf("skin providers, fastest first: %s", strings.Join(parts, ", "))
 }
