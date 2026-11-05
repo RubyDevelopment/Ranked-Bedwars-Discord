@@ -18,7 +18,7 @@ flowchart LR
     API["Database API"]
     ENGINE["Engine<br/>(Minecraft bots)"]
     DASH["Dashboard"]
-    BLOB[("Vercel Blob<br/>chat logs")]
+    STORE[("Object storage<br/>chat logs")]
 
     DISCORD <--> GW
     GW --> CMD
@@ -28,7 +28,7 @@ flowchart LR
     HLP --> SDKC --> API
     HLP --> BR <--> ENGINE
     DASH -- "live chat / console" --> BR
-    HLP --> BLOB
+    HLP --> STORE
 ```
 
 ## How a command runs
@@ -111,7 +111,7 @@ Copy `.env.example` to `.env`.
 | `DATABASE_API_TIMEOUT` | no | Per-call limit, default 15s |
 | `ENGINE_BRIDGE_ADDR`, `ENGINE_BRIDGE_SECRET` | no | Enable the Engine bridge. Without an address, games are hosted by hand |
 | `LIVE_CHAT_SECRET` | no | Allows the dashboard's live chat and console |
-| `BLOB_READ_WRITE_TOKEN` | yes, for game logs | Where finished games' chat logs are stored. Without it no game log is saved (the bot logs a warning per game) |
+| `STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_REGION` | yes, for game logs | The Cloudflare R2 bucket (S3 API) where finished games' chat logs and ticket archives are stored. Without them no log is saved (the bot logs a warning per game) |
 | `DEVELOPMENT_GUILD_ID` | no | Register slash commands in one server for instant updates |
 | `PLAN_ENFORCEMENT`, `PLAN_GRANDFATHER_BEFORE` | no | Plan checks for servers, see the file for the values |
 | `LOG_LEVEL` | no | `debug` (default), `info`, `warn` or `error` |
