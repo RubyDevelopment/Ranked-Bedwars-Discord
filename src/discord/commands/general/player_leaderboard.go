@@ -200,9 +200,6 @@ func buildLeaderboard(s *discordgo.Session, ask leaderboardAsk) *leaderboardView
 	img, err := renderLeaderboardBanner(s, ask, rowData, seasonKey, seasonID, totalPages)
 	if img != nil {
 		view.png = img
-		if totalPages > 1 {
-			view.text = fmt.Sprintf("Page %d/%d", ask.page, totalPages)
-		}
 		return view
 	}
 	if err != nil {
