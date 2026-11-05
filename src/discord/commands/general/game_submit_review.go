@@ -133,14 +133,14 @@ func mvpOf(game match.Game, res proofread.Result) string {
 }
 
 // reviewButtons are the two buttons under the result. Without a winner there is nothing to agree with, so only the manual hint stays.
-func reviewButtons(game match.Game, res proofread.Result) []discordgo.MessageComponent {
+func reviewButtons(game match.Game, res proofread.Result, seq int64) []discordgo.MessageComponent {
 	id := strconv.FormatUint(uint64(game.ID), 10)
 	buttons := []discordgo.MessageComponent{}
 	if res.Winner != "" {
 		buttons = append(buttons, &discordgo.Button{Label: "Confirm & score", Style: discordgo.SuccessButton,
-			CustomID: submitReviewPrefix + "ok|" + id + "|" + res.Winner + "|" + mvpOf(game, res)})
+			CustomID: submitReviewPrefix + "ok|" + id + "|" + res.Winner + "|" + mvpOf(game, res) + "|" + strconv.FormatInt(seq, 10)})
 	}
-	buttons = append(buttons, &discordgo.Button{Label: "Wrong · score manually", Style: discordgo.SecondaryButton, CustomID: submitReviewPrefix + "manual|" + id})
+	buttons = append(buttons, &discordgo.Button{Label: "Wrong · score manually", Style: discordgo.SecondaryButton, CustomID: submitReviewPrefix + "manual|" + id + "|-|-|" + strconv.FormatInt(seq, 10)})
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
 }
 
@@ -196,6 +196,13 @@ func handleSubmitReview(s *discordgo.Session, i *discordgo.InteractionCreate, cu
 	if !ok || game.GuildID != i.GuildID {
 		update(helpers.SimpleErrorEmbed("This game was already scored or closed (by staff, or by the engine when the match ended), so there is nothing left to confirm. Check the results channel."))
 		return true
+	}
+	// A button of an answer a newer screenshot has replaced does nothing.
+	if latest, known := latestSeq(game.ID); known && len(parts) >= 6 {
+		if seq, err := strconv.ParseInt(parts[5], 10, 64); err == nil && seq != latest {
+			update(submissionReplacedEmbed())
+			return true
+		}
 	}
 	actor := helpers.InteractionUserID(i)
 	if parts[1] == "manual" || len(parts) < 5 {

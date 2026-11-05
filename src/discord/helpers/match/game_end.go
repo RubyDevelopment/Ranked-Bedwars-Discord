@@ -397,3 +397,32 @@ func SplitResultMentions(results []ratings.EloResult) (winners, losers string) {
 	}
 	return strings.Join(won, " "), strings.Join(lost, " ")
 }
+
+// Resubmit replaces the claim of a game that is still waiting for staff scoring: a player sent a newer screenshot, which may name another
+// team. Nothing else changes; the game is already with staff.
+func (m *GameManager) Resubmit(id uint, userID string) (SubmitOutcome, error) {
+	lg := m.live(id)
+	if lg == nil {
+		return SubmitOutcome{}, ErrGameNotFound
+	}
+	lg.mu.Lock()
+	p, ok := lg.g.Player(userID)
+	switch {
+	case !ok:
+		lg.mu.Unlock()
+		return SubmitOutcome{}, ErrNotParticipant
+	case lg.g.End != EndStaffPending || lg.busy:
+		lg.mu.Unlock()
+		return SubmitOutcome{}, ErrWrongState
+	}
+	team, ok := lg.g.ResolveTeam(p.Team)
+	if !ok {
+		lg.mu.Unlock()
+		return SubmitOutcome{}, ErrUnknownTeam
+	}
+	lg.g.Winner = team
+	snap := lg.g.clone()
+	lg.mu.Unlock()
+	m.sync(lg)
+	return SubmitOutcome{End: EndStaffPending, Team: team, Game: snap}, nil
+}

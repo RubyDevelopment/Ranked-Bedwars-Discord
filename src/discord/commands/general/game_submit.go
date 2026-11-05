@@ -27,6 +27,7 @@ const minResultDuration = 3 * time.Minute
 
 func init() {
 	helpers.Register(GameSubmitCommand)
+	go proofread.Warm() // load the screenshot reader now, so the first screenshot does not wait for it
 }
 
 // ============================================================================
@@ -95,13 +96,15 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 	}
 
-		// Whatever the answer is, the screenshot they sent is shown with it.
+	// Whatever the answer is, the screenshot they sent is shown with it.
 	fail := func(e *discordgo.MessageEmbed) error {
 		return helpers.EditInteractionEmbed(s, i, helpers.WithProofImage(e, proofURL))
 	}
 
-// 3. Validate the Game State
-	if game.State != match.GameInGame {
+	// 3. Validate the Game State
+	// A game already with staff can be submitted again: the newest screenshot replaces the one before.
+	resubmit := game.State == match.GamePostGame && game.End == match.EndStaffPending
+	if game.State != match.GameInGame && !resubmit {
 		return fail(SubmitResultNotInProgressEmbed(i))
 	}
 	if !game.StartedAt.IsZero() {
@@ -109,21 +112,23 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 			return fail(SubmitResultTooEarlyEmbed(i, minResultDuration-elapsed))
 		}
 	}
-	if game.End == match.EndStaffPending {
-		return fail(SubmitResultAlreadySubmittedEmbed(i))
-	}
 	if player.Team == "" {
 		return fail(SubmitResultNoTeamEmbed(i))
 	}
 
 	// 4. Read the screenshot's chat: the winners, the losers, the bed and the MVP are checked against the game, for staff to see.
+	ctx, sub := beginSubmission(s, game.ID) // from here on this is the submission that counts; the one before is cancelled
+	defer sub.cancel()
+	replaced := func() error {
+		return helpers.EditInteractionEmbed(s, i, helpers.WithProofImage(submissionReplacedEmbed(), proofURL))
+	}
+	helpers.ChainPrefixReplies(i) // the answer below replaces the "reading" message instead of following it
 	var review *proofread.Result
 	unread := false
 	flow := match.SubmitFlowOf(i.GuildID)
 	if attachment != nil && flow.Mode != match.SubmitManual && proofread.Available() {
-		helpers.ChainPrefixReplies(i)                                         // the result below replaces this message instead of following it
 		_ = helpers.EditInteractionEmbed(s, i, helpers.WithProofImage(SubmitResultProcessingEmbed(), proofURL)) // shown while the picture is read
-		check, err := readScreenshot(s, attachment.URL, game, player.Team)
+		check, err := readScreenshot(ctx, s, attachment.URL, game, player.Team)
 		switch {
 		case err != nil:
 			log.Printf("[Submit] could not read the screenshot of game %d: %v", game.ID, err)
@@ -143,9 +148,13 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 		e.Fields = append(e.Fields, reviewFields(game, *review)...)
 		if staffReview {
-			return helpers.EditInteractionComponents(s, i, e, reviewButtons(game, *review))
+			return helpers.EditInteractionComponents(s, i, e, reviewButtons(game, *review, sub.seq))
 		}
 		return fail(e)
+	}
+
+	if !sub.isLatest(game.ID) {
+		return replaced() // a newer screenshot came in while this one was being read
 	}
 
 	// 5. Auto mode scores a clear reading at once; anything unclear goes to staff to verify, with the reason
@@ -165,10 +174,20 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	// 6. Ranked games wait for staff, casual games are scored immediately
 	if game.Mode.Rated() {
 		// The claim is recorded on the game: it moves to staff scoring and its players are free to queue again.
-		if _, err := match.Games.Submit(game.ID, actor); err != nil {
+		submit := match.Games.Submit
+		if resubmit {
+			submit = match.Games.Resubmit
+		}
+		if _, err := submit(game.ID, actor); err != nil {
 			return fail(match.GameActionErrorEmbed("submit the result", err))
 		}
-		return reply(helpers.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL), true)
+		e := helpers.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL)
+		if resubmit {
+			e.Fields = append(e.Fields, &discordgo.MessageEmbedField{Name: "Updated", Value: "This replaces the earlier screenshot for this game."})
+		}
+		err := reply(e, true)
+		sub.answered(helpers.ReplyMessage(s, i))
+		return err
 	}
 	if _, err := match.Games.Score(actor, i.GuildID, game.ID, player.Team, match.ScoreOptions{}); err != nil {
 		return fail(match.GameActionErrorEmbed("score the casual match", err))
@@ -218,13 +237,11 @@ func teamColorsOf(game match.Game) map[string]string {
 }
 
 // readScreenshot reads the chat of the screenshot against the game's roster, using the server profile's own chat rules.
-func readScreenshot(s *discordgo.Session, imageURL string, game match.Game, claimedTeam string) (proofread.Result, error) {
+func readScreenshot(ctx context.Context, s *discordgo.Session, imageURL string, game match.Game, claimedTeam string) (proofread.Result, error) {
 	var profile proofread.Profile
 	if raw, err := database.Must().GameConfig.Field(game.GuildID, "server"); err == nil {
 		profile = proofread.LoadProfile(raw)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 	return proofread.Check(ctx, imageURL, profile, rosterOf(s, game), claimedTeam, teamColorsOf(game))
 }
 

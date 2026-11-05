@@ -429,3 +429,15 @@ func addPrefixGameDefault(data *discordgo.ApplicationCommandInteractionData, cmd
 
 // GameNumberInChannel is the number of the game running in a channel; the game code sets it when it loads.
 var GameNumberInChannel = func(channelID string) (int, bool) { return 0, false }
+
+// ReplyMessage is the reply a command sent, to edit it later: for a prefix command the first reply of a chained one (see ChainPrefixReplies),
+// for a slash command its response. nil when there is none.
+func ReplyMessage(s *discordgo.Session, i *discordgo.InteractionCreate) *discordgo.Message {
+	if IsPrefixInteraction(i) {
+		v, _ := chainedPrefixReplies.Load(i.Interaction.ID)
+		m, _ := v.(*discordgo.Message)
+		return m
+	}
+	m, _ := s.InteractionResponse(i.Interaction)
+	return m
+}

@@ -35,7 +35,7 @@ func TestReviewShowsWinnersLosersMVPAndConfirmButton(t *testing.T) {
 
 func TestConfirmButtonNeedsAWinner(t *testing.T) {
 	count := func(res proofread.Result) int {
-		return len(reviewButtons(reviewGame(), res)[0].(discordgo.ActionsRow).Components)
+		return len(reviewButtons(reviewGame(), res, 1)[0].(discordgo.ActionsRow).Components)
 	}
 	if n := count(proofread.Result{}); n != 1 {
 		t.Errorf("%d buttons without a winner, want only the manual one", n)
@@ -43,8 +43,8 @@ func TestConfirmButtonNeedsAWinner(t *testing.T) {
 	if n := count(proofread.Result{Winner: "Team A"}); n != 2 {
 		t.Errorf("%d buttons with a winner, want confirm and manual", n)
 	}
-	ok := reviewButtons(reviewGame(), proofread.Result{Winner: "Team A", MVP: proofread.Member{Name: "EGIRLMEI"}})[0].(discordgo.ActionsRow).Components[0].(*discordgo.Button)
-	if want := "subscore|ok|28508|Team A|2"; ok.CustomID != want {
+	ok := reviewButtons(reviewGame(), proofread.Result{Winner: "Team A", MVP: proofread.Member{Name: "EGIRLMEI"}}, 1)[0].(discordgo.ActionsRow).Components[0].(*discordgo.Button)
+	if want := "subscore|ok|28508|Team A|2|1"; ok.CustomID != want {
 		t.Errorf("confirm id %q, want %q", ok.CustomID, want)
 	}
 }

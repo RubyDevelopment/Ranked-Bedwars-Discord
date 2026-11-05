@@ -65,53 +65,6 @@ func Download(ctx context.Context, rawURL string) ([]byte, error) {
 	return data, nil
 }
 
-// ReadLines reads the text lines of a screenshot, zooming as it needs to. Chat sits in the lower left, so that part is cut out and enlarged
-// until its letters are about the size the reader does best at; the size comes from the picture's height, since a screenshot's game
-// scale only changes how big the letters are, not where they are. If `enough` says what was read is not enough, it tries again enlarged
-// further with another page-layout mode, and last reads the whole picture. A clear screenshot therefore costs one quick read.
-func ReadLines(ctx context.Context, data []byte, enough func([]string) bool) ([]string, error) {
-	bin, _ := tesseractPath() // "" when none is installed: the built-in reader is used
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("the image could not be read: %w", err)
-	}
-	b := img.Bounds()
-	// Chat is narrow (about 40% of the width at most) and low: a tighter piece has less of the scene to confuse the reader.
-	chat := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*35/100, b.Min.X+b.Dx()*52/100, b.Min.Y+b.Dy()*99/100))
-	wide := crop(img, image.Rect(b.Min.X, b.Min.Y+b.Dy()*30/100, b.Max.X, b.Min.Y+b.Dy()*98/100))
-	fit := clamp(2200/float64(b.Dy()), 1.5, 4.5)
-	passes := []struct {
-		src   image.Image
-		scale float64
-		psm   string
-		prep  func(image.Image, float64) image.Image
-	}{
-		{chat, fit, "6", textOnly}, // only the pixels that are one of the game's text colors: the scene drops away
-		{chat, fit, "6", prepare},
-		{chat, clamp(fit*1.6, 2, 6), "4", textOnly},
-		{wide, fit, "11", prepare},
-		{img, clamp(1800/float64(b.Dy()), 1, 3), "11", prepare},
-	}
-	var out []string
-	seen := map[string]bool{}
-	for _, p := range passes {
-		lines, err := recognise(ctx, bin, p.prep(p.src, p.scale), p.psm)
-		if err != nil {
-			return nil, err
-		}
-		for _, l := range lines {
-			if !seen[l] {
-				seen[l] = true
-				out = append(out, l)
-			}
-		}
-		if enough != nil && enough(out) {
-			break
-		}
-	}
-	return out, nil
-}
-
 func clamp(v, lo, hi float64) float64 { return math.Max(lo, math.Min(hi, v)) }
 
 func crop(src image.Image, r image.Rectangle) image.Image {
