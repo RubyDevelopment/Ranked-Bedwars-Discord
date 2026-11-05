@@ -88,24 +88,36 @@ func (s *Store) PutJSON(ctx context.Context, key string, v any) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	var zipped bytes.Buffer
-	zw := brotli.NewWriterLevel(&zipped, brotli.BestCompression)
+	return s.put(ctx, key, "application/json", brotliBytes(raw), "br", true)
+}
+
+// PutJSONExact stores already-encoded JSON at exactly key (no random suffix, for moving files whose names already have one).
+func (s *Store) PutJSONExact(ctx context.Context, key string, raw []byte) (string, error) {
+	return s.put(ctx, key, "application/json", brotliBytes(raw), "br", false)
+}
+
+func brotliBytes(raw []byte) []byte {
+	var out bytes.Buffer
+	zw := brotli.NewWriterLevel(&out, brotli.BestCompression)
 	_, _ = zw.Write(raw)
 	_ = zw.Close()
-	return s.put(ctx, key, "application/json", zipped.Bytes(), "br")
+	return out.Bytes()
 }
 
 // Put uploads data at key (a random suffix is added before the extension, so an address cannot be guessed) and returns its URL.
 func (s *Store) Put(ctx context.Context, key, contentType string, data []byte) (string, error) {
-	return s.put(ctx, key, contentType, data, "")
+	return s.put(ctx, key, contentType, data, "", true)
 }
 
-// put is Put with an optional Content-Encoding. The bucket serves it back as stored, so readers (fetch) unpack gzip by themselves.
-func (s *Store) put(ctx context.Context, key, contentType string, data []byte, encoding string) (string, error) {
+// put is Put with an optional Content-Encoding. The bucket serves it back as stored, so readers (fetch) unpack it by themselves.
+func (s *Store) put(ctx context.Context, key, contentType string, data []byte, encoding string, suffix bool) (string, error) {
 	if !s.Enabled() {
 		return "", fmt.Errorf("object storage is not configured (STORAGE_BUCKET, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY)")
 	}
-	key = withSuffix(strings.TrimLeft(key, "/"))
+	key = strings.TrimLeft(key, "/")
+	if suffix {
+		key = withSuffix(key)
+	}
 	target := s.Endpoint + "/" + s.Bucket + "/" + escapeKey(key)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, target, bytes.NewReader(data))
 	if err != nil {

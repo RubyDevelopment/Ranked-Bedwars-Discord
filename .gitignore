@@ -40,3 +40,6 @@ data/
 
 .env*
 .old/
+# blob_to_r2 migration output
+blob_to_r2.sql
+blob_to_r2.state.json
