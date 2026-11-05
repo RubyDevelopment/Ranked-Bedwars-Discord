@@ -805,14 +805,14 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 		if p.Captain {
 			head = "👑 " + head
 		}
-		elo := fmt.Sprintf("> ELO: `%d`", p.EloBefore)
+		elo := fmt.Sprintf("ELO: `%d`", p.EloBefore)
 		for _, r := range g.Results {
 			if r.UserID == p.UserID {
-				elo = fmt.Sprintf("> ELO: `%d → %d` (`%+d`)", r.Before, r.After, r.Change)
+				elo = fmt.Sprintf("ELO: `%+d`", r.Change) // gained or lost, like +25 or -18
 				break
 			}
 		}
-		stats := fmt.Sprintf("> K/D: `%d/%d` · FK: `%d` · Beds: `%d`", p.Kills, p.Deaths, p.FinalKills, p.BedsDestroyed)
+		stats := fmt.Sprintf(" · K/D: `%d/%d` · FK: `%d` · Beds: `%d`", p.Kills, p.Deaths, p.FinalKills, p.BedsDestroyed)
 		ids := make([]string, 0, len(p.Custom))
 		for id := range p.Custom {
 			ids = append(ids, id)
@@ -821,17 +821,17 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 		for _, id := range ids {
 			stats += fmt.Sprintf(" · %s: `%g`", f.label(id), p.Custom[id])
 		}
-		block := head + "\n" + elo + "\n" + stats
-		if size+len(block)+2 > 1000 {
+		block := head + "\n> " + elo + stats // the player's name, then ELO, K/D, FK and beds on one line
+		if size+len(block)+1 > 1000 {
 			break
 		}
-		size += len(block) + 2
+		size += len(block) + 1
 		blocks = append(blocks, block)
 	}
 	if len(blocks) == 0 {
 		return "No players"
 	}
-	return strings.Join(blocks, "\n\n")
+	return strings.Join(blocks, "\n") // the next player right below
 }
 
 // TeamStats is TeamStatLines with the guild's own stat labels, for commands outside this package.

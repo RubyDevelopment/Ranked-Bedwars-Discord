@@ -157,3 +157,13 @@ func refreshVoiceStatuses(s *discordgo.Session) {
 		}
 	}
 }
+
+// IsQueueChannel reports whether the voice channel is one of the guild's queue channels.
+func IsQueueChannel(guildID, channelID string) bool {
+	snap, err := Queues.Snapshot(guildID)
+	if err != nil || snap == nil {
+		return false
+	}
+	_, ok := snap.Bindings[channelID]
+	return ok
+}

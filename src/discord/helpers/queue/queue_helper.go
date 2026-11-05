@@ -191,7 +191,10 @@ func checkAdmission(s *discordgo.Session, guildID, userID, channelID string, sna
 	}
 
 	if Queues.deps.InGame(guildID, userID) {
-		sendQueueAlert(s, guildID, userID, helpers.QueueDeniedEmbed("You cannot queue while you are inside an active game. Finish your current game first."))
+		// While their game's void vote is open, players usually sit in a queue channel to talk: that is no attempt to queue, so no alert.
+		if Queues.deps.VoidVoting == nil || !Queues.deps.VoidVoting(guildID, userID) {
+			sendQueueAlert(s, guildID, userID, helpers.QueueDeniedEmbed("You cannot queue while you are inside an active game. Finish your current game first."))
+		}
 		return false
 	}
 
@@ -591,6 +594,7 @@ type FormParams struct {
 type QueueDeps struct {
 	Parties         *partymgr.PartyManager
 	InGame          func(guildID, userID string) bool // nil = nobody is in a game
+	VoidVoting      func(guildID, userID string) bool // whether the member's game has a void vote open; nil = none do (players drift into queue channels meanwhile)
 	HasActiveSeason func(guildID string) bool
 	Paused          func(guildID string) bool
 	FlowMaxParty    func(guildID string, mode types.Mode) *int // the game flow's cap on a party's size; nil = none

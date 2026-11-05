@@ -61,6 +61,7 @@ func init() {
 
 	queue.Queues.Wire(func(d *queue.QueueDeps) {
 		d.InGame = Games.InGame
+		d.VoidVoting = Games.VoidVoting
 		d.FlowMaxParty = func(guildID string, mode types.Mode) *int {
 			flows := Games.deps.Flows(guildID)
 			if flows.IsCaptain(mode) {
@@ -285,6 +286,14 @@ func (m *GameManager) ByChannel(channelID string) (Game, bool) {
 
 // InGame reports whether the player is in an active (not yet finished, not yet submitted) game.
 // The queue, party and decay code use it.
+// VoidVoting reports whether the player's game has a void vote open.
+func (m *GameManager) VoidVoting(guildID, userID string) bool {
+	m.mu.RLock()
+	id, ok := m.byPlayer[playerKey(guildID, userID)]
+	m.mu.RUnlock()
+	return ok && voidVoteOpen(id)
+}
+
 func (m *GameManager) InGame(guildID, userID string) bool {
 	m.mu.RLock()
 	id, ok := m.byPlayer[playerKey(guildID, userID)]

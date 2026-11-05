@@ -19,8 +19,7 @@ import (
 // server's own recent games: how many games were made in each hour of each weekday over the last four weeks.
 //
 //	📈 Usually busy now · ~4 games/hr            the current hour is one of the server's active ones
-//	💤 Quiet right now · usually picks up around 8 PM UTC · ~5 games/hr
-//	(nothing)                                    too few recent games to say anything
+//	(nothing)                                    a quiet hour, or too few recent games to say anything
 //
 // The history is read once every half hour per server (it changes slowly), not for every status.
 
@@ -71,7 +70,7 @@ func buildActivityProfile(times []time.Time, now time.Time) activityProfile {
 	return p
 }
 
-// status is what an empty queue reads at this moment: "" when there is too little history to estimate anything.
+// status is what an empty queue reads at this moment: only the busy line, "" otherwise.
 func (p activityProfile) status(now time.Time) string {
 	if p.games < activityMinimum {
 		return ""
@@ -81,23 +80,7 @@ func (p activityProfile) status(now time.Time) string {
 	if here >= busyGamesPerHr {
 		return fmt.Sprintf("📈 Usually busy now · ~%s games/hr", rate(here))
 	}
-	// The next busy hour within a day, else the busiest hour of the next day.
-	best, bestAt := 0.0, -1
-	for ahead := 1; ahead <= 24; ahead++ {
-		t := now.Add(time.Duration(ahead) * time.Hour)
-		v := p.perHour[t.Weekday()][t.Hour()]
-		if v >= busyGamesPerHr {
-			return fmt.Sprintf("💤 Quiet right now · usually picks up around %s · ~%s games/hr", clock(t), rate(v))
-		}
-		if v > best {
-			best, bestAt = v, ahead
-		}
-	}
-	if bestAt > 0 && best > 0 {
-		t := now.Add(time.Duration(bestAt) * time.Hour)
-		return fmt.Sprintf("💤 Quiet right now · busiest around %s", clock(t))
-	}
-	return "💤 Quiet right now"
+	return "" // a quiet hour shows no status
 }
 
 // rate writes a games-per-hour figure without a needless decimal.
@@ -106,19 +89,6 @@ func rate(v float64) string {
 		return strconv.Itoa(int(v + 0.5))
 	}
 	return strconv.FormatFloat(v, 'f', 1, 64)
-}
-
-// clock is an hour as "8 PM UTC": a voice channel status is plain text, so it cannot show each reader's own time zone.
-func clock(t time.Time) string {
-	h := t.UTC().Hour()
-	suffix := "AM"
-	if h >= 12 {
-		suffix = "PM"
-	}
-	if h%12 == 0 {
-		return "12 " + suffix + " UTC"
-	}
-	return fmt.Sprintf("%d %s UTC", h%12, suffix)
 }
 
 // ============================================================================

@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/queue"
 	"ranked-bedwars/src/types"
 )
 
@@ -20,7 +22,18 @@ import (
 var voidVotes = struct {
 	mu sync.Mutex
 	by map[uint]map[string]bool // game id -> user id -> true (agrees) or false (disagrees)
-}{by: map[uint]map[string]bool{}}
+	at map[uint]time.Time       // game id -> when its vote was opened
+}{by: map[uint]map[string]bool{}, at: map[uint]time.Time{}}
+
+// voidVoteLife is how long an unfinished vote counts as open: a forgotten one must not silence the queue alerts for ever.
+const voidVoteLife = 15 * time.Minute
+
+// voidVoteOpen reports whether the game has a void vote going.
+func voidVoteOpen(gameID uint) bool {
+	voidVotes.mu.Lock()
+	defer voidVotes.mu.Unlock()
+	return len(voidVotes.by[gameID]) > 0 && time.Since(voidVotes.at[gameID]) < voidVoteLife
+}
 
 // VoidVotesNeeded is how many votes void a game of this many players: three quarters, rounded down, and never fewer than one.
 func VoidVotesNeeded(players int) int {
@@ -44,6 +57,7 @@ func castVoidBallot(gameID uint, userID string, agrees bool, players int) (yes, 
 	defer voidVotes.mu.Unlock()
 	if voidVotes.by[gameID] == nil {
 		voidVotes.by[gameID] = map[string]bool{}
+		voidVotes.at[gameID] = time.Now()
 	}
 	previous, voted := voidVotes.by[gameID][userID]
 	already = voted && previous == agrees
@@ -79,6 +93,7 @@ func VoidVoters(gameID uint) (yes, no []string) {
 func ClearVoidVotes(gameID uint) {
 	voidVotes.mu.Lock()
 	delete(voidVotes.by, gameID)
+	delete(voidVotes.at, gameID)
 	voidVotes.mu.Unlock()
 }
 
@@ -174,9 +189,26 @@ func handleVoidVoteClick(s *discordgo.Session, i *discordgo.InteractionCreate, c
 		update(voidVoteClosedEmbed("Void Vote Passed", fmt.Sprintf("Game #%d was voided (%d of %d players agreed).", game.Number, yes, players)), []discordgo.MessageComponent{})
 	case players-no < needed: // even if everyone left agreed, it could not pass
 		ClearVoidVotes(gameID)
+		returnToTeamVoice(s, game) // players drift into the queue channels during a vote: bring them back
 		update(voidVoteClosedEmbed("Void Vote Failed", fmt.Sprintf("Too many players disagreed, so Game #%d keeps going.", game.Number)), []discordgo.MessageComponent{})
 	default:
 		update(VoidVotePanel(game), VoidVoteButtons(gameID))
 	}
 	return true
+}
+
+// returnToTeamVoice moves the players who are sitting in a queue channel back to their team's voice channel (after a failed void vote).
+// Anyone in another channel, or not in voice, is left where they are.
+func returnToTeamVoice(s *discordgo.Session, g Game) {
+	for _, p := range g.Players {
+		vcID := g.Channels.Voice[p.Team]
+		if vcID == "" {
+			continue
+		}
+		vs, err := s.State.VoiceState(g.GuildID, p.UserID)
+		if err != nil || vs == nil || vs.ChannelID == "" || vs.ChannelID == vcID || !queue.IsQueueChannel(g.GuildID, vs.ChannelID) {
+			continue
+		}
+		_ = s.GuildMemberMove(g.GuildID, p.UserID, &vcID)
+	}
 }
