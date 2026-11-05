@@ -5,7 +5,6 @@ package storage
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -21,6 +20,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 // Store uploads files to the bucket. It is switched on by STORAGE_BUCKET with its keys; without them every upload is skipped, so the bot
@@ -88,10 +89,10 @@ func (s *Store) PutJSON(ctx context.Context, key string, v any) (string, error) 
 		return "", err
 	}
 	var zipped bytes.Buffer
-	zw, _ := gzip.NewWriterLevel(&zipped, gzip.BestCompression)
+	zw := brotli.NewWriterLevel(&zipped, brotli.BestCompression)
 	_, _ = zw.Write(raw)
 	_ = zw.Close()
-	return s.put(ctx, key, "application/json", zipped.Bytes(), "gzip")
+	return s.put(ctx, key, "application/json", zipped.Bytes(), "br")
 }
 
 // Put uploads data at key (a random suffix is added before the extension, so an address cannot be guessed) and returns its URL.
@@ -131,7 +132,7 @@ func (s *Store) put(ctx context.Context, key, contentType string, data []byte, e
 	return target, nil
 }
 
-// withSuffix puts a random string before the key's extension: games/1/2-discord.json becomes games/1/2-discord-3f9a1c7e2b40.json.
+// withSuffix puts a random string before the key's extension: games/1/2/discord.json becomes games/1/2/discord-3f9a1c7e2b40.json.
 func withSuffix(key string) string {
 	var b [6]byte
 	_, _ = rand.Read(b[:])

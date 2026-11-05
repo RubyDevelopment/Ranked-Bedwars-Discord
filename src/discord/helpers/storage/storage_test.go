@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"compress/gzip"
 	"context"
 	"io"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 // The signing is checked against Amazon's published test case "get-vanilla" (a GET of / with only Host and X-Amz-Date signed): the same
@@ -29,12 +30,7 @@ func TestPutUploadsASignedObject(t *testing.T) {
 	var gotPath, gotAuth, gotType, gotBody, gotEnc string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath, gotAuth, gotType, gotEnc = r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("Content-Type"), r.Header.Get("Content-Encoding")
-		zr, err := gzip.NewReader(r.Body)
-		if err != nil {
-			t.Errorf("body is not gzip: %v", err)
-			return
-		}
-		b, _ := io.ReadAll(zr)
+		b, _ := io.ReadAll(brotli.NewReader(r.Body))
 		gotBody = string(b)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -43,11 +39,11 @@ func TestPutUploadsASignedObject(t *testing.T) {
 	if !s.Enabled() {
 		t.Fatal("a configured store says it is off")
 	}
-	url, err := s.PutJSON(context.Background(), "games/123/45-discord.json", map[string]string{"hello": "world"})
+	url, err := s.PutJSON(context.Background(), "games/123/45/discord.json", map[string]string{"hello": "world"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(gotPath, "/rbw-storage/games/123/45-discord-") || !strings.HasSuffix(gotPath, ".json") || gotPath == "/rbw-storage/games/123/45-discord.json" {
+	if !strings.HasPrefix(gotPath, "/rbw-storage/games/123/45/discord-") || !strings.HasSuffix(gotPath, ".json") || gotPath == "/rbw-storage/games/123/45/discord.json" {
 		t.Errorf("object path %q has no random suffix", gotPath)
 	}
 	if url != srv.URL+gotPath {
@@ -56,7 +52,7 @@ func TestPutUploadsASignedObject(t *testing.T) {
 	if !strings.HasPrefix(gotAuth, "AWS4-HMAC-SHA256 Credential=KEYID/") || !strings.Contains(gotAuth, "/auto/s3/aws4_request") || !strings.Contains(gotAuth, "x-amz-content-sha256") {
 		t.Errorf("authorization %q", gotAuth)
 	}
-	if gotEnc != "gzip" || gotType != "application/json" || gotBody != `{"hello":"world"}` {
+	if gotEnc != "br" || gotType != "application/json" || gotBody != `{"hello":"world"}` {
 		t.Errorf("type %q body %q", gotType, gotBody)
 	}
 }

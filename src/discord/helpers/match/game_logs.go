@@ -113,7 +113,7 @@ func (m *GameManager) archiveLogs(g Game) {
 	defer cancel()
 	put := func(kind string, messages any) string {
 		file := gameLogFile{Version: gameLogVersion, Kind: kind, GameID: g.ID, GameNumber: g.Number, GuildID: g.GuildID, CreatedAt: time.Now().UTC().Format(time.RFC3339), Messages: messages}
-		url, err := storage.Files.PutJSON(ctx, fmt.Sprintf("games/%s/%d-%s.json", g.GuildID, g.ID, kind), file)
+		url, err := storage.Files.PutJSON(ctx, fmt.Sprintf("games/%s/%d/%s.json", g.GuildID, g.ID, kind), file)
 		if err != nil {
 			m.logf("archive %s log of game %d: %v", kind, g.ID, err)
 		}
