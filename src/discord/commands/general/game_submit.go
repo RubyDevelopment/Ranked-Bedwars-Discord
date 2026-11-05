@@ -1,13 +1,18 @@
 package general
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
+	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/match"
+	"ranked-bedwars/src/discord/helpers/proofread"
 	"ranked-bedwars/src/types"
 
 	"github.com/bwmarrin/discordgo"
@@ -106,18 +111,58 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		return helpers.EditInteractionEmbed(s, i, SubmitResultNoTeamEmbed(i))
 	}
 
-	// 4. Ranked games wait for staff, casual games are scored immediately
+	// 4. Read the screenshot's chat: the winners, the losers, the bed and the MVP are checked against the game, for staff to see.
+	var review *proofread.Result
+	flow := match.SubmitFlowOf(i.GuildID)
+	if attachment != nil && flow.Mode != match.SubmitManual && proofread.Available() {
+		_ = helpers.EditInteractionEmbed(s, i, SubmitResultProcessingEmbed()) // shown while the picture is read
+		check, err := readScreenshot(attachment.URL, game, player.Team)
+		switch {
+		case err != nil:
+			log.Printf("[Submit] could not read the screenshot of game %d: %v", game.ID, err)
+		case !check.HasEvidence():
+			return helpers.EditInteractionEmbed(s, i, SubmitResultNoChatEmbed(i))
+		default:
+			review = &check
+		}
+	}
+	reply := func(e *discordgo.MessageEmbed, staffReview bool) error {
+		if review == nil {
+			return helpers.EditInteractionEmbed(s, i, e)
+		}
+		e.Fields = append(e.Fields, reviewFields(game, *review)...)
+		if staffReview {
+			return helpers.EditInteractionComponents(s, i, e, reviewButtons(game, *review))
+		}
+		return helpers.EditInteractionEmbed(s, i, e)
+	}
+
+	// 5. Auto mode scores a clear reading at once; anything unclear goes to staff to verify, with the reason
+	if game.Mode.Rated() && flow.Mode == match.SubmitAuto && review != nil {
+		if why := autoScoreBlocker(game, *review, player.Team, flow.MinPlayersPercent); why == "" {
+			result, err := match.Games.Score(sdk.SystemActor, i.GuildID, game.ID, review.Winner, match.ScoreOptions{MVP: mvpOf(game, *review)})
+			if err == nil {
+				return helpers.EditInteractionEmbed(s, i, autoScoredEmbed(game, actor, review.Winner, result.Results, *review, proofURL))
+			}
+			log.Printf("[Submit] could not auto-score game %d: %v", game.ID, err)
+			review.Mismatch = "automatic scoring failed: " + err.Error()
+		} else {
+			review.Held = why
+		}
+	}
+
+	// 6. Ranked games wait for staff, casual games are scored immediately
 	if game.Mode.Rated() {
 		// The claim is recorded on the game: it moves to staff scoring and its players are free to queue again.
 		if _, err := match.Games.Submit(game.ID, actor); err != nil {
 			return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("submit the result", err))
 		}
-		return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL))
+		return reply(helpers.SubmitResultStaffScoringEmbed(i, game.Number, player.Team, proofURL), true)
 	}
 	if _, err := match.Games.Score(actor, i.GuildID, game.ID, player.Team, match.ScoreOptions{}); err != nil {
 		return helpers.EditInteractionEmbed(s, i, match.GameActionErrorEmbed("score the casual match", err))
 	}
-	return helpers.EditInteractionEmbed(s, i, helpers.SubmitResultCasualEmbed(i, game.Number, player.Team, proofURL))
+	return reply(helpers.SubmitResultCasualEmbed(i, game.Number, player.Team, proofURL), false)
 }
 
 // ============================================================================
@@ -138,6 +183,23 @@ func attachmentOption(i *discordgo.InteractionCreate, name string) *discordgo.Me
 		return data.Resolved.Attachments[id]
 	}
 	return nil
+}
+
+// readScreenshot reads the chat of the screenshot against the game's roster, using the server profile's own chat rules.
+func readScreenshot(imageURL string, game match.Game, claimedTeam string) (proofread.Result, error) {
+	var profile proofread.Profile
+	if raw, err := database.Must().GameConfig.Field(game.GuildID, "server"); err == nil {
+		profile = proofread.LoadProfile(raw)
+	}
+	roster := make([]proofread.Member, 0, len(game.Players))
+	for _, p := range game.Players {
+		if p.Username != "" {
+			roster = append(roster, proofread.Member{Name: p.Username, Team: p.Team})
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return proofread.Check(ctx, imageURL, profile, roster, claimedTeam)
 }
 
 func isImageAttachment(contentType, filename string) bool {
@@ -184,6 +246,14 @@ func SubmitResultInvalidAttachmentEmbed(i *discordgo.InteractionCreate) *discord
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Invalid Attachment",
 		Description: "The attachment must be an image file (PNG, JPG, GIF or WebP).",
+		Thumbnail:   helpers.ThumbFlag,
+	})
+}
+
+func SubmitResultNoChatEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
+	return helpers.Preset("error", types.PresetOptions{
+		Title:       "No Game Chat Found",
+		Description: "The screenshot does not show the game chat, or it cannot be read. Send a screenshot with the **game chat open** (the kills, bed breaks and the win message), so staff can check the result.",
 		Thumbnail:   helpers.ThumbFlag,
 	})
 }

@@ -588,6 +588,10 @@ func TicketClosedLines(ticket *types.Ticket, guildName string) []string {
 		"- **Server:** `" + guildName + "`",
 		"- **Closed By:** " + closedBy,
 	}
+	if reason := strings.TrimSpace(ticket.CloseReason); reason != "" { // only when one was given
+		// The reason is typed by whoever closed the ticket: no mention in it may ping anyone.
+		lines = append(lines, "- **Reason:** "+strings.ReplaceAll(reason, "@", "@​"))
+	}
 	return lines
 }
 

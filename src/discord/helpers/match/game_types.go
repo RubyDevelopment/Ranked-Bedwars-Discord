@@ -491,7 +491,39 @@ type FlowSettings struct {
 	Captain  CaptainFlow  `json:"captain"`
 	// Formations are the named ways of forming teams a mode can pick (see team_formation.go).
 	Formations []Formation `json:"formations"`
+	// Submit is how a submitted screenshot is handled (see SubmitFlow).
+	Submit SubmitFlow `json:"submit"`
 }
+
+// The ways a /submit screenshot is handled, per guild (guild config "flows" > "submit").
+const (
+	SubmitManual = "manual" // as it always was: the screenshot goes to staff, who score the game
+	SubmitVerify = "verify" // the screenshot's chat is read and shown to staff, who confirm it with a button
+	SubmitAuto   = "auto"   // the game is scored from the screenshot when the reading is clear; otherwise staff verify it
+)
+
+// SubmitFlow is the guild's choice of how screenshots are handled.
+type SubmitFlow struct {
+	Mode string `json:"mode"`
+	// MinPlayersPercent is how much of the roster the chat has to name before auto mode trusts the reading (default 50).
+	MinPlayersPercent int `json:"min_players_percent"`
+}
+
+// normalized fills in what was left out or is not a known mode.
+func (f SubmitFlow) normalized() SubmitFlow {
+	switch f.Mode {
+	case SubmitManual, SubmitVerify, SubmitAuto:
+	default:
+		f.Mode = SubmitVerify
+	}
+	if f.MinPlayersPercent <= 0 || f.MinPlayersPercent > 100 {
+		f.MinPlayersPercent = 50
+	}
+	return f
+}
+
+// SubmitFlowOf is how the guild handles submitted screenshots.
+func SubmitFlowOf(guildID string) SubmitFlow { return Games.deps.Flows(guildID).Submit.normalized() }
 
 // DefaultFlows are the settings of a guild that configured nothing.
 func DefaultFlows() FlowSettings {
@@ -499,6 +531,7 @@ func DefaultFlows() FlowSettings {
 		Standard: StandardFlow{IsEnabled: true, RandomnessPercent: 100, KeepPartyTogether: true, BalancePartyGroups: true},
 		Captain: CaptainFlow{IsEnabled: true, PickTimeoutSeconds: 60, TopEloCaptainChance: 0.75, AutoAssignParties: true,
 			OneCaptainPerParty: true, DefaultPickingType: "alternating", AlternatingMinPlayers: 8},
+		Submit: SubmitFlow{Mode: SubmitVerify, MinPlayersPercent: 50},
 	}
 }
 
