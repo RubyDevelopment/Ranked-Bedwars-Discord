@@ -76,7 +76,7 @@ func sendPrefixReply(s *discordgo.Session, i *discordgo.InteractionCreate, conte
 }
 
 // EditInteractionFile answers with a PNG attachment (and optional text), for slash and prefix commands alike.
-func EditInteractionFile(s *discordgo.Session, i *discordgo.InteractionCreate, content, name string, data []byte) error {
+func EditInteractionFile(s *discordgo.Session, i *discordgo.InteractionCreate, content, name string, data []byte, components ...discordgo.MessageComponent) error {
 	content = strings.TrimSpace(content)
 	file := &discordgo.File{Name: name, ContentType: "image/png", Reader: bytes.NewReader(data)}
 	if IsPrefixInteraction(i) {
@@ -85,19 +85,20 @@ func EditInteractionFile(s *discordgo.Session, i *discordgo.InteractionCreate, c
 			return nil
 		}
 		_, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
-			Content:   content,
-			Files:     []*discordgo.File{file},
-			Reference: &discordgo.MessageReference{MessageID: messageID, ChannelID: i.ChannelID, GuildID: i.GuildID},
+			Content:    content,
+			Files:      []*discordgo.File{file},
+			Components: components,
+			Reference:  &discordgo.MessageReference{MessageID: messageID, ChannelID: i.ChannelID, GuildID: i.GuildID},
 		})
 		return err
 	}
 	if IsDeferredSlashInteraction(i) {
-		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content, Files: []*discordgo.File{file}})
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content, Files: []*discordgo.File{file}, Components: &components})
 		return err
 	}
 	return Respond(s, i, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Content: content, Files: []*discordgo.File{file}},
+		Data: &discordgo.InteractionResponseData{Content: content, Files: []*discordgo.File{file}, Components: components},
 	})
 }
 

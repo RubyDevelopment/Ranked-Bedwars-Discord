@@ -37,71 +37,43 @@ func IsHistoryPaginationCustomID(customID string) bool {
 // embed. The middle button displays the current page and is non-clickable. The
 // Back 5 / Next 5 buttons are only shown when there are at least 5 pages.
 func BuildHistoryPageComponents(kind HistoryPageKind, snowflake string, page, totalPages int, opts []string) []discordgo.MessageComponent {
+	return BuildPageRow(page, totalPages,
+		func(target int) string { return encodeHistoryPageCustomID(kind, snowflake, target, opts) },
+		func(slot string) string { return historyPagePrefix + "off-" + slot })
+}
+
+// BuildPageRow is the button row of the history pages for any feature that turns pages: Back 5, Back, the current page (not
+// pressable), Next and Next 5 (the two jumps only when there are at least 5 pages). id gives the custom id of the button that goes to a
+// page; inert gives the id of a button that cannot be pressed, one per slot ("back5", "back", "page", "next", "next5"), because Discord
+// refuses a message in which two components share an id and the jump buttons clamp to the same page as Back/Next at either end.
+// It returns nil when there is only one page.
+func BuildPageRow(page, totalPages int, id func(target int) string, inert func(slot string) string) []discordgo.MessageComponent {
 	if totalPages <= 1 {
 		return nil
 	}
-	if page < 1 {
-		page = 1
+	page = clampHistoryPage(page, totalPages)
+	button := func(target int, label, slot string, disabled bool) discordgo.MessageComponent {
+		customID := id(target)
+		if disabled {
+			customID = inert(slot)
+		}
+		return &discordgo.Button{CustomID: customID, Label: label, Style: discordgo.SecondaryButton, Disabled: disabled}
 	}
-	if page > totalPages {
-		page = totalPages
-	}
-
 	row := &discordgo.ActionsRow{Components: make([]discordgo.MessageComponent, 0, 5)}
-
 	if totalPages >= historyJumpSize {
-		back5 := page - historyJumpSize
-		if back5 < 1 {
-			back5 = 1
-		}
-		row.Components = append(row.Components, historyPageButton(kind, snowflake, back5, "Back 5", "back5", opts, page <= historyJumpSize))
+		row.Components = append(row.Components, button(max(1, page-historyJumpSize), "Back 5", "back5", page <= historyJumpSize))
 	}
-
-	back := page - 1
-	if back < 1 {
-		back = 1
-	}
-	row.Components = append(row.Components, historyPageButton(kind, snowflake, back, "Back", "back", opts, page == 1))
-
-	row.Components = append(row.Components, &discordgo.Button{
-		Label:    fmt.Sprintf("%d/%d", page, totalPages),
-		Style:    discordgo.SecondaryButton,
-		Disabled: true,
-		CustomID: historyPagePrefix + "page",
-	})
-
-	next := page + 1
-	if next > totalPages {
-		next = totalPages
-	}
-	row.Components = append(row.Components, historyPageButton(kind, snowflake, next, "Next", "next", opts, page == totalPages))
-
+	row.Components = append(row.Components, button(max(1, page-1), "Back", "back", page == 1))
+	row.Components = append(row.Components, &discordgo.Button{Label: fmt.Sprintf("%d/%d", page, totalPages), Style: discordgo.SecondaryButton, Disabled: true, CustomID: inert("page")})
+	row.Components = append(row.Components, button(min(totalPages, page+1), "Next", "next", page == totalPages))
 	if totalPages >= historyJumpSize {
-		next5 := page + historyJumpSize
-		if next5 > totalPages {
-			next5 = totalPages
-		}
-		row.Components = append(row.Components, historyPageButton(kind, snowflake, next5, "Next 5", "next5", opts, page > totalPages-historyJumpSize))
+		row.Components = append(row.Components, button(min(totalPages, page+historyJumpSize), "Next 5", "next5", page > totalPages-historyJumpSize))
 	}
-
 	return []discordgo.MessageComponent{row}
 }
 
-// historyPageButton builds one pagination button. A button that cannot be pressed (the jump buttons clamp to the same
-// page as Back/Next at either end) gets an inert id of its own: Discord refuses a message in which two components
-// share a custom id, and a disabled button's id is never read. slot names the button's place in the row.
-func historyPageButton(kind HistoryPageKind, snowflake string, targetPage int, label, slot string, opts []string, disabled bool) discordgo.MessageComponent {
-	customID := encodeHistoryPageCustomID(kind, snowflake, targetPage, opts)
-	if disabled {
-		customID = historyPagePrefix + "off-" + slot
-	}
-	return &discordgo.Button{
-		CustomID: customID,
-		Label:    label,
-		Style:    discordgo.SecondaryButton,
-		Disabled: disabled,
-	}
-}
+// MessageOwner is who ran the command a message answers ("" when Discord does not say): only that person turns its pages.
+func MessageOwner(i *discordgo.InteractionCreate) string { return historyOwner(i) }
 
 // encodeHistoryPageCustomID encodes a button target into a custom ID:
 // pgv1|kind|snowflake|page|option...

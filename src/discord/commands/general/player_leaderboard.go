@@ -1,9 +1,11 @@
 package general
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"maps"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/banner"
+	"ranked-bedwars/src/discord/helpers/pagination"
 	"ranked-bedwars/src/types"
 )
 
@@ -115,56 +118,23 @@ func executePlayerLeaderboardCommand(s *discordgo.Session, i *discordgo.Interact
 		return err
 	}
 
-	page := helpers.OptionInt(i, "page")
-	if page < 1 {
-		page = 1
-	}
-
-	seasonKey, seasonID, err := helpers.ActiveSeasonKey(i.GuildID)
-	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorLeaderboardEmbed(i))
-	}
-	if seasonKey == "" {
-		return helpers.EditInteractionEmbed(s, i, LeaderboardNoActiveSeasonEmbed(i))
-	}
-
 	stat := leaderboardStats[0]
 	for _, st := range leaderboardStats {
 		if st.key == helpers.OptionString(i, "stat") {
 			stat = st
 		}
 	}
-
-	offset := (page - 1) * leaderboardPerPage
-	rows, err := database.Must().Stats.Leaderboard(i.GuildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: offset, Sort: stat.key})
-	if err != nil {
-		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorLeaderboardEmbed(i))
+	view := buildLeaderboard(s, leaderboardAsk{
+		guildID: i.GuildID, invoker: invokingUser(i), member: i.Member,
+		page: max(1, helpers.OptionInt(i, "page")), stat: stat, style: helpers.OptionString(i, "style"),
+	})
+	if view.png != nil {
+		return helpers.EditInteractionFile(s, i, view.text, "leaderboard.png", view.png, view.components...)
 	}
-	if len(rows.Data) == 0 {
-		if page > 1 {
-			return helpers.EditInteractionEmbed(s, i, LeaderboardEmptyPageEmbed(i, page))
-		}
-		return helpers.EditInteractionEmbed(s, i, LeaderboardEmptyEmbed(i, seasonKey))
+	if len(view.components) > 0 {
+		return helpers.EditInteractionComponents(s, i, view.embed, view.components)
 	}
-
-	totalPages := 1
-	if rows.Total != nil && *rows.Total > 0 {
-		totalPages = int((*rows.Total + leaderboardPerPage - 1) / leaderboardPerPage)
-	}
-
-	sent, err := sendLeaderboardBanner(s, i, rows.Data, seasonKey, seasonID, stat, page, totalPages)
-	if sent {
-		return nil
-	}
-	if err != nil {
-		log.Printf("leaderboard banner for guild %s: %v", i.GuildID, err)
-	}
-
-	title := seasonKey
-	if stat.key != "elo" {
-		title += " · " + stat.label
-	}
-	return helpers.EditInteractionEmbed(s, i, LeaderboardOverviewEmbed(i, rows.Data, title, page, totalPages))
+	return helpers.EditInteractionEmbed(s, i, view.embed)
 }
 
 // ============================================================================
@@ -178,34 +148,103 @@ func invokingUser(i *discordgo.InteractionCreate) *discordgo.User {
 	return i.User
 }
 
-// sendLeaderboardBanner answers with the banner. sent is false when the guild has
-// no style the invoker may use or drawing failed: the caller then sends the embed.
-func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate, rows []sdk.LeaderboardEntry, season string, seasonID uint, stat leaderboardStat, page, totalPages int) (sent bool, err error) {
-	invoker := invokingUser(i)
+// leaderboardAsk is everything one page of a leaderboard depends on, so the command and its page buttons build it the same way.
+type leaderboardAsk struct {
+	guildID string
+	invoker *discordgo.User
+	member  *discordgo.Member
+	page    int
+	stat    leaderboardStat
+	style   string // a banner style named in the command ("" = the one the player chose before)
+}
+
+// leaderboardView is one page, ready to send: the banner picture, or the embed that stands in for it (or answers an error), and its buttons.
+type leaderboardView struct {
+	png        []byte
+	embed      *discordgo.MessageEmbed
+	text       string
+	components []discordgo.MessageComponent
+}
+
+// leaderboardPagePrefix starts the custom id of the page buttons: lbpg|<page to go to>|<stat key>. An inert button is lbpg|off-<slot>.
+const leaderboardPagePrefix = "lbpg|"
+
+// buildLeaderboard loads one page of the leaderboard and draws it.
+func buildLeaderboard(s *discordgo.Session, ask leaderboardAsk) *leaderboardView {
+	failed := func(e *discordgo.MessageEmbed) *leaderboardView { return &leaderboardView{embed: e} }
+
+	seasonKey, seasonID, err := helpers.ActiveSeasonKey(ask.guildID)
+	if err != nil {
+		return failed(UnexpectedErrorLeaderboardEmbed(nil))
+	}
+	if seasonKey == "" {
+		return failed(LeaderboardNoActiveSeasonEmbed(nil))
+	}
+	rows, err := database.Must().Stats.Leaderboard(ask.guildID, seasonID, sdk.Page{Limit: leaderboardPerPage, Offset: (ask.page - 1) * leaderboardPerPage, Sort: ask.stat.key})
+	if err != nil {
+		return failed(UnexpectedErrorLeaderboardEmbed(nil))
+	}
+	if len(rows.Data) == 0 {
+		if ask.page > 1 {
+			return failed(LeaderboardEmptyPageEmbed(nil, ask.page))
+		}
+		return failed(LeaderboardEmptyEmbed(nil, seasonKey))
+	}
+	totalPages := 1
+	if rows.Total != nil && *rows.Total > 0 {
+		totalPages = int((*rows.Total + leaderboardPerPage - 1) / leaderboardPerPage)
+	}
+
+	view := &leaderboardView{components: pagination.BuildPageRow(ask.page, totalPages,
+		func(target int) string { return fmt.Sprintf("%s%d|%s", leaderboardPagePrefix, target, ask.stat.key) },
+		func(slot string) string { return leaderboardPagePrefix + "off-" + slot })}
+
+	img, err := renderLeaderboardBanner(s, ask, rows.Data, seasonKey, seasonID, totalPages)
+	if img != nil {
+		view.png = img
+		if totalPages > 1 {
+			view.text = fmt.Sprintf("Page %d/%d", ask.page, totalPages)
+		}
+		return view
+	}
+	if err != nil {
+		log.Printf("leaderboard banner for guild %s: %v", ask.guildID, err)
+	}
+	title := seasonKey
+	if ask.stat.key != "elo" {
+		title += " · " + ask.stat.label
+	}
+	view.embed = LeaderboardOverviewEmbed(nil, rows.Data, title, ask.page, totalPages)
+	return view
+}
+
+// renderLeaderboardBanner draws the banner of a page. It returns nil (and no error) when the guild has no style the viewer may use.
+func renderLeaderboardBanner(s *discordgo.Session, ask leaderboardAsk, rows []sdk.LeaderboardEntry, season string, seasonID uint, totalPages int) ([]byte, error) {
+	invoker := ask.invoker
 	if invoker == nil {
-		return false, nil
+		return nil, nil
 	}
 	// The ten rows' players are looked up while the rest (the viewer's own profile, their style, their position) is loaded.
 	rowVars := banner.Vars{}
 	rowsDone := make(chan struct{})
 	go func() {
 		defer close(rowsDone)
-		banner.LeaderboardRowVars(s, i.GuildID, rows, rowVars)
+		banner.LeaderboardRowVars(s, ask.guildID, rows, rowVars)
 	}()
-	doc := banner.LoadBanners(i.GuildID)
-	viewer := banner.BannerViewer(invoker.ID, i.Member)
+	doc := banner.LoadBanners(ask.guildID)
+	viewer := banner.BannerViewer(invoker.ID, ask.member)
 
-	view, verr := database.Must().Player.Get(i.GuildID, invoker.ID)
+	view, verr := database.Must().Player.Get(ask.guildID, invoker.ID)
 	preferred := ""
 	if verr == nil {
 		preferred = banner.ChosenBanner(view.Config, "leaderboard")
 	}
-	if style := helpers.OptionString(i, "style"); style != "" {
+	if ask.style != "" {
 		for _, b := range doc.Eligible("leaderboard", viewer) {
-			if b.ID == style {
-				preferred = style
+			if b.ID == ask.style {
+				preferred = ask.style
 				if verr == nil {
-					if err := banner.RememberBanner(i.GuildID, invoker.ID, view.Config, "leaderboard", style); err != nil {
+					if err := banner.RememberBanner(ask.guildID, invoker.ID, view.Config, "leaderboard", ask.style); err != nil {
 						log.Printf("remember leaderboard banner: %v", err)
 					}
 				}
@@ -214,34 +253,76 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 	chosen := doc.Choose("leaderboard", viewer, preferred)
 	if chosen == nil {
-		return false, nil
+		return nil, nil
 	}
 
-	vars := banner.GuildVars(s, i.GuildID, invoker)
+	vars := banner.GuildVars(s, ask.guildID, invoker)
 	vars["lb.title"] = fmt.Sprintf("%s Leaderboard", season)
-	vars["lb.stat"], vars["lb.stat_short"] = stat.label, stat.short
+	vars["lb.stat"], vars["lb.stat_short"] = ask.stat.label, ask.stat.short
 	vars["season.name"] = season
 	<-rowsDone
 	maps.Copy(vars, rowVars)
 	for n := range rows {
-		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(stat.value(&rows[n].PlayerStatsModel))
+		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(ask.stat.value(&rows[n].PlayerStatsModel))
 	}
-	vars["page.number"], vars["page.total"] = fmt.Sprint(page), fmt.Sprint(totalPages)
+	vars["page.number"], vars["page.total"] = fmt.Sprint(ask.page), fmt.Sprint(totalPages)
 	if verr == nil {
-		you(s, i.GuildID, invoker, view, seasonID, stat, vars)
+		you(s, ask.guildID, invoker, view, seasonID, ask.stat, vars)
 	}
-
-	img, err := banner.RenderBanner(chosen, vars)
-	if err != nil {
-		return false, err
-	}
-	text := ""
-	if totalPages > 1 {
-		text = fmt.Sprintf("Page %d/%d", page, totalPages)
-	}
-	return true, helpers.EditInteractionFile(s, i, text, "leaderboard.png", img)
+	return banner.RenderBanner(chosen, vars)
 }
 
+// ============================================================================
+// Page buttons
+// ============================================================================
+
+func init() { helpers.RegisterComponentHandler(handleLeaderboardPage) }
+
+// handleLeaderboardPage turns the page of a leaderboard when one of its buttons is pressed: the banner is drawn again for the new page and
+// replaces the old one. Only the player who ran the command turns its pages (the banner shows their own row).
+func handleLeaderboardPage(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
+	rest, ok := strings.CutPrefix(customID, leaderboardPagePrefix)
+	if !ok {
+		return false
+	}
+	target, statKey, found := strings.Cut(rest, "|")
+	page, err := strconv.Atoi(target)
+	if !found || err != nil || page < 1 {
+		return true // an inert button (the current page, or a button at the end): nothing to do
+	}
+	stat := leaderboardStats[0]
+	for _, st := range leaderboardStats {
+		if st.key == statKey {
+			stat = st
+		}
+	}
+
+	pressed := helpers.InteractionUserID(i)
+	if owner := pagination.MessageOwner(i); owner != "" && owner != pressed {
+		_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Flags:  discordgo.MessageFlagsEphemeral,
+				Embeds: []*discordgo.MessageEmbed{helpers.Preset("error", types.PresetOptions{Title: "Permission Denied", Description: "Only the player who ran this command can change pages. Run `/leaderboard` to see your own."})},
+			},
+		})
+		return true
+	}
+
+	// Drawing a page takes a moment: acknowledge the press now, then replace the message.
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	user := i.User
+	if i.Member != nil && i.Member.User != nil {
+		user = i.Member.User
+	}
+	view := buildLeaderboard(s, leaderboardAsk{guildID: i.GuildID, invoker: user, member: i.Member, page: page, stat: stat})
+
+	edit := leaderboardPageEdit(view)
+	if err := helpers.EditInteractionResponse(s, i, edit); err != nil {
+		log.Printf("leaderboard page for guild %s: %v", i.GuildID, err)
+	}
+	return true
+}
 
 // ============================================================================
 // Helper functions
@@ -363,4 +444,24 @@ func positionOn(guildID string, seasonID, playerID uint, stat leaderboardStat) i
 		}
 	}
 	return 0
+}
+
+// leaderboardPageEdit is the edit that replaces a leaderboard message with another page: the old banner is dropped (attachments: [], or it
+// would stay beside the new one) and the new one attached, or the embed that stands in for it.
+func leaderboardPageEdit(view *leaderboardView) *discordgo.WebhookEdit {
+	components := view.components
+	if components == nil {
+		components = []discordgo.MessageComponent{}
+	}
+	edit := &discordgo.WebhookEdit{Components: &components, Attachments: &[]*discordgo.MessageAttachment{}}
+	if view.png != nil {
+		edit.Content = &view.text
+		edit.Embeds = &[]*discordgo.MessageEmbed{}
+		edit.Files = []*discordgo.File{{Name: "leaderboard.png", ContentType: "image/png", Reader: bytes.NewReader(view.png)}}
+		return edit
+	}
+	empty := ""
+	edit.Content = &empty
+	edit.Embeds = &[]*discordgo.MessageEmbed{view.embed}
+	return edit
 }
