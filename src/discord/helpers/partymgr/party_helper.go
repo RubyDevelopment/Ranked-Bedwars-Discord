@@ -16,6 +16,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/discord/helpers/ratings"
@@ -179,6 +180,9 @@ func StartPartySweeper(s *discordgo.Session) {
 	partySweepOnce.Do(func() {
 		ids := make([]string, 0, len(s.State.Guilds))
 		for _, g := range s.State.Guilds {
+			if guildlink.IsSecondary(g.ID) {
+				continue // a linked secondary server has no data of its own
+			}
 			ids = append(ids, g.ID)
 		}
 		go partyWatch.Seed(ids, Parties.hasParties)

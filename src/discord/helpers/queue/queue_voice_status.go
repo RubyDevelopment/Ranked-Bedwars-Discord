@@ -3,6 +3,7 @@ package queue
 import (
 	"fmt"
 	"ranked-bedwars/src/discord/helpers/base"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"strings"
 	"time"
 
@@ -137,6 +138,9 @@ func refreshVoiceStatuses(s *discordgo.Session) {
 	s.State.RLock()
 	var guilds []string
 	for _, g := range s.State.Guilds {
+		if guildlink.IsSecondary(g.ID) {
+			continue // a linked secondary server has no queue of its own
+		}
 		guilds = append(guilds, g.ID)
 	}
 	s.State.RUnlock()

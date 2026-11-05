@@ -21,6 +21,7 @@ import (
 	guildmodel "github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models/guild"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/discord/helpers/tickets"
@@ -690,6 +691,9 @@ func onDecide(s *discordgo.Session, i *discordgo.InteractionCreate, id int, appr
 func StartSweeper(s *discordgo.Session) {
 	go func() {
 		for _, g := range append([]*discordgo.Guild(nil), s.State.Guilds...) {
+			if guildlink.IsSecondary(g.ID) {
+				continue // a linked secondary server has no data of its own
+			}
 			Requests.mu.Lock()
 			_, _ = Requests.state(g.ID) // read each guild's tickets once; a guild with none costs one call
 			Requests.mu.Unlock()

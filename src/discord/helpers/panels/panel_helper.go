@@ -19,6 +19,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/discord/helpers/tickets"
@@ -128,6 +129,9 @@ func sweepGiveaways(s *discordgo.Session) {
 		return
 	}
 	for _, g := range s.State.Guilds {
+		if guildlink.IsSecondary(g.ID) {
+			continue // a linked secondary server has no data of its own: its main guild is swept
+		}
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -498,6 +502,9 @@ func syncAllPanels(s *discordgo.Session) {
 		return
 	}
 	for _, g := range s.State.Guilds {
+		if guildlink.IsSecondary(g.ID) {
+			continue // a linked secondary server has no data of its own: its main guild is swept
+		}
 		func() {
 			defer func() {
 				if r := recover(); r != nil {

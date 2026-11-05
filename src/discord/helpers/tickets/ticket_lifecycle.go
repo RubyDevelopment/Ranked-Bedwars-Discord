@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/blob"
 	"ranked-bedwars/src/types"
@@ -669,8 +670,8 @@ func sweepTicketInactivity(s *discordgo.Session) {
 		return
 	}
 	for _, guild := range s.State.Guilds {
-		if guild == nil {
-			continue
+		if guild == nil || guildlink.IsSecondary(guild.ID) {
+			continue // a linked secondary server has no tickets of its own
 		}
 		ip, err := Tickets.LoadOpen(guild.ID)
 		if err != nil {

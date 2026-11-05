@@ -18,6 +18,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/database"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
@@ -918,6 +919,9 @@ func StartPunishmentExpiry(s *discordgo.Session) {
 	punishmentOnce.Do(func() {
 		ids := make([]string, 0, len(s.State.Guilds))
 		for _, g := range s.State.Guilds {
+			if guildlink.IsSecondary(g.ID) {
+				continue // a linked secondary server has no data of its own
+			}
 			ids = append(ids, g.ID)
 		}
 		go PunishmentWatch.Seed(ids, guildHasTimedPunishments)

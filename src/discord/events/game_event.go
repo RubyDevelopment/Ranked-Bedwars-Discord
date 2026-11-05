@@ -4,6 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 )
@@ -57,6 +58,9 @@ var GameRecoveryEvent = &types.Event{
 	Execute: func(s *discordgo.Session, r *discordgo.Ready) {
 		ids := make([]string, 0, len(r.Guilds))
 		for _, g := range r.Guilds {
+			if guildlink.IsSecondary(g.ID) {
+				continue // a linked secondary server has no games of its own
+			}
 			ids = append(ids, g.ID)
 		}
 		go match.RecoverGamesOnStartup(s, ids) // listing every guild takes a while: the ready event does not wait for it
