@@ -4,10 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"slices"
 	"strings"
 	"sync"
@@ -30,10 +30,9 @@ import (
 // Giveaways (dashboard: Community → Giveaways)
 // ============================================================================
 
-// The dashboard keeps the giveaways in the guild config's `panels.giveaways`. The bot posts each one that has a
-// prize, a channel and an end time, takes entries through its button, draws the winners when it ends and announces
-// them. What the bot records (message, entries, winners) lives apart in `panels.giveaway_state`, so saving the
-// dashboard's list never overwrites an entry.
+// Giveaways are rows of the database (guild_giveaways, with their entries in guild_giveaway_entries). The dashboard makes them; the bot
+// posts each one that is due, takes entries through its button, draws the winners when it ends (once, recorded in the database before
+// anything is announced) and announces them.
 
 type giveawayDoc struct {
 	ID          string `json:"id"`
@@ -59,19 +58,13 @@ type giveawayDoc struct {
 	PrizeRoleID        string         `json:"prizeRoleId"`
 }
 
-type giveawayState struct {
-	ChannelID string   `json:"channel_id"`
-	MessageID string   `json:"message_id"`
-	Ended     bool     `json:"ended"`
-	Entries   []string `json:"entries"`
-	Winners   []string `json:"winners"`
-	// Weights is how many entries each member holds (the bonuses they qualified for when they entered); a member without one holds one.
-	Weights map[string]int `json:"weights,omitempty"`
-}
+// panelsWriteMu serializes the bot's writes to the guild config's `panels` field (the posted message of a panel), so two do not overwrite each other.
+var panelsWriteMu sync.Mutex
 
 var (
 	giveawaySession atomic.Pointer[discordgo.Session]
 	giveawayOnce    sync.Once
+	giveawayPosted  sync.Map // guild/giveaway -> true, while a post is going out
 )
 
 const (
@@ -90,56 +83,6 @@ func StartGiveaways(s *discordgo.Session) {
 		}()
 	})
 }
-
-func readGiveaways(cfg *models.GuildConfigsModel) ([]giveawayDoc, map[string]*giveawayState) {
-	var sections struct {
-		Giveaways []giveawayDoc             `json:"giveaways"`
-		State     map[string]*giveawayState `json:"giveaway_state"`
-	}
-	if !cfg.Panels.IsEmpty() {
-		_ = cfg.Panels.Unmarshal(&sections)
-	}
-	if sections.State == nil {
-		sections.State = map[string]*giveawayState{}
-	}
-	return sections.Giveaways, sections.State
-}
-
-// updateGiveawayState applies fn to the giveaway's state inside the guild's panels field; fn returns false to
-// leave the field untouched.
-// panelsWriteMu serializes the bot's own writes to the panels field, so a burst of entries does not trip over itself.
-var panelsWriteMu sync.Mutex
-
-func updateGiveawayState(guildID, id string, fn func(st *giveawayState) bool) error {
-	panelsWriteMu.Lock()
-	defer panelsWriteMu.Unlock()
-	return database.Must().GuildConfig.UpdateField(sdk.SystemActor, guildID, "panels", func(cfg *models.GuildConfigsModel) (any, error) {
-		sections := map[string]json.RawMessage{}
-		if !cfg.Panels.IsEmpty() {
-			if err := cfg.Panels.Unmarshal(&sections); err != nil {
-				return nil, err
-			}
-		}
-		state := map[string]*giveawayState{}
-		_ = json.Unmarshal(sections["giveaway_state"], &state)
-		st := state[id]
-		if st == nil {
-			st = &giveawayState{}
-			state[id] = st
-		}
-		if !fn(st) {
-			return sections, errNoChange
-		}
-		raw, err := json.Marshal(state)
-		if err != nil {
-			return nil, err
-		}
-		sections["giveaway_state"] = raw
-		return sections, nil
-	})
-}
-
-var errNoChange = errors.New("no change")
 
 func sweepGiveaways(s *discordgo.Session) {
 	if s == nil {
@@ -161,29 +104,33 @@ func sweepGiveaways(s *discordgo.Session) {
 }
 
 func sweepGuildGiveaways(s *discordgo.Session, guildID string) {
-	cfg, err := database.Must().GuildConfig.Get(guildID)
+	rows, err := database.Giveaways(guildID, "scheduled,running")
 	if err != nil {
 		return
 	}
-	list, state := readGiveaways(cfg)
 	now := time.Now()
-	for _, g := range list {
-		ends, perr := time.Parse(time.RFC3339, g.EndsAt)
-		if strings.TrimSpace(g.Prize) == "" || g.ChannelID == "" || perr != nil {
-			continue
-		}
-		st := state[g.ID]
+	for _, row := range rows {
+		g := docOf(row)
 		switch {
-		case st != nil && st.Ended:
-		case (st == nil || st.MessageID == "") && now.Before(ends):
-			postGiveaway(s, guildID, g, ends)
-		case st != nil && st.MessageID != "" && !now.Before(ends):
-			drawGiveaway(s, guildID, g, st)
-		case st == nil || st.MessageID == "":
+		case row.Status != "running" && now.Before(row.EndsAt):
+			postGiveaway(s, guildID, row, g)
+		case row.Status == "running" && row.MessageID != "" && !now.Before(row.EndsAt):
+			drawGiveaway(s, guildID, row, g)
+		case !now.Before(row.EndsAt):
 			// It ended before the bot ever posted it: there is nothing to draw.
-			_ = updateGiveawayState(guildID, g.ID, func(st *giveawayState) bool { st.Ended = true; return true })
+			_ = database.FinishGiveaway(guildID, row.ID, nil)
 		}
 	}
+}
+
+// docOf is a giveaway row as the rules and the post read it: the row's own fields and the rules saved with it.
+func docOf(row database.Giveaway) giveawayDoc {
+	var g giveawayDoc
+	_ = json.Unmarshal(row.Rules, &g)
+	g.ID = strconv.FormatUint(uint64(row.ID), 10)
+	g.Prize, g.Description, g.Winners, g.ChannelID = row.Prize, row.Description, row.Winners, row.ChannelID
+	g.EndsAt = row.EndsAt.UTC().Format(time.RFC3339)
+	return g
 }
 
 func giveawayEmbed(g giveawayDoc, ends time.Time, ended bool, winners []string) map[string]any {
@@ -219,43 +166,49 @@ func giveawayButton(id string, disabled bool) []map[string]any {
 	}}}}
 }
 
-func postGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, ends time.Time) {
+func postGiveaway(s *discordgo.Session, guildID string, row database.Giveaway, g giveawayDoc) {
+	key := guildID + "/" + g.ID
+	if _, busy := giveawayPosted.LoadOrStore(key, true); busy {
+		return // posted a moment ago; saving that it is running has not gone through yet
+	}
 	id, err := helpers.SendPayload(s, g.ChannelID, map[string]any{
-		"embeds": []map[string]any{giveawayEmbed(g, ends, false, nil)}, "components": giveawayButton(g.ID, false),
+		"embeds": []map[string]any{giveawayEmbed(g, row.EndsAt, false, nil)}, "components": giveawayButton(g.ID, false),
 		"allowed_mentions": map[string]any{"parse": []string{}},
 	})
 	if err != nil {
+		giveawayPosted.Delete(key)
 		panelLogger.Warn(fmt.Sprintf("posting giveaway %s in %s: %v", g.ID, guildID, err))
 		return
 	}
-	if err := updateGiveawayState(guildID, g.ID, func(st *giveawayState) bool { st.ChannelID, st.MessageID = g.ChannelID, id; return true }); err != nil {
+	if err := database.UpdateGiveaway(guildID, row.ID, map[string]any{"status": "running", "message_id": id}); err != nil {
 		panelLogger.Warn(fmt.Sprintf("saving giveaway %s in %s: %v", g.ID, guildID, err))
 	}
 }
 
-func drawGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, st *giveawayState) {
+func drawGiveaway(s *discordgo.Session, guildID string, row database.Giveaway, g giveawayDoc) {
+	entries, err := database.GiveawayEntries(guildID, row.ID)
+	if err != nil {
+		panelLogger.Warn(fmt.Sprintf("reading the entries of giveaway %s in %s: %v", g.ID, guildID, err))
+		return
+	}
+	ids := make([]string, len(entries))
+	weights := make(map[string]int, len(entries))
+	for n, e := range entries {
+		ids[n], weights[e.UserID] = e.UserID, e.Weight
+	}
 	// Each entry has the chance its weight gives it (extra entries for rank or role).
-	winners := pickWinners(st.Entries, st.Weights, max(g.Winners, 1), rand.New(rand.NewSource(time.Now().UnixNano())))
+	winners := pickWinners(ids, weights, max(g.Winners, 1), rand.New(rand.NewSource(time.Now().UnixNano())))
 
-	// Record the result first: a draw that is announced twice would be worse than one that is not announced.
-	already := false
-	if err := updateGiveawayState(guildID, g.ID, func(cur *giveawayState) bool {
-		if cur.Ended {
-			already = true
-			return false
+	// Record the result first, in the database, where it works once: a draw that is announced twice would be worse than one that is not.
+	if err := database.FinishGiveaway(guildID, row.ID, winners); err != nil {
+		if apiErr, ok := err.(*database.APIStatusError); !ok || apiErr.Status >= 500 {
+			panelLogger.Warn(fmt.Sprintf("ending giveaway %s in %s: %v", g.ID, guildID, err))
 		}
-		cur.Ended, cur.Winners = true, winners
-		return true
-	}); err != nil && !errors.Is(err, errNoChange) {
-		panelLogger.Warn(fmt.Sprintf("ending giveaway %s in %s: %v", g.ID, guildID, err))
-		return
-	}
-	if already {
 		return
 	}
 
-	channelID := st.ChannelID
-	_ = helpers.EditPayload(s, channelID, st.MessageID, map[string]any{
+	channelID := row.ChannelID
+	_ = helpers.EditPayload(s, channelID, row.MessageID, map[string]any{
 		"embeds": []map[string]any{giveawayEmbed(g, time.Time{}, true, winners)}, "components": giveawayButton(g.ID, true),
 		"allowed_mentions": map[string]any{"parse": []string{}},
 	})
@@ -282,7 +235,7 @@ func drawGiveaway(s *discordgo.Session, guildID string, g giveawayDoc, st *givea
 	}
 	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Content:         text,
-		Reference:       &discordgo.MessageReference{MessageID: st.MessageID, ChannelID: channelID, GuildID: guildID},
+		Reference:       &discordgo.MessageReference{MessageID: row.MessageID, ChannelID: channelID, GuildID: guildID},
 		AllowedMentions: &discordgo.MessageAllowedMentions{Users: winners},
 	})
 }
@@ -299,63 +252,46 @@ func HandleGiveawayEntry(s *discordgo.Session, i *discordgo.InteractionCreate, c
 		return true
 	}
 	say := func(text string) { _ = respondText(s, i, text) }
-	id, userID := strings.TrimPrefix(customID, giveawayIDPrefix), i.Member.User.ID
-
-	cfg, err := database.Must().GuildConfig.Get(i.GuildID)
+	rowID, err := strconv.ParseUint(strings.TrimPrefix(customID, giveawayIDPrefix), 10, 64)
 	if err != nil {
-		say("Something went wrong. Please try again in a moment.")
-		return true
-	}
-	list, state := readGiveaways(cfg)
-	var g *giveawayDoc
-	for idx := range list {
-		if list[idx].ID == id {
-			g = &list[idx]
-		}
-	}
-	if g == nil {
 		say("This giveaway is no longer available.")
 		return true
 	}
-	if st := state[id]; st != nil && st.Ended {
-		say("This giveaway has ended.")
-		return true
-	}
-	if ends, err := time.Parse(time.RFC3339, g.EndsAt); err == nil && !time.Now().Before(ends) {
-		say("This giveaway has ended.")
-		return true
-	}
+	userID := i.Member.User.ID
 
-	entrantNow, rankOrder, err := gatherEntrant(i.GuildID, userID, memberRoles(i), *g, state)
+	row, err := database.GiveawayByID(i.GuildID, uint(rowID))
 	if err != nil {
 		say("Something went wrong. Please try again in a moment.")
 		return true
 	}
-	if reason := g.check(entrantNow, rankOrder); reason != "" {
+	if row == nil || row.Status == "cancelled" {
+		say("This giveaway is no longer available.")
+		return true
+	}
+	if row.Status == "ended" || !time.Now().Before(row.EndsAt) {
+		say("This giveaway has ended.")
+		return true
+	}
+	g := docOf(*row)
+
+	who, rankOrder, err := gatherEntrant(i.GuildID, userID, memberRoles(i), g, row.ID)
+	if err != nil {
+		say("Something went wrong. Please try again in a moment.")
+		return true
+	}
+	if reason := g.check(who, rankOrder); reason != "" {
 		say(reason)
 		return true
 	}
-	weight := g.weight(entrantNow)
 
-	entered, count := false, 0
-	err = updateGiveawayState(i.GuildID, id, func(st *giveawayState) bool {
-		count = len(st.Entries)
-		if slices.Contains(st.Entries, userID) {
-			return false
-		}
-		st.Entries = append(st.Entries, userID)
-		if weight > 1 {
-			if st.Weights == nil {
-				st.Weights = map[string]int{}
-			}
-			st.Weights[userID] = weight
-		}
-		entered, count = true, len(st.Entries)
-		return true
-	})
+	entered, count, err := database.EnterGiveaway(i.GuildID, row.ID, userID, g.weight(who))
 	switch {
-	case err != nil && !errors.Is(err, errNoChange):
-		say("Something went wrong. Please try again in a moment.")
+	case err != nil:
+		if apiErr, ok := err.(*database.APIStatusError); ok && apiErr.Status == 400 {
+			say("This giveaway has ended.")
+		} else {
+			say("Something went wrong. Please try again in a moment.")
+		}
 	case !entered:
 		say("You have already entered this giveaway.")
 	default:

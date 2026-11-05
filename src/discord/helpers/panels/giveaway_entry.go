@@ -13,15 +13,13 @@ import (
 // gatherEntrant collects what the giveaway's rules need to know about the member who pressed Enter, reading only what they ask for: the
 // stats, the punishment record and the other giveaways' winners are not looked up for a giveaway that does not use them. The second
 // result is the server's rank names, lowest first.
-func gatherEntrant(guildID, userID string, roles []string, g giveawayDoc, state map[string]*giveawayState) (entrant, []string, error) {
+func gatherEntrant(guildID, userID string, roles []string, g giveawayDoc, giveawayID uint) (entrant, []string, error) {
 	e := entrant{Roles: slices.Clone(roles)}
 	var order []string
 
 	if g.ExcludePastWinners {
-		for id, st := range state {
-			if id != g.ID && st != nil && slices.Contains(st.Winners, userID) {
-				e.PastWinner = true
-			}
+		if won, err := database.HasWonGiveaway(guildID, userID, giveawayID); err == nil {
+			e.PastWinner = won
 		}
 	}
 

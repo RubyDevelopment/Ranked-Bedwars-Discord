@@ -17,20 +17,26 @@ import (
 
 // apiCall sends one JSON request to the database API and decodes the answer into out (when it is not nil).
 func apiCall(method, path string, in, out any) error {
+	_, err := apiCallHeaders(method, path, in, out)
+	return err
+}
+
+// apiCallHeaders is apiCall that also returns the answer's headers (a list's X-Total-Count, for one).
+func apiCallHeaders(method, path string, in, out any) (http.Header, error) {
 	if apiConn.baseURL == "" {
-		return errors.New("database API is not configured")
+		return nil, errors.New("database API is not configured")
 	}
 	var body io.Reader
 	if in != nil {
 		raw, err := json.Marshal(in)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		body = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(context.Background(), method, apiConn.baseURL+path, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiConn.apiKey)
 	if in != nil {
@@ -38,17 +44,17 @@ func apiCall(method, path string, in, out any) error {
 	}
 	res, err := (&http.Client{Timeout: max(apiConn.timeout, 10*time.Second)}).Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 	if res.StatusCode >= 300 {
-		return &APIStatusError{Status: res.StatusCode, Message: apiMessage(raw)}
+		return res.Header, &APIStatusError{Status: res.StatusCode, Message: apiMessage(raw)}
 	}
 	if out != nil && len(raw) > 0 {
-		return json.Unmarshal(raw, out)
+		return res.Header, json.Unmarshal(raw, out)
 	}
-	return nil
+	return res.Header, nil
 }
 
 // APIStatusError is an answer of the database API that was not a success; Message is its own explanation when it gave one.
