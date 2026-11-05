@@ -23,10 +23,9 @@ import (
 // the division's members, specs and managers answer. It never gives the role: when it ends, the result goes to the vote log channel
 // and a manager adds the player with /<division> add. A voter can change their vote and check it with My Vote.
 //
-// ponytail: open votes live in memory, so a bot restart closes them (a press then says so); store them in the database if restarts
-// during a vote turn out to matter.
+// Votes are kept in memory while open and stored in the database as they change (division_store.go), so a restart keeps them.
 
-const votePrefix = "divvote|" // divvote|yes|pugs, divvote|no|pugs, divvote|mine|pugs, divvote|cancel|pugs
+const votePrefix = "divvote|" // divvote|yes|pugs, divvote|no|pugs, divvote|mine|pugs, divvote|close|pugs
 
 type vote struct {
 	mu        sync.Mutex
@@ -34,14 +33,14 @@ type vote struct {
 	guildID   string
 	channelID string
 	messageID string
+	dbID      uint // the row in guild_division_votes (0 until stored)
 	logChan   string
 	targetID  string
 	name      string // the target's username
 	nominator string
 	reason    string
-	eligible  map[string]bool // who may vote, fixed when the vote starts
-	votes     map[string]bool // voter -> approves
-	need      int
+	eligible  map[string]string              // who may vote (id -> name), fixed when the vote starts
+	votes     map[string]bool                // voter -> approves
 	image     bool                           // the stats banner is attached as stats.png
 	stats     []*discordgo.MessageEmbedField // a plain stats summary, when there is no banner
 	closed    bool
@@ -54,18 +53,15 @@ var open = struct {
 
 func init() { helpers.RegisterComponentHandler(handleVote) }
 
-// votesNeeded is half of the eligible voters, rounded up (at least one).
-func votesNeeded(eligible int) int { return max(1, (eligible+1)/2) }
-
-// outcome is "passed" once the approvals reach need, "failed" when even every voter left approving could not reach it, else "".
-func outcome(yes, no, eligible, need int) string {
+// verdict is how a closed vote went: more approvals than denials is "approved", the reverse "denied", else "tied".
+func verdict(yes, no int) string {
 	switch {
-	case yes >= need:
-		return "passed"
-	case eligible-no < need:
-		return "failed"
+	case yes > no:
+		return "approved"
+	case no > yes:
+		return "denied"
 	}
-	return ""
+	return "tied"
 }
 
 func (v *vote) counts() (yes, no int) {
@@ -83,19 +79,19 @@ func (v *vote) link() string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", v.guildID, v.channelID, v.messageID)
 }
 
-// embed is the vote message while open (status "") and its result once over ("passed", "failed" or "cancelled" by <@id>).
+// embed is the vote message while open (status "") and its result once a manager closed it ("approved", "denied" or "tied", by <@id>).
 func (v *vote) embed(status, by string) *discordgo.MessageEmbed {
 	yes, no := v.counts()
 	preset, title, result := "default", fmt.Sprintf("%s Vote · %s", v.div.Label, v.name), ""
 	switch status {
-	case "passed":
-		preset, result = "success", fmt.Sprintf("**Approved** by vote. No role was added: a manager can add them with `/%s add`.", v.div.Key)
-	case "failed":
-		preset, result = "error", "**Denied** by vote."
-	case "cancelled":
-		preset, result = "info", "**Cancelled** by <@"+by+">."
+	case "approved":
+		preset, result = "success", fmt.Sprintf("Closed by <@%s>: **Approved**. No role was added: a manager can add them with `/%s add`.", by, v.div.Key)
+	case "denied":
+		preset, result = "error", fmt.Sprintf("Closed by <@%s>: **Denied**.", by)
+	case "tied":
+		preset, result = "info", fmt.Sprintf("Closed by <@%s>: **Tied**.", by)
 	}
-	desc := fmt.Sprintf("<@%s> was nominated for **%s** by <@%s>.\n**Reason:** %s\n\n**%d** approvals of **%d** eligible voters are needed.", v.targetID, v.div.Label, v.nominator, v.reason, v.need, len(v.eligible))
+	desc := fmt.Sprintf("<@%s> was nominated for **%s** by <@%s>.\n**Reason:** %s\n\nVote Approve or Deny. A manager closes the vote.", v.targetID, v.div.Label, v.nominator, v.reason)
 	if result != "" {
 		desc += "\n\n" + result
 	}
@@ -117,7 +113,7 @@ func (v *vote) buttons() []discordgo.MessageComponent {
 		&discordgo.Button{Label: fmt.Sprintf("Approve (%d)", yes), Style: discordgo.SuccessButton, CustomID: id("yes")},
 		&discordgo.Button{Label: fmt.Sprintf("Deny (%d)", no), Style: discordgo.DangerButton, CustomID: id("no")},
 		&discordgo.Button{Label: "My Vote", Style: discordgo.SecondaryButton, CustomID: id("mine")},
-		&discordgo.Button{Label: "Cancel Vote", Style: discordgo.SecondaryButton, CustomID: id("cancel")},
+		&discordgo.Button{Label: "Close Vote", Style: discordgo.SecondaryButton, CustomID: id("close")},
 	}}}
 }
 
@@ -183,7 +179,7 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 		return notConfiguredEmbed(d, SetVotes)
 	}
 	if cfg.Member == "" && cfg.Spec == "" && cfg.Manager == "" {
-		return errorEmbed("Not Configured", "The "+d.Label+" member, spec and manager roles are not set, so nobody could vote. An administrator can set them with `/divisions set-role`.")
+		return errorEmbed("Not Configured", "The "+d.Label+" member, spec and manager roles are not set, so nobody could vote. An administrator can set them with `/"+d.Key+" set-role`.")
 	}
 	if why == "" {
 		why = "No reason given."
@@ -206,14 +202,14 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	if err != nil {
 		return unexpectedEmbed()
 	}
-	eligible := map[string]bool{}
+	eligible := map[string]string{}
 	for _, roleID := range []string{cfg.Member, cfg.Spec, cfg.Manager} {
 		if roleID == "" {
 			continue
 		}
-		for _, id := range holders(members, roleID) {
-			if id != target.ID {
-				eligible[id] = true
+		for _, m := range holders(members, roleID) {
+			if id := m.User.ID; id != target.ID {
+				eligible[id] = nameOf(m)
 			}
 		}
 	}
@@ -224,12 +220,14 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	v := &vote{
 		div: d, guildID: i.GuildID, channelID: cfg.VoteChannel, logChan: cfg.LogChannel, targetID: target.ID, name: name,
 		nominator: helpers.InteractionUserID(i), reason: why, eligible: eligible, votes: map[string]bool{},
-		need: votesNeeded(len(eligible)), image: png != nil, stats: summary,
+		image: png != nil, stats: summary,
 	}
 	msg := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{v.embed("", "")}, Components: v.buttons()}
 	if png != nil {
 		msg.Files = []*discordgo.File{{Name: "stats.png", ContentType: "image/png", Reader: bytes.NewReader(png)}}
 	}
+
+	loadOpen(i.GuildID) // so a vote that survived a restart still blocks a duplicate
 
 	// Held until the vote is registered, so a press cannot arrive for a message that is not known yet.
 	open.mu.Lock()
@@ -245,6 +243,7 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	}
 	v.messageID = sent.ID
 	open.by[sent.ID] = v
+	v.save("", "")
 	return helpers.Preset("success", types.PresetOptions{
 		Title:       "Vote Started",
 		Description: fmt.Sprintf("The %s vote for <@%s> is open in <#%s>.\n%s", d.Label, target.ID, cfg.VoteChannel, v.link()),
@@ -256,7 +255,7 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 // Voting
 // ============================================================================
 
-// handleVote counts an Approve or Deny press, answers My Vote and Cancel Vote, and ends the vote when it is decided.
+// handleVote counts an Approve or Deny press, answers My Vote, and lets a manager close the vote.
 func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
 	if !strings.HasPrefix(customID, votePrefix) {
 		return false
@@ -275,11 +274,17 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 
 	open.mu.Lock()
 	v := open.by[i.Message.ID]
+	if v == nil {
+		open.mu.Unlock()
+		loadOpen(i.GuildID) // a vote from before a restart
+		open.mu.Lock()
+		v = open.by[i.Message.ID]
+	}
 	open.mu.Unlock()
 	if v == nil {
-		// Unknown (it ended, or the bot restarted): keep the message, take the buttons away.
+		// Not open any more: keep the message, take the buttons away.
 		respond(discordgo.InteractionResponseUpdateMessage, &discordgo.InteractionResponseData{Embeds: i.Message.Embeds, Components: []discordgo.MessageComponent{}})
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Flags: discordgo.MessageFlagsEphemeral, Content: "This vote is no longer open (it ended, or the bot restarted). Ask a manager to start a new one."})
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{Flags: discordgo.MessageFlagsEphemeral, Content: "This vote is no longer open (it was closed). Ask a manager to start a new one."})
 		return true
 	}
 
@@ -308,34 +313,31 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 				choice = "Approve"
 			}
 			say(fmt.Sprintf("You voted **%s** on the %s vote for <@%s>. Press the other button to change it.", choice, v.div.Label, v.targetID))
-		case v.eligible[uid]:
+		case v.eligible[uid] != "":
 			say(fmt.Sprintf("You have not voted yet on the %s vote for <@%s>.", v.div.Label, v.targetID))
 		default:
 			say(fmt.Sprintf("You cannot vote on the %s vote for <@%s>: only %s members, specs and managers can.", v.div.Label, v.targetID, v.div.Label))
 		}
 		return true
 
-	case "cancel":
+	case "close":
 		cfg, err := Load(v.guildID, v.div)
 		if err != nil || !IsManager(s, i, cfg) {
-			say("Only " + v.div.Label + " managers can cancel a vote.")
+			say("Only " + v.div.Label + " managers can close a vote.")
 			return true
 		}
-		v.finish(s, "cancelled", uid, update)
+		yes, no := v.counts()
+		v.finish(s, verdict(yes, no), uid, update)
 		return true
 
 	case "yes", "no":
-		if !v.eligible[uid] {
+		if v.eligible[uid] == "" {
 			say(fmt.Sprintf("Only %s members, specs and managers can vote here (and not on their own nomination).", v.div.Label))
 			return true
 		}
 		v.votes[uid] = action == "yes"
-		yes, no := v.counts()
-		if result := outcome(yes, no, len(v.eligible), v.need); result != "" {
-			v.finish(s, result, "", update)
-		} else {
-			update("", "")
-		}
+		update("", "")
+		v.save("", "")
 		return true
 	}
 	return false
@@ -348,6 +350,7 @@ func (v *vote) finish(s *discordgo.Session, status, by string, update func(statu
 	delete(open.by, v.messageID)
 	open.mu.Unlock()
 	update(status, by)
+	v.save(status, by)
 
 	if v.logChan == "" {
 		return
@@ -355,16 +358,16 @@ func (v *vote) finish(s *discordgo.Session, status, by string, update func(statu
 	var approved, denied []string
 	for id, approves := range v.votes {
 		if approves {
-			approved = append(approved, id)
+			approved = append(approved, v.eligible[id])
 		} else {
-			denied = append(denied, id)
+			denied = append(denied, v.eligible[id])
 		}
 	}
 	e := v.embed(status, by)
 	e.Image = nil
 	e.Fields = append(e.Fields,
-		&discordgo.MessageEmbedField{Name: "Approved by", Value: mentions(approved)},
-		&discordgo.MessageEmbedField{Name: "Denied by", Value: mentions(denied)},
+		&discordgo.MessageEmbedField{Name: "Approved by", Value: mentions(approved, 1000)},
+		&discordgo.MessageEmbedField{Name: "Denied by", Value: mentions(denied, 1000)},
 		&discordgo.MessageEmbedField{Name: "Vote", Value: v.link()})
 	_, _ = helpers.SendChannelMessage(s, v.guildID, v.logChan, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{e}})
 }

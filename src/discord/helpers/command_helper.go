@@ -984,24 +984,31 @@ func logCommandUsage(s *discordgo.Session, i *discordgo.InteractionCreate, cmd *
 	if err != nil || channelID == "" {
 		return
 	}
-	var args []string
-	for _, opt := range i.ApplicationCommandData().Options {
+	data := i.ApplicationCommandData()
+	context := "/" + cmd.Name
+	if sub := SubcommandPathFromInteraction(data); sub != "" {
+		context += " " + sub
+	}
+	for _, opt := range data.Options {
+		if opt.Type == discordgo.ApplicationCommandOptionSubCommand || opt.Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+			continue
+		}
 		val := fmt.Sprint(opt.Value)
 		if opt.Type == discordgo.ApplicationCommandOptionUser {
 			val = "<@" + val + ">"
 		}
-		args = append(args, opt.Name+": "+val)
+		context += " " + opt.Name + ":" + val
 	}
-	_, _ = s.ChannelMessageSendEmbed(channelID, &discordgo.MessageEmbed{
-		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: ThumbGuild},
-		Title:       "/" + cmd.Name,
-		Description: strings.Join(args, "\n"),
+	_, _ = SendChannelMessage(s, i.GuildID, channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{Preset("info", types.PresetOptions{
+		Title:       "Command Log",
+		Description: "A command was run and logged by the system.",
+		Thumbnail:   ThumbFlag,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "User", Value: "<@" + userID + ">", Inline: true},
-			{Name: "Channel", Value: "<#" + i.ChannelID + ">", Inline: true},
+			{Name: "Executor", Value: "**User:** <@" + userID + ">\n**ID:** `" + userID + "`"},
+			{Name: "Command Details", Value: "**Command:** `/" + cmd.Name + "`\n**Context:** " + context},
+			{Name: "Location", Value: "**Channel:** <#" + i.ChannelID + ">\n**ID:** `" + i.ChannelID + "`"},
 		},
-		Timestamp: time.Now().Format(time.RFC3339),
-	})
+	})}})
 }
 
 // A guild's own custom commands live in package features, which imports helpers, so helpers reaches them through these

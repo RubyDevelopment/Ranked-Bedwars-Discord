@@ -2,7 +2,7 @@
 // manage them (add, remove, list, vote), the managers overview and the alerts they post.
 //
 // The roles and channels are ordinary requirement slots of the division's own command ("pugs", "pups", "premium"), so the dashboard,
-// /config and /divisions all read and write the same assignments.
+// /config and the division commands all read and write the same assignments.
 package division
 
 import (
@@ -38,7 +38,7 @@ var (
 
 // Setting is one role or channel a division is configured with.
 type Setting struct {
-	Key    string // the value /divisions takes
+	Key    string // the value set-role / set-channel take
 	Name   string
 	Type   types.RequirementType
 	suffix string // appended to the division key to make the requirement slot
@@ -144,6 +144,18 @@ func IsManager(s *discordgo.Session, i *discordgo.InteractionCreate, cfg Config)
 
 // guildMembers lists every member of the guild.
 func guildMembers(s *discordgo.Session, guildID string) ([]*discordgo.Member, error) {
+	// The bot loads every member into its gateway cache when a server becomes available and the member events keep it current, so
+	// this answers instantly. Only a cache that is still filling up (or was never filled) falls back to paging through Discord.
+	if g, err := s.State.Guild(guildID); err == nil {
+		s.State.RLock() // State.Guild locks on its own, so this is taken after it returns, never inside it
+		complete := g.MemberCount > 0 && len(g.Members) >= g.MemberCount
+		cached := append([]*discordgo.Member(nil), g.Members...)
+		s.State.RUnlock()
+		if complete {
+			return cached, nil
+		}
+	}
+
 	var all []*discordgo.Member
 	after := ""
 	for {
@@ -160,25 +172,37 @@ func guildMembers(s *discordgo.Session, guildID string) ([]*discordgo.Member, er
 }
 
 // holders lists the members (not bots) that hold the role.
-func holders(members []*discordgo.Member, roleID string) []string {
-	var ids []string
+func holders(members []*discordgo.Member, roleID string) []*discordgo.Member {
+	var out []*discordgo.Member
 	for _, m := range members {
 		if m.User != nil && !m.User.Bot && helpers.MemberHasRole(m, roleID) {
-			ids = append(ids, m.User.ID)
+			out = append(out, m)
 		}
 	}
-	return ids
+	return out
 }
 
-// mentions joins user mentions to fit a field, saying how many did not fit.
-func mentions(ids []string) string {
+// nameOf is how the server shows the member: their nickname, else their display name.
+func nameOf(m *discordgo.Member) string {
+	switch {
+	case m.Nick != "":
+		return m.Nick
+	case m.User.GlobalName != "":
+		return m.User.GlobalName
+	}
+	return m.User.Username
+}
+
+// mentions joins names (not <@id> mentions: Discord shows a mention as a raw ID for any user the viewer's client has not loaded,
+// which is most of a long list) to fit limit characters, saying how many did not fit.
+func mentions(ids []string, limit int) string {
 	if len(ids) == 0 {
 		return "*None*"
 	}
 	var b strings.Builder
 	for n, id := range ids {
-		m := "<@" + id + ">"
-		if b.Len()+len(m)+20 > 1000 {
+		m := id
+		if b.Len()+len(m)+20 > limit {
 			fmt.Fprintf(&b, " … +%d more", len(ids)-n)
 			break
 		}
@@ -210,48 +234,7 @@ func unexpectedEmbed() *discordgo.MessageEmbed {
 }
 
 func notConfiguredEmbed(d Div, st Setting) *discordgo.MessageEmbed {
-	return errorEmbed("Not Configured", fmt.Sprintf("The %s **%s** is not set. An administrator can set it with `/divisions`.", d.Label, strings.ToLower(st.Name)))
-}
-
-// RosterEmbed lists a division's managers, members and specs.
-func RosterEmbed(s *discordgo.Session, guildID string, d Div, cfg Config) (*discordgo.MessageEmbed, error) {
-	members, err := guildMembers(s, guildID)
-	if err != nil {
-		return nil, err
-	}
-	field := func(name, roleID string) *discordgo.MessageEmbedField {
-		if roleID == "" {
-			return &discordgo.MessageEmbedField{Name: name, Value: "`Not configured`"}
-		}
-		ids := holders(members, roleID)
-		return &discordgo.MessageEmbedField{Name: fmt.Sprintf("%s (%d)", name, len(ids)), Value: mentions(ids)}
-	}
-	return helpers.Preset("default", types.PresetOptions{
-		Title:     d.Label + " Division",
-		Fields:    []*discordgo.MessageEmbedField{field("Managers", cfg.Manager), field("Members", cfg.Member), field("Specs", cfg.Spec)},
-		Thumbnail: helpers.ThumbPlayers,
-	}), nil
-}
-
-// ManagersEmbed lists the managers of every division.
-func ManagersEmbed(s *discordgo.Session, guildID string) (*discordgo.MessageEmbed, error) {
-	members, err := guildMembers(s, guildID)
-	if err != nil {
-		return nil, err
-	}
-	fields := make([]*discordgo.MessageEmbedField, 0, len(All))
-	for _, d := range All {
-		cfg, err := Load(guildID, d)
-		if err != nil {
-			return nil, err
-		}
-		value := "`Manager role not configured`"
-		if cfg.Manager != "" {
-			value = roleMention(cfg.Manager) + "\n" + mentions(holders(members, cfg.Manager))
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{Name: d.Label, Value: value})
-	}
-	return helpers.Preset("default", types.PresetOptions{Title: "Division Managers", Fields: fields, Thumbnail: helpers.ThumbPlayers}), nil
+	return errorEmbed("Not Configured", fmt.Sprintf("The %s **%s** is not set. An administrator can set it with `/%s set-role` or `/%s set-channel`.", d.Label, strings.ToLower(st.Name), d.Key, d.Key))
 }
 
 // ============================================================================
@@ -272,7 +255,8 @@ func NewCommand(d Div) *types.Command {
 		sub("remove", "Remove a player from "+d.Label, user("The player to remove"), reason),
 		sub("add-spec", "Give a player the "+d.Label+" spec role", user("The player"), reason),
 		sub("remove-spec", "Take the "+d.Label+" spec role from a player", user("The player"), reason),
-		sub("list", "List the "+d.Label+" managers, members and specs"),
+		sub("list", "List the "+d.Label+" members"),
+		sub("specs", "List the "+d.Label+" specs"),
 	}
 	if d.Vote {
 		subs = append(subs, sub("vote", "Start a vote to add a player to "+d.Label, user("The player to vote on"), reason))
@@ -315,27 +299,21 @@ func execute(s *discordgo.Session, i *discordgo.InteractionCreate, d Div) error 
 		return reply(unexpectedEmbed())
 	}
 
-	if sub == "list" {
-		e, err := RosterEmbed(s, i.GuildID, d, cfg)
+	if sub == "list" || sub == "specs" || sub == "managers" {
+		e, rows, err := Roster(s, i.GuildID, d, cfg, sub, 0)
 		if err != nil {
 			return reply(unexpectedEmbed())
 		}
-		return reply(e)
+		return helpers.EditInteractionComponents(s, i, e, rows)
 	}
 	switch sub {
-	case "managers":
-		e, err := ManagersEmbed(s, i.GuildID)
-		if err != nil {
-			return reply(unexpectedEmbed())
-		}
-		return reply(e)
 	case "settings":
 		return reply(settingsEmbed(d, cfg))
 	case "set-role", "set-channel", "clear":
 		return reply(configure(s, i, d, sub, opts))
 	case "vote", "add", "remove", "add-spec", "remove-spec":
 	default:
-		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.Key+" list`, `managers`, `add`, `remove`, `add-spec`, `remove-spec` or `vote`."))
+		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.Key+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec` or `vote`."))
 	}
 
 	if !IsManager(s, i, cfg) {
