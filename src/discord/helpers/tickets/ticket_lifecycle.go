@@ -9,7 +9,7 @@ import (
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
-	"ranked-bedwars/src/discord/helpers/blob"
+	"ranked-bedwars/src/discord/helpers/storage"
 	"ranked-bedwars/src/types"
 	"regexp"
 	"strconv"
@@ -471,11 +471,11 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 		TranscriptComplete: transcriptErr == nil && len(messages) < 5000,
 		ArchivedAt:         time.Now().Unix(),
 	}
-	if !blob.Blobs.Enabled() {
-		log.Printf("[Tickets] JSON archive not saved for ticket %s in guild %s: blob storage is not configured", threadID, guildID)
+	if !storage.Files.Enabled() {
+		log.Printf("[Tickets] JSON archive not saved for ticket %s in guild %s: object storage is not configured", threadID, guildID)
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		archiveURL, archiveErr := blob.Blobs.PutJSON(ctx, fmt.Sprintf("tickets/%s/%s.json", guildID, threadID), archive)
+		archiveURL, archiveErr := storage.Files.PutJSON(ctx, fmt.Sprintf("tickets/%s/%s.json", guildID, threadID), archive)
 		cancel()
 		if archiveErr != nil {
 			log.Printf("[Tickets] could not save JSON archive for ticket %s in guild %s: %v", threadID, guildID, archiveErr)

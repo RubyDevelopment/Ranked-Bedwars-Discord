@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers/base"
-	"ranked-bedwars/src/discord/helpers/blob"
+	"ranked-bedwars/src/discord/helpers/storage"
 	"ranked-bedwars/src/discord/helpers/match"
 	"strconv"
 	"strings"
@@ -24,8 +24,8 @@ func (b *EngineBridge) handle(msg engineInbound) {
 	switch msg.Type {
 	case "hello":
 		b.logf("engine ready")
-		if !blob.Blobs.Enabled() {
-			b.logf("WARNING: BLOB_READ_WRITE_TOKEN is not set, so the chat logs of hosted games cannot be saved and will not show on the dashboard")
+		if !storage.Files.Enabled() {
+			b.logf("WARNING: object storage is not set up (STORAGE_BUCKET and its keys), so the chat logs of hosted games cannot be saved and will not show on the dashboard")
 		}
 		b.sendResumes()
 

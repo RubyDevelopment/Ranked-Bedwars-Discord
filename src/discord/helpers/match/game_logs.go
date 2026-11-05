@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
-	"ranked-bedwars/src/discord/helpers/blob"
+	"ranked-bedwars/src/discord/helpers/storage"
 	"ranked-bedwars/src/types"
 	"slices"
 	"strings"
@@ -22,7 +22,7 @@ import (
 // Game logs
 // ============================================================================
 
-// When a game is released, its two chats are written to Vercel Blob and their
+// When a game is released, its two chats are written to object storage (Cloudflare R2) and their
 // URLs are recorded in the game's runtime metadata ("logs"), where the
 // dashboard's game results page picks them up:
 //
@@ -35,7 +35,7 @@ const (
 	gameLogVersion     = 1
 	discordLogPages    = 20 // 100 messages each
 	gameChatLineLimit  = 20000
-	blobUploadDeadline = 90 * time.Second
+	uploadDeadline = 90 * time.Second
 )
 
 // GameChatLine is defined in package types (games.go).
@@ -55,7 +55,7 @@ type DiscordLogMessage = types.DiscordLogMessage
 // GameLogRefs is defined in package types (games.go).
 type GameLogRefs = types.GameLogRefs
 
-// gameLogFile is the JSON document written to the blob store.
+// gameLogFile is the JSON document written to the storage bucket.
 type gameLogFile struct {
 	Version    int    `json:"version"`
 	Kind       string `json:"kind"` // "discord" | "game" | "bot"
@@ -90,14 +90,14 @@ func (m *GameManager) takeChat(id uint) []GameChatLine {
 	return lines
 }
 
-// archiveLogs writes both logs of a finished game to the blob store and records
+// archiveLogs writes both logs of a finished game to the storage bucket and records
 // where they are. It runs before the game's channels are deleted, and does
-// nothing when blob storage isn't configured.
+// nothing when object storage is not configured.
 func (m *GameManager) archiveLogs(g Game) {
 	chat := m.takeChat(g.ID)
-	if !blob.Blobs.Enabled() {
+	if !storage.Files.Enabled() {
 		// Game logs are part of a finished game's record on the dashboard: say loudly that this one is lost.
-		m.logf("game %d: its chat logs were NOT saved. Game logs need blob storage: set BLOB_READ_WRITE_TOKEN", g.ID)
+		m.logf("game %d: its chat logs were NOT saved. Game logs need object storage: set STORAGE_BUCKET, STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY", g.ID)
 		return
 	}
 	var discord []DiscordLogMessage
@@ -109,11 +109,11 @@ func (m *GameManager) archiveLogs(g Game) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), blobUploadDeadline)
+	ctx, cancel := context.WithTimeout(context.Background(), uploadDeadline)
 	defer cancel()
 	put := func(kind string, messages any) string {
 		file := gameLogFile{Version: gameLogVersion, Kind: kind, GameID: g.ID, GameNumber: g.Number, GuildID: g.GuildID, CreatedAt: time.Now().UTC().Format(time.RFC3339), Messages: messages}
-		url, err := blob.Blobs.PutJSON(ctx, fmt.Sprintf("games/%s/%d-%s.json", g.GuildID, g.ID, kind), file)
+		url, err := storage.Files.PutJSON(ctx, fmt.Sprintf("games/%s/%d-%s.json", g.GuildID, g.ID, kind), file)
 		if err != nil {
 			m.logf("archive %s log of game %d: %v", kind, g.ID, err)
 		}
