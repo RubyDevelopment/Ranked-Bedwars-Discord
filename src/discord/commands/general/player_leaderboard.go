@@ -5,6 +5,7 @@ import (
 	"log"
 	"maps"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
@@ -28,22 +29,23 @@ func ptrToFloat64(v float64) *float64 { return &v }
 // leaderboardStats are the stats a leaderboard can be ordered by; key is the database's sort value.
 type leaderboardStat struct {
 	key, label string
+	short      string // the column heading on a banner (kept short: the column is narrow)
 	value      func(*models.PlayerStatsModel) int
 }
 
 var leaderboardStats = []leaderboardStat{
-	{"elo", "ELO", func(m *models.PlayerStatsModel) int { return m.Elo }},
-	{"highest_elo", "Peak ELO", func(m *models.PlayerStatsModel) int { return m.HighestElo }},
-	{"wins", "Wins", func(m *models.PlayerStatsModel) int { return m.Wins }},
-	{"losses", "Losses", func(m *models.PlayerStatsModel) int { return m.Losses }},
-	{"games_played", "Games Played", func(m *models.PlayerStatsModel) int { return m.GamesPlayed }},
-	{"kills", "Kills", func(m *models.PlayerStatsModel) int { return m.Kills }},
-	{"final_kills", "Final Kills", func(m *models.PlayerStatsModel) int { return m.FinalKills }},
-	{"first_bloods", "First Bloods", func(m *models.PlayerStatsModel) int { return m.FirstBloods }},
-	{"assists", "Assists", func(m *models.PlayerStatsModel) int { return m.Assists }},
-	{"beds_destroyed", "Beds Destroyed", func(m *models.PlayerStatsModel) int { return m.BedsDestroyed }},
-	{"mvp_count", "MVPs", func(m *models.PlayerStatsModel) int { return m.MvpCount }},
-	{"highest_win_streak", "Best Win Streak", func(m *models.PlayerStatsModel) int { return m.HighestWinStreak }},
+	{"elo", "ELO", "ELO", func(m *models.PlayerStatsModel) int { return m.Elo }},
+	{"highest_elo", "Peak ELO", "PEAK", func(m *models.PlayerStatsModel) int { return m.HighestElo }},
+	{"wins", "Wins", "WINS", func(m *models.PlayerStatsModel) int { return m.Wins }},
+	{"losses", "Losses", "LOSS", func(m *models.PlayerStatsModel) int { return m.Losses }},
+	{"games_played", "Games Played", "GAMES", func(m *models.PlayerStatsModel) int { return m.GamesPlayed }},
+	{"kills", "Kills", "KILLS", func(m *models.PlayerStatsModel) int { return m.Kills }},
+	{"final_kills", "Final Kills", "FINAL", func(m *models.PlayerStatsModel) int { return m.FinalKills }},
+	{"first_bloods", "First Bloods", "FIRST", func(m *models.PlayerStatsModel) int { return m.FirstBloods }},
+	{"assists", "Assists", "ASST", func(m *models.PlayerStatsModel) int { return m.Assists }},
+	{"beds_destroyed", "Beds Destroyed", "BEDS", func(m *models.PlayerStatsModel) int { return m.BedsDestroyed }},
+	{"mvp_count", "MVPs", "MVPS", func(m *models.PlayerStatsModel) int { return m.MvpCount }},
+	{"highest_win_streak", "Best Win Streak", "STRK", func(m *models.PlayerStatsModel) int { return m.HighestWinStreak }},
 }
 
 func leaderboardStatChoices() []*discordgo.ApplicationCommandOptionChoice {
@@ -217,7 +219,7 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 	vars := banner.GuildVars(s, i.GuildID, invoker)
 	vars["lb.title"] = fmt.Sprintf("%s Leaderboard", season)
-	vars["lb.stat"] = stat.label
+	vars["lb.stat"], vars["lb.stat_short"] = stat.label, stat.short
 	vars["season.name"] = season
 	<-rowsDone
 	maps.Copy(vars, rowVars)
@@ -226,7 +228,7 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 	vars["page.number"], vars["page.total"] = fmt.Sprint(page), fmt.Sprint(totalPages)
 	if verr == nil {
-		you(s, i.GuildID, invoker, view, seasonID, vars)
+		you(s, i.GuildID, invoker, view, seasonID, stat, vars)
 	}
 
 	img, err := banner.RenderBanner(chosen, vars)
@@ -240,23 +242,6 @@ func sendLeaderboardBanner(s *discordgo.Session, i *discordgo.InteractionCreate,
 	return true, helpers.EditInteractionFile(s, i, text, "leaderboard.png", img)
 }
 
-func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, vars banner.Vars) {
-	playerID := sdk.UintToString(view.Player.ID)
-	position := make(chan int, 1) // the position is asked for while the stats load
-	go func() {
-		pos := 0
-		if rank, err := database.Must().Stats.Rank(guildID, playerID, seasonID); err == nil {
-			pos = rank.Position
-		}
-		position <- pos
-	}()
-	st, err := database.Must().Stats.Get(guildID, playerID, seasonID)
-	pos := <-position
-	if err != nil {
-		return
-	}
-	banner.EntryVars(vars, "me.", pos, view.Config.Username, banner.AvatarOf(invoker), st)
-}
 
 // ============================================================================
 // Helper functions
@@ -315,4 +300,67 @@ func LeaderboardOverviewEmbed(i *discordgo.InteractionCreate, rows []sdk.Leaderb
 		FooterText:  fmt.Sprintf("Page %d/%d", page, totalPages),
 		Thumbnail:   helpers.ThumbPlayers,
 	})
+}
+
+// you adds the viewer's own row: their stats, their value of the chosen stat (me.value) and where they stand on that stat.
+func you(s *discordgo.Session, guildID string, invoker *discordgo.User, view *sdk.PlayerView, seasonID uint, stat leaderboardStat, vars banner.Vars) {
+	playerID := sdk.UintToString(view.Player.ID)
+	position := make(chan int, 1) // the position is asked for while the stats load
+	go func() { position <- positionOn(guildID, seasonID, view.Player.ID, stat) }()
+	st, err := database.Must().Stats.Get(guildID, playerID, seasonID)
+	pos := <-position
+	if err != nil {
+		return
+	}
+	banner.EntryVars(vars, "me.", pos, view.Config.Username, banner.AvatarOf(invoker), st)
+	vars["me.value"] = fmt.Sprint(stat.value(st))
+}
+
+// positionOn is a player's place on the leaderboard ordered by stat, or 0 when it cannot be found. The database ranks by ELO only, so
+// for any other stat the leaderboard is read in pages of 200 (five at a time) until the player appears.
+func positionOn(guildID string, seasonID, playerID uint, stat leaderboardStat) int {
+	if stat.key == "elo" {
+		if rank, err := database.Must().Stats.Rank(guildID, sdk.UintToString(playerID), seasonID); err == nil {
+			return rank.Position
+		}
+		return 0
+	}
+	const pageSize, batch, maxPages = 200, 5, 25 // reads at most the top 5000 players
+	for first := 0; first < maxPages; first += batch {
+		found := make(chan int, batch)
+		var wg sync.WaitGroup
+		more := false
+		var mu sync.Mutex
+		for p := first; p < first+batch && p < maxPages; p++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				rows, err := database.Must().Stats.Leaderboard(guildID, seasonID, sdk.Page{Limit: pageSize, Offset: p * pageSize, Sort: stat.key})
+				if err != nil {
+					return
+				}
+				for _, row := range rows.Data {
+					if row.PlayerID == playerID {
+						found <- row.Position
+						return
+					}
+				}
+				if len(rows.Data) == pageSize {
+					mu.Lock()
+					more = true
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+		select {
+		case pos := <-found:
+			return pos
+		default:
+		}
+		if !more {
+			return 0
+		}
+	}
+	return 0
 }

@@ -27,12 +27,13 @@ function stats() {
 
 function leaderboard() {
   const names = ["notmarsett", "BlitzPlayer1", "Oswiecony_", "SMXLC", "MaxGamer8039", "_ea_", "bummyyyyy", "HT206", "hassanwafdy", "sheepcat21"];
-  const v = { "lb.title": "Season Leaderboard", "lb.stat": "ELO", "season.name": "Chapter 3 Season 2", "page.number": "1", "page.total": "3" };
+  const STATS = { elo: ["ELO", "ELO"], kills: ["Kills", "KILLS"], games_played: ["Games Played", "GAMES"], highest_win_streak: ["Best Win Streak", "STRK"] }; const [STAT_LABEL, STAT_SHORT] = STATS[process.env.STAT || "elo"];
+  const v = { "lb.title": "Season Leaderboard", "lb.stat": STAT_LABEL, "lb.stat_short": STAT_SHORT, "season.name": "Chapter 3 Season 2", "page.number": "1", "page.total": "3" };
   names.forEach((name, i) => {
     const n = i + 1, [rank, color] = RANKS[i % 4];
-    Object.assign(v, { [`lb.${n}.name`]: name, [`lb.${n}.head`]: skin(name), [`lb.${n}.avatar`]: skin(name), [`lb.${n}.body`]: body(name), [`lb.${n}.position`]: String(n + Number(process.env.POS_BASE || 0)), [`lb.${n}.rank`]: rank, [`lb.${n}.elo`]: String(1350 - i * 25), [`lb.${n}.peak`]: String(1350 - i * 20), [`lb.${n}.wins`]: String(300 - i * 9), [`lb.${n}.losses`]: String(100 + i * 5), [`lb.${n}.games`]: "400", [`lb.${n}.kills`]: "4000", [`lb.${n}.deaths`]: "2500", [`lb.${n}.mvps`]: "40", [`lb.${n}.wlr`]: "2.10", [`lb.${n}.kdr`]: "1.60", [`lb.${n}.value`]: String(1350 - i * 25), ...rankVars(`lb.${n}.`, rank, color) });
+    Object.assign(v, { [`lb.${n}.name`]: name, [`lb.${n}.head`]: skin(name), [`lb.${n}.avatar`]: skin(name), [`lb.${n}.body`]: body(name), [`lb.${n}.position`]: String(n + Number(process.env.POS_BASE || 0)), [`lb.${n}.rank`]: rank, [`lb.${n}.elo`]: String(1350 - i * 25), [`lb.${n}.peak`]: String(1350 - i * 20), [`lb.${n}.wins`]: String(300 - i * 9), [`lb.${n}.losses`]: String(100 + i * 5), [`lb.${n}.games`]: "400", [`lb.${n}.kills`]: "4000", [`lb.${n}.deaths`]: "2500", [`lb.${n}.mvps`]: "40", [`lb.${n}.wlr`]: "2.10", [`lb.${n}.kdr`]: "1.60", [`lb.${n}.value`]: String({ elo: 1350 - i * 25, kills: 12850 - i * 980, games_played: 645 - i * 30, highest_win_streak: 14 - i }[process.env.STAT || "elo"]), ...rankVars(`lb.${n}.`, rank, color) });
   });
-  Object.assign(v, { "me.name": "_Wiggels", "me.head": skin("_Wiggels"), "me.avatar": skin("_Wiggels"), "me.position": process.env.ME_POS || "1190", "me.rank": "Coal", "me.elo": "0", "me.peak": "0", "me.wins": "0", "me.losses": "1", "me.games": "1", "me.kills": "3", "me.deaths": "3", "me.mvps": "0", "me.wlr": "0.00", "me.kdr": "1.00", ...rankVars("me.", "Coal", "#9ca3af") });
+  Object.assign(v, { "me.value": String({ elo: 0, kills: 3, games_played: 1, highest_win_streak: 0 }[process.env.STAT || "elo"]), "me.name": "_Wiggels", "me.head": skin("_Wiggels"), "me.avatar": skin("_Wiggels"), "me.position": process.env.ME_POS || "1190", "me.rank": "Coal", "me.elo": "0", "me.peak": "0", "me.wins": "0", "me.losses": "1", "me.games": "1", "me.kills": "3", "me.deaths": "3", "me.mvps": "0", "me.wlr": "0.00", "me.kdr": "1.00", ...rankVars("me.", "Coal", "#9ca3af") });
   return v;
 }
 

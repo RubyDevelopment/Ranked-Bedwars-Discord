@@ -54,12 +54,14 @@ func sampleStats() Vars {
 }
 
 func sampleLeaderboard() Vars {
-	v := Vars{"lb.title": "Season 5 Leaderboard", "page.number": "1", "page.total": "12"}
+	v := Vars{"lb.title": "Season 5 Leaderboard", "lb.stat": "ELO", "lb.stat_short": "ELO", "page.number": "1", "page.total": "12"}
 	names := []string{"Nexus720", "teebabi", "EBK", "Worst", "mynameisnotshort", "Steve", "Alex", "Herobrine", "Notch", "jeb_"}
 	for n := 1; n <= 10; n++ {
 		st := &models.PlayerStatsModel{Rank: []string{"Master", "Diamond", "Gold"}[n%3], Elo: 2400 - n*37, HighestElo: 2500 - n*20, Wins: 300 - n*11, Losses: 120 + n*7, Kills: 4000 - n*100, Deaths: 2500 + n*30, GamesPlayed: 420}
 		EntryVars(v, fmt.Sprintf("lb.%d.", n), n, names[n-1], "", st)
+		v[fmt.Sprintf("lb.%d.value", n)] = fmt.Sprint(st.Elo)
 	}
+	v["me.value"] = "1875"
 	EntryVars(v, "me.", 14, "Nexus720", "", &models.PlayerStatsModel{Rank: "Diamond", Elo: 1875, HighestElo: 1990, Wins: 412, Losses: 233, Kills: 5123, Deaths: 3011})
 	return v
 }
