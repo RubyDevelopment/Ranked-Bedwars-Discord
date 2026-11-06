@@ -180,6 +180,17 @@ func IsTicketStaff(member *discordgo.Member, panel *types.InteractivePanel, cate
 	return false
 }
 
+// ticketMode is how tickets of this category are created: the category's own mode, else the panel's, else thread.
+func ticketMode(panel *types.InteractivePanel, category *types.TicketCategory) string {
+	if category != nil && (category.Mode == types.TicketModeChannel || category.Mode == types.TicketModeThread) {
+		return category.Mode
+	}
+	if panel != nil && panel.Ticket != nil && panel.Ticket.Settings.Mode == types.TicketModeChannel {
+		return types.TicketModeChannel
+	}
+	return types.TicketModeThread
+}
+
 // pingRoleIDs are the roles a ticket in this category mentions: only the category's own list. The panel-wide staff
 // roles can open every ticket but are not pinged unless the category lists them too.
 func pingRoleIDs(category *types.TicketCategory) []string {
@@ -213,6 +224,7 @@ func staffRoleIDs(panel *types.InteractivePanel, category *types.TicketCategory)
 	}
 	if category != nil {
 		add(category.StaffRoleIDs)
+		add(category.ViewRoleIDs)
 	}
 	return roles
 }

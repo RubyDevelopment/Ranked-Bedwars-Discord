@@ -59,10 +59,7 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 	}
 
 	// Determine ticket mode (thread or channel)
-	mode := panel.Ticket.Settings.Mode
-	if mode == "" {
-		mode = types.TicketModeThread // Default to thread mode
-	}
+	mode := ticketMode(panel, category)
 
 	createdAt := time.Now().Unix()
 	ticket := &types.Ticket{
@@ -143,7 +140,10 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		ticket.ThreadID = channel.ID
 	} else {
 		// Create a thread (default behavior)
-		parentID := panel.Ticket.Settings.ThreadChannelID
+		parentID := category.ThreadChannelID
+		if parentID == "" {
+			parentID = panel.Ticket.Settings.ThreadChannelID
+		}
 		if parentID == "" {
 			parentID = fallbackChannelID
 		}
