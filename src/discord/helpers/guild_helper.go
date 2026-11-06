@@ -1049,7 +1049,7 @@ func runAppearanceSyncCycle(s *discordgo.Session, logger baseutility.AppLogger) 
 		if err := syncGuildDiscordProfile(s, liveGuild); err != nil {
 			logger.Error(fmt.Sprintf("Failed to save server branding for guild %s: %v", guild.SnowflakeID, err))
 		}
-		if err := forceGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
+		if err := updateGuildAppearance(s, guild.SnowflakeID, logger); err != nil {
 			logger.Error(fmt.Sprintf("Failed to update appearance for guild %s: %v", guild.SnowflakeID, err))
 		}
 	}
@@ -1061,11 +1061,6 @@ var appearanceApplyMu sync.Mutex
 // successfully sent to Discord.
 func updateGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger) error {
 	return applyGuildAppearance(s, snowflakeID, logger, false)
-}
-
-// forceGuildAppearance sends the server's whole current profile again, whatever was applied before.
-func forceGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger) error {
-	return applyGuildAppearance(s, snowflakeID, logger, true)
 }
 
 func applyGuildAppearance(s *discordgo.Session, snowflakeID string, logger baseutility.AppLogger, force bool) error {
