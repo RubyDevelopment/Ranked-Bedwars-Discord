@@ -108,7 +108,7 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game) *dis
 	var description strings.Builder
 
 	// Basic info
-	description.WriteString(fmt.Sprintf("**Game Number:** %s\n", helpers.MatchLink(game.GuildID, game.Total, fmt.Sprintf("#%d", game.Number))))
+	description.WriteString(fmt.Sprintf("**Game Number:** %s\n", helpers.MatchLink(game.GuildID, game.SeasonID, game.Number, game.Total, fmt.Sprintf("#%d", game.Number))))
 	description.WriteString(fmt.Sprintf("**Mode:** %s\n", game.Mode.Name))
 	description.WriteString(fmt.Sprintf("**State:** %s\n", game.State))
 	description.WriteString(fmt.Sprintf("**Map:** %s\n", game.Map))

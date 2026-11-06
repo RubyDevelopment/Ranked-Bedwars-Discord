@@ -192,7 +192,7 @@ func resultsSummary(g Game, outcome string) string {
 		}
 		return strings.Join(out, " ")
 	}
-	head := fmt.Sprintf("**Game #%d**", g.Number)
+	head := "**" + helpers.MatchLink(g.GuildID, g.SeasonID, g.Number, g.Total, fmt.Sprintf("Game #%d", g.Number)) + "**"
 	if outcome == outcomeWin {
 		var winners, losers []string
 		for _, r := range g.Results {
