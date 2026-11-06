@@ -153,6 +153,25 @@ func IsManager(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	return false
 }
 
+// blockedByHigherDivision answers, when the member already belongs to a division above d that whoever ran the interaction does not
+// manage, with the error to show. Joining a division makes a player leave the others, so without this a PUPS manager could "add"
+// a PUGS player to PUPS and so take their PUGS role away. nil means the move is allowed.
+func blockedByHigherDivision(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, member *discordgo.Member) *discordgo.MessageEmbed {
+	for _, higher := range All {
+		if higher.Key == d.Key {
+			break
+		}
+		higherCfg, err := Load(i.GuildID, higher)
+		if err != nil || higherCfg.Member == "" || !helpers.MemberHasRole(member, higherCfg.Member) {
+			continue
+		}
+		if !IsManager(s, i, higher, higherCfg) {
+			return errorEmbed("Higher Division", fmt.Sprintf("<@%s> is in **%s**, a higher division than **%s**. Only %s managers (or managers above them) can move them.", member.User.ID, higher.Label, d.Label, higher.Label))
+		}
+	}
+	return nil
+}
+
 // ============================================================================
 // Members
 // ============================================================================
@@ -369,6 +388,11 @@ func change(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg Con
 	}
 	if !add && !has {
 		return errorEmbed("Not Added", fmt.Sprintf("<@%s> does not have the %s %s.", target.ID, d.Label, strings.ToLower(st.Name)))
+	}
+	if add && !spec {
+		if blocked := blockedByHigherDivision(s, i, d, member); blocked != nil {
+			return blocked
+		}
 	}
 	role, _ := s.State.Role(i.GuildID, roleID)
 	bot, _ := helpers.FetchGuildMember(s, i.GuildID, s.State.User.ID)

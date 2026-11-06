@@ -185,6 +185,8 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 		return errorEmbed("Player Not Found", "<@"+target.ID+"> is not in this server.")
 	} else if helpers.MemberHasRole(member, cfg.Member) {
 		return errorEmbed("Already Added", fmt.Sprintf("<@%s> is already in %s.", target.ID, d.Label))
+	} else if blocked := blockedByHigherDivision(s, i, d, member); blocked != nil {
+		return blocked
 	}
 
 	nominator := i.Member.User
