@@ -320,6 +320,7 @@ func handleTicketOpen(s *discordgo.Session, i *discordgo.InteractionCreate, pane
 
 	ticket, err := OpenTicket(s, i.GuildID, panelID, categoryID, owner, i.ChannelID)
 	if err != nil {
+		log.Printf("[Tickets] open failed for user %s panel %s category %s in guild %s: %v", owner.ID, panelID, categoryID, i.GuildID, err)
 		helpers.EditComponentEmbed(s, i, ticketOpenErrorEmbed(err))
 		return
 	}
