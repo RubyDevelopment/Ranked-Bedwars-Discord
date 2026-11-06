@@ -8,7 +8,7 @@ import (
 )
 
 var severityIcon = map[string]string{"critical": "🟥", "high": "🟧", "medium": "🟨", "low": "⬜"}
-var kindName = map[string]string{"win_trading": "Win trading", "boosting": "Boosting", "throwing": "Throwing", "void_dodging": "Void dodging"}
+var kindName = map[string]string{"win_trading": "Win trading", "boosting": "Boosting", "repeat_partners": "Repeat partners", "throwing": "Throwing", "void_dodging": "Void dodging"}
 var severityColor = map[string]int{"critical": 0xdc2626, "high": 0xf97316, "medium": 0xeab308, "low": 0x94a3b8}
 
 func clip(s string, n int) string {

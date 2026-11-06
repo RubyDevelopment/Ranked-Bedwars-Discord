@@ -47,6 +47,7 @@ type Risk struct {
 
 // Report is what the database answers.
 type Report struct {
+	Season        string          `json:"season"`
 	GamesAnalysed int             `json:"games_analysed"`
 	GamesVoided   int             `json:"games_voided"`
 	Players       int             `json:"players"`

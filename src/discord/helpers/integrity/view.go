@@ -22,7 +22,7 @@ const (
 	KindID     = "intg|kind"
 )
 
-var kindOrder = []string{"win_trading", "boosting", "throwing", "void_dodging"}
+var kindOrder = []string{"win_trading", "boosting", "repeat_partners", "throwing", "void_dodging"}
 
 // matching is the findings of a kind ("" is all of them), each with the number it has in the whole report.
 type numbered struct {
@@ -81,7 +81,11 @@ func Overview(rep *Report, kind string, page int) (*discordgo.MessageEmbed, []di
 	}
 	e := &discordgo.MessageEmbed{Title: "🛡️ Ladder integrity", Color: color}
 	var d strings.Builder
-	fmt.Fprintf(&d, "**%d** scored games · %s – %s · %d players · %d voided\n", rep.GamesAnalysed, day(rep, true), day(rep, false), rep.Players, rep.GamesVoided)
+	season := "This season"
+	if rep.Season != "" {
+		season = rep.Season
+	}
+	fmt.Fprintf(&d, "**%s** only · **%d** scored games · %s – %s · %d players · %d voided\n", season, rep.GamesAnalysed, day(rep, true), day(rep, false), rep.Players, rep.GamesVoided)
 	if len(rep.Findings) == 0 {
 		d.WriteString("\n✅ **Nothing stands out.** Nothing here is unlikely enough to be more than luck.")
 		e.Description = d.String()

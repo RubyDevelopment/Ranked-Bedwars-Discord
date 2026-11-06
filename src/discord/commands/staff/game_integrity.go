@@ -36,7 +36,7 @@ var IntegrityCommand = &types.Command{
 			{Name: "player", Description: "Show the findings about one player", Type: discordgo.ApplicationCommandOptionUser},
 			{Name: "game", Description: "Show the findings that involve this game number", Type: discordgo.ApplicationCommandOptionInteger, MinValue: ptrFloat(1)},
 			{Name: "kind", Description: "Only this kind of finding", Type: discordgo.ApplicationCommandOptionString, Choices: []*discordgo.ApplicationCommandOptionChoice{
-				{Name: "Win trading", Value: "win_trading"}, {Name: "Boosting", Value: "boosting"}, {Name: "Throwing", Value: "throwing"}, {Name: "Void dodging", Value: "void_dodging"},
+				{Name: "Win trading", Value: "win_trading"}, {Name: "Boosting", Value: "boosting"}, {Name: "Repeat partners", Value: "repeat_partners"}, {Name: "Throwing", Value: "throwing"}, {Name: "Void dodging", Value: "void_dodging"},
 			}},
 		},
 	},
