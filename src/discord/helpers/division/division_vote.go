@@ -319,8 +319,8 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 
 	case "close":
 		cfg, err := Load(v.guildID, v.div)
-		if err != nil || !IsManager(s, i, cfg) {
-			say("Only " + v.div.Label + " managers can close a vote.")
+		if err != nil || !IsManager(s, i, v.div, cfg) {
+			say("Only " + v.div.Label + " managers, or managers of a higher division, can close a vote.")
 			return true
 		}
 		yes, no := v.counts()

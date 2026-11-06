@@ -134,9 +134,23 @@ func (c Config) Value(st Setting) string {
 	return c.AlertChannel
 }
 
-// IsManager says whether whoever ran the interaction may manage the division: an administrator, or a holder of its manager role.
-func IsManager(s *discordgo.Session, i *discordgo.InteractionCreate, cfg Config) bool {
-	return helpers.MemberIsAdministrator(s, i) || helpers.MemberHasRole(i.Member, cfg.Manager)
+// IsManager says whether whoever ran the interaction may manage the division d (cfg is its assignments): an administrator, a
+// holder of its manager role, or a holder of the manager role of a division above it. All lists the divisions from the highest
+// level to the lowest (Premium, PUGS, PUPS, Pit), so Premium managers manage all four, PUGS managers PUGS, PUPS and Pit, PUPS
+// managers PUPS and Pit, and Pit managers only Pit.
+func IsManager(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg Config) bool {
+	if helpers.MemberIsAdministrator(s, i) || (cfg.Manager != "" && helpers.MemberHasRole(i.Member, cfg.Manager)) {
+		return true
+	}
+	for _, higher := range All {
+		if higher.Key == d.Key {
+			break
+		}
+		if higherCfg, err := Load(i.GuildID, higher); err == nil && higherCfg.Manager != "" && helpers.MemberHasRole(i.Member, higherCfg.Manager) {
+			return true
+		}
+	}
+	return false
 }
 
 // ============================================================================
@@ -317,8 +331,8 @@ func execute(s *discordgo.Session, i *discordgo.InteractionCreate, d Div) error 
 		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.Key+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec` or `vote`."))
 	}
 
-	if !IsManager(s, i, cfg) {
-		return reply(errorEmbed("Permission Denied", "Only "+d.Label+" managers can do this."))
+	if !IsManager(s, i, d, cfg) {
+		return reply(errorEmbed("Permission Denied", "Only "+d.Label+" managers, or managers of a higher division, can do this."))
 	}
 	target := helpers.SubOptionUser(s, opts, "user")
 	if target == nil || target.Bot {
