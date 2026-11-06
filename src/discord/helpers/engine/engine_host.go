@@ -12,6 +12,7 @@ import (
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/types"
 	appLog "ranked-bedwars/src/utility"
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"slices"
 	"strings"
 	"time"
@@ -389,8 +390,17 @@ func (b *EngineBridge) gone(gameID uint) {
 	if !ok {
 		return
 	}
-	if g, found := match.Games.Get(gameID); found && g.State == match.GameInGame {
+	g, found := match.Games.Get(gameID)
+	if !found {
+		return
+	}
+	switch g.State {
+	case match.GameInGame:
 		b.logf("game %d: the engine no longer runs this match", gameID)
 		match.Games.Notify(gameID, match.GameEvent{Kind: match.EventTrackingLost, Reason: "The bot restarted and the engine no longer runs this match, so it will not finish on its own."})
+	case match.GamePreGame:
+		// It was kept after the restart because the engine was hosting it; the engine has lost it, so there is nothing to continue.
+		b.logf("game %d: the engine no longer hosts this game that was being set up: voiding it", gameID)
+		_ = match.Games.Void(sdk.SystemActor, g.GuildID, g.ID, "The bot restarted and the engine no longer hosts this game.", match.VoidOptions{})
 	}
 }

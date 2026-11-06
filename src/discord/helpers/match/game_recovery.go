@@ -92,6 +92,13 @@ func (m *GameManager) recoverOne(guildID string, rec *models.GamesModel, sum *Re
 		}
 		sum.Kept++
 	default: // waiting / pre-game / anything unexpected
+		if g.State == GamePreGame && g.Bot != "" {
+			// The engine accepted this game and is hosting it (a bot is on the server, inviting the players): it keeps working
+			// without the bot, so the game carries on where it left off instead of being voided. resumeHostedGames asks the
+			// engine to take it up again; if the engine no longer has it, it is voided then (see EngineBridge.gone).
+			sum.Kept++
+			return
+		}
 		_ = m.Void(sdk.SystemActor, guildID, g.ID, "The bot restarted while the game was being set up.", VoidOptions{})
 		sum.Voided++
 	}
@@ -226,7 +233,7 @@ func resumeHostedGames(guildIDs []string) {
 	var open []Game
 	for _, guildID := range guildIDs {
 		for _, g := range Games.GuildGames(guildID) {
-			if g.State == GameInGame && g.Bot != "" {
+			if (g.State == GameInGame || g.State == GamePreGame) && g.Bot != "" {
 				open = append(open, g)
 			}
 		}
