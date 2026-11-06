@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"ranked-bedwars/src/discord/helpers"
@@ -17,6 +19,7 @@ import (
 
 func init() {
 	helpers.Register(IntegrityCommand)
+	helpers.RegisterComponentHandler(handleIntegrityComponent)
 	match.ScoredHooks = append(match.ScoredHooks, alertAfterScoring)
 }
 
@@ -73,7 +76,90 @@ func executeIntegrityCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	if number := helpers.OptionInt(i, "game"); number > 0 {
 		return helpers.EditInteractionEmbed(s, i, integrity.GameView(rep, number))
 	}
-	return helpers.EditInteractionEmbed(s, i, integrity.Overview(rep, helpers.OptionString(i, "kind")))
+	e, components := integrity.Overview(rep, helpers.OptionString(i, "kind"), 1)
+	return helpers.EditInteractionComponents(s, i, e, components)
+}
+
+// isStaffMember says whether whoever pressed a component may use the integrity report: an administrator or the guild's staff role (the same
+// people who can run the command).
+func isStaffMember(i *discordgo.InteractionCreate) bool {
+	if i.Member == nil {
+		return false
+	}
+	if i.Member.Permissions&discordgo.PermissionAdministrator != 0 {
+		return true
+	}
+	role, err := helpers.RequirementSlotID(i.GuildID, "score", types.ReqRole, types.StaffRoleKey)
+	return err == nil && role != "" && slices.Contains(i.Member.Roles, role)
+}
+
+// handleIntegrityComponent turns the overview's pages, filters it by kind, and opens a finding's evidence when one is picked.
+func handleIntegrityComponent(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
+	if !strings.HasPrefix(customID, "intg|") {
+		return false
+	}
+	if strings.HasPrefix(customID, integrity.OffPrefix) {
+		return true // a button that cannot be pressed
+	}
+	if !isStaffMember(i) {
+		_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral, Content: "Only staff can use the integrity report."},
+		})
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	if customID == integrity.OpenID { // a finding picked from the menu: its evidence, for the person who picked it only
+		values := i.MessageComponentData().Values
+		_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral},
+		})
+		n, _ := strconv.Atoi(strings.Join(values, ""))
+		rep, err := integrity.Fetch(ctx, i.GuildID, "", 0)
+		if err != nil || n < 1 || n > len(rep.Findings) {
+			content := "That finding is no longer in the report: it has changed since this page was drawn. Run /integrity again."
+			_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &content})
+			return true
+		}
+		f := rep.Findings[n-1]
+		hits := integrity.ChatHits(ctx, i.GuildID, f.Games, f.Players, 6)
+		embeds := []*discordgo.MessageEmbed{integrity.Detail(rep, n, f, hits)}
+		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds})
+		return true
+	}
+
+	page, kind := 1, ""
+	switch {
+	case customID == integrity.KindID:
+		if v := strings.Join(i.MessageComponentData().Values, ""); v != "all" {
+			kind = v
+		}
+	case strings.HasPrefix(customID, integrity.PagePrefix):
+		rest := strings.TrimPrefix(customID, integrity.PagePrefix)
+		target, k, _ := strings.Cut(rest, "|")
+		page, _ = strconv.Atoi(target)
+		kind = k
+	default:
+		return true
+	}
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	rep, err := integrity.Fetch(ctx, i.GuildID, "", 0)
+	if err != nil {
+		log.Printf("[Integrity] page: %v", err)
+		return true
+	}
+	e, components := integrity.Overview(rep, kind, page)
+	if components == nil {
+		components = []discordgo.MessageComponent{}
+	}
+	embeds := []*discordgo.MessageEmbed{e}
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &embeds, Components: &components}); err != nil {
+		log.Printf("[Integrity] page: %v", err)
+	}
+	return true
 }
 
 // alertAfterScoring tells staff when a game that just scored adds to a high or critical finding. It waits for the database's report to move on

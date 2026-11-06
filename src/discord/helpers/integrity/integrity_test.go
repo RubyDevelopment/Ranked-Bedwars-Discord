@@ -38,8 +38,12 @@ func bigReport() *Report {
 func TestEmbedsStayWithinDiscordLimits(t *testing.T) {
 	rep := bigReport()
 	hits := []Hit{{Game: 1, Source: "discord", Who: "alpha", Text: strings.Repeat("let you win ", 50)}, {Game: 2, Source: "minecraft", Who: "beta", Text: "i'll lose"}}
+	over, comps := Overview(rep, "", 1)
+	if len(comps) < 2 || len(comps) > 5 {
+		t.Errorf("%d component rows", len(comps))
+	}
 	for name, e := range map[string]*discordgo.MessageEmbed{
-		"overview": Overview(rep, ""), "detail": Detail(rep, 1, rep.Findings[0], hits), "player": PlayerView(rep, "alpha", rep), "game": GameView(rep, 3),
+		"overview": over, "detail": Detail(rep, 1, rep.Findings[0], hits), "player": PlayerView(rep, "alpha", rep), "game": GameView(rep, 3),
 	} {
 		total := len([]rune(e.Title)) + len([]rune(e.Description))
 		if len([]rune(e.Title)) > 256 || len([]rune(e.Description)) > 4096 || len(e.Fields) > 25 {
@@ -59,8 +63,8 @@ func TestEmbedsStayWithinDiscordLimits(t *testing.T) {
 
 func TestEmptyReportsReadClearly(t *testing.T) {
 	rep := &Report{GamesAnalysed: 50}
-	if e := Overview(rep, ""); !strings.Contains(e.Description, "Nothing stands out") {
-		t.Errorf("overview: %q", e.Description)
+	if e, comps := Overview(rep, "", 1); !strings.Contains(e.Description, "Nothing stands out") || comps != nil {
+		t.Errorf("overview: %q %v", e.Description, comps)
 	}
 	if e := PlayerView(rep, "alpha", rep); !strings.Contains(e.Description, "Nothing stands out") {
 		t.Errorf("player: %q", e.Description)
@@ -77,5 +81,31 @@ func TestFindingNumbersMatchTheReport(t *testing.T) {
 	}
 	if !(Finding{Severity: "critical"}).AtLeast("high") || (Finding{Severity: "medium"}).AtLeast("high") {
 		t.Error("severity comparison")
+	}
+}
+
+func TestOverviewPagesAndFilters(t *testing.T) {
+	rep := bigReport() // ten critical win-trading findings
+	rep.Findings[3].Kind, rep.Findings[4].Kind = "boosting", "boosting"
+	if Pages(rep, "") != 2 || Pages(rep, "boosting") != 1 || Pages(rep, "throwing") != 1 {
+		t.Fatalf("pages: %d %d %d", Pages(rep, ""), Pages(rep, "boosting"), Pages(rep, "throwing"))
+	}
+	first, _ := Overview(rep, "", 1)
+	second, comps := Overview(rep, "", 2)
+	if len(first.Fields) != PerPage+1 || len(second.Fields) != PerPage { // the first page also lists the most flagged players
+		t.Errorf("fields: %d on page 1, %d on page 2", len(first.Fields), len(second.Fields))
+	}
+	if !strings.Contains(second.Footer.Text, "Page 2/2") || !strings.Contains(second.Fields[0].Name, "#6") {
+		t.Errorf("page 2: %q / %q", second.Footer.Text, second.Fields[0].Name)
+	}
+	if len(comps) != 3 { // page buttons, the menu that opens a finding, the kind filter
+		t.Errorf("%d component rows on page 2", len(comps))
+	}
+	only, _ := Overview(rep, "boosting", 1)
+	if len(only.Fields) != 2 || !strings.Contains(only.Footer.Text, "Boosting only") || !strings.Contains(only.Fields[0].Name, "#4") {
+		t.Errorf("boosting only: %+v", only.Fields)
+	}
+	if g := gamesRange([]int{26966, 26464, 26469}); g != "3 games (#26464–#26966)" {
+		t.Errorf("games range: %s", g)
 	}
 }
