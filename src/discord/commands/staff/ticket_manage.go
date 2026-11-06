@@ -220,7 +220,7 @@ func executeTicketLogs(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 // executeTicketClaim claims the ticket the command is run in.
 func executeTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
@@ -236,7 +236,7 @@ func executeTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate) er
 
 // executeTicketRename renames the ticket the command is run in.
 func executeTicketRename(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
@@ -257,7 +257,7 @@ func executeTicketRename(s *discordgo.Session, i *discordgo.InteractionCreate) e
 
 // executeTicketTransfer forwards the ticket the command is run in to another category of its panel.
 func executeTicketTransfer(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
@@ -298,7 +298,7 @@ func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCr
 		}
 	}
 	var choices []*discordgo.ApplicationCommandOptionChoice
-	if ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID); err == nil && tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+	if ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID); err == nil && tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
 		for _, c := range TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
 			if strings.Contains(strings.ToLower(c.Label), typed) && len(choices) < 25 {
 				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: c.Label, Value: c.ID})
@@ -313,7 +313,7 @@ func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCr
 
 // executeTicketLock locks or unlocks the ticket the command is run in.
 func executeTicketLock(s *discordgo.Session, i *discordgo.InteractionCreate, locked bool) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
@@ -331,7 +331,7 @@ func executeTicketLock(s *discordgo.Session, i *discordgo.InteractionCreate, loc
 
 // executeTicketClose asks for confirmation before closing the ticket the command is run in.
 func executeTicketClose(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}
@@ -371,7 +371,7 @@ func executeTicketClose(s *discordgo.Session, i *discordgo.InteractionCreate) er
 // changeTicketMember adds or removes a user and/or a role of the ticket thread or channel. At least one of the two
 // options is needed; when both are given both are changed.
 func changeTicketMember(s *discordgo.Session, i *discordgo.InteractionCreate, add bool) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.TicketContextErrorEmbed(err))
 	}

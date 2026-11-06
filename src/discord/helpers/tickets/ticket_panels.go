@@ -329,7 +329,7 @@ func handleTicketOpen(s *discordgo.Session, i *discordgo.InteractionCreate, pane
 
 // handleTicketClaim claims or releases the ticket the button is in.
 func handleTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate, claim bool) {
-	ctx, err := LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		_ = RespondEmbed(s, i, TicketContextErrorEmbed(err))
 		return
@@ -369,7 +369,7 @@ func handleTicketClaim(s *discordgo.Session, i *discordgo.InteractionCreate, cla
 
 // handleTicketCloseAsk shows the "are you sure" prompt only the clicker can see.
 func handleTicketCloseAsk(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	ctx, err := LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		_ = RespondEmbed(s, i, TicketContextErrorEmbed(err))
 		return
@@ -399,7 +399,7 @@ func handleTicketCloseAnswer(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	ctx, err := LoadTicketContext(i.GuildID, i.ChannelID)
+	ctx, err := LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID)
 	if err != nil {
 		_ = RespondEmbed(s, i, TicketContextErrorEmbed(err))
 		return

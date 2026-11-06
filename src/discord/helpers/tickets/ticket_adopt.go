@@ -64,10 +64,8 @@ func adoptTicketChannel(s *discordgo.Session, guildID, channelID string) error {
 		if match == nil {
 			continue
 		}
-		if welcome == nil || message.ID < welcome.ID { // snowflakes grow with time, and are compared by length first
-			if welcome == nil || len(message.ID) < len(welcome.ID) || len(message.ID) == len(welcome.ID) {
-				welcome, ownerID = message, match[1]
-			}
+		if welcome == nil || snowflakeBefore(message.ID, welcome.ID) {
+			welcome, ownerID = message, match[1]
 		}
 	}
 	if welcome == nil {
@@ -91,8 +89,6 @@ func adoptTicketChannel(s *discordgo.Session, guildID, channelID string) error {
 	if channel.IsThread() {
 		mode = types.TicketModeThread
 	}
-	createdAt := discordgo.SnowflakeTimestamp
-	_ = createdAt
 	opened := int64(0)
 	if at, err := discordgo.SnowflakeTimestamp(channelID); err == nil {
 		opened = at.Unix()
@@ -112,8 +108,8 @@ func adoptTicketChannel(s *discordgo.Session, guildID, channelID string) error {
 		if number == 0 || ticketNumberTaken(current, number) {
 			number, _ = NextTicketIdentity(current)
 		}
-		if ref == "" || ticketRefTaken(current, ref) {
-			_, ref = NextTicketIdentity(current)
+		for ref == "" || ticketRefTaken(current, ref) {
+			ref = randomID(refAlphabet, 6)
 		}
 		ticket := &types.Ticket{
 			Number:           number,
@@ -182,6 +178,13 @@ func welcomeReference(welcome *discordgo.Message) string {
 		}
 	}
 	return ""
+}
+
+// snowflakeBefore reports whether Discord id a is older than b (ids grow with time).
+func snowflakeBefore(a, b string) bool {
+	x, errA := strconv.ParseUint(a, 10, 64)
+	y, errB := strconv.ParseUint(b, 10, 64)
+	return errA == nil && errB == nil && x < y
 }
 
 func ticketNumberTaken(ip *types.InteractivePanels, number int) bool {
