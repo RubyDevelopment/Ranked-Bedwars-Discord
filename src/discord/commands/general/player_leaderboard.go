@@ -34,22 +34,41 @@ type leaderboardStat struct {
 	key, label string
 	short      string // the column heading on a banner (kept short: the column is narrow)
 	value      func(*models.PlayerStatsModel) int
+	ratio      func(*models.PlayerStatsModel) string // set for a ratio (KDR…), which is shown with two decimals instead of as a count
 }
 
-var leaderboardStats = []leaderboardStat{
-	{"elo", "ELO", "ELO", func(m *models.PlayerStatsModel) int { return m.Elo }},
-	{"highest_elo", "Peak ELO", "PEAK", func(m *models.PlayerStatsModel) int { return m.HighestElo }},
-	{"wins", "Wins", "WINS", func(m *models.PlayerStatsModel) int { return m.Wins }},
-	{"losses", "Losses", "LOSS", func(m *models.PlayerStatsModel) int { return m.Losses }},
-	{"games_played", "Games Played", "GAMES", func(m *models.PlayerStatsModel) int { return m.GamesPlayed }},
-	{"kills", "Kills", "KILLS", func(m *models.PlayerStatsModel) int { return m.Kills }},
-	{"final_kills", "Final Kills", "FINAL", func(m *models.PlayerStatsModel) int { return m.FinalKills }},
-	{"first_bloods", "First Bloods", "FIRST", func(m *models.PlayerStatsModel) int { return m.FirstBloods }},
-	{"assists", "Assists", "ASST", func(m *models.PlayerStatsModel) int { return m.Assists }},
-	{"beds_destroyed", "Beds Destroyed", "BEDS", func(m *models.PlayerStatsModel) int { return m.BedsDestroyed }},
-	{"mvp_count", "MVPs", "MVPS", func(m *models.PlayerStatsModel) int { return m.MvpCount }},
-	{"highest_win_streak", "Best Win Streak", "STRK", func(m *models.PlayerStatsModel) int { return m.HighestWinStreak }},
+// show is the player's value of the stat as it is written on a leaderboard.
+func (st leaderboardStat) show(m *models.PlayerStatsModel) string {
+	if st.ratio != nil {
+		return st.ratio(m)
+	}
+	return fmt.Sprint(st.value(m))
 }
+
+var countStats = []leaderboardStat{
+	{"elo", "ELO", "ELO", func(m *models.PlayerStatsModel) int { return m.Elo }, nil},
+	{"highest_elo", "Peak ELO", "PEAK", func(m *models.PlayerStatsModel) int { return m.HighestElo }, nil},
+	{"wins", "Wins", "WINS", func(m *models.PlayerStatsModel) int { return m.Wins }, nil},
+	{"losses", "Losses", "LOSS", func(m *models.PlayerStatsModel) int { return m.Losses }, nil},
+	{"games_played", "Games Played", "GAMES", func(m *models.PlayerStatsModel) int { return m.GamesPlayed }, nil},
+	{"kills", "Kills", "KILLS", func(m *models.PlayerStatsModel) int { return m.Kills }, nil},
+	{"final_kills", "Final Kills", "FINAL", func(m *models.PlayerStatsModel) int { return m.FinalKills }, nil},
+	{"first_bloods", "First Bloods", "FIRST", func(m *models.PlayerStatsModel) int { return m.FirstBloods }, nil},
+	{"assists", "Assists", "ASST", func(m *models.PlayerStatsModel) int { return m.Assists }, nil},
+	{"beds_destroyed", "Beds Destroyed", "BEDS", func(m *models.PlayerStatsModel) int { return m.BedsDestroyed }, nil},
+	{"mvp_count", "MVPs", "MVPS", func(m *models.PlayerStatsModel) int { return m.MvpCount }, nil},
+	{"highest_win_streak", "Best Win Streak", "STRK", func(m *models.PlayerStatsModel) int { return m.HighestWinStreak }, nil},
+}
+
+// ratioStats are worked out from two counts. The database orders by them itself (see its ratioSorts); a zero divisor counts as 1.
+var ratioStats = []leaderboardStat{
+	{key: "kdr", label: "KDR (kills/deaths)", short: "KDR", ratio: func(m *models.PlayerStatsModel) string { return banner.Ratio(m.Kills, m.Deaths) }},
+	{key: "wlr", label: "WLR (wins/losses)", short: "WLR", ratio: func(m *models.PlayerStatsModel) string { return banner.Ratio(m.Wins, m.Losses) }},
+	{key: "fkdr", label: "FKDR (final kills/deaths)", short: "FKDR", ratio: func(m *models.PlayerStatsModel) string { return banner.Ratio(m.FinalKills, m.Deaths) }},
+	{key: "bdr", label: "BDR (beds destroyed/lost)", short: "BDR", ratio: func(m *models.PlayerStatsModel) string { return banner.Ratio(m.BedsDestroyed, m.BedsLost) }},
+}
+
+var leaderboardStats = append(countStats[:len(countStats):len(countStats)], ratioStats...)
 
 func leaderboardStatChoices() []*discordgo.ApplicationCommandOptionChoice {
 	out := make([]*discordgo.ApplicationCommandOptionChoice, len(leaderboardStats))
@@ -208,6 +227,9 @@ func buildLeaderboard(s *discordgo.Session, ask leaderboardAsk) *leaderboardView
 	title := seasonKey
 	if ask.stat.key != "elo" {
 		title += " · " + ask.stat.label
+		if ask.stat.ratio != nil {
+			title += " (10+ games)" // the database ranks a ratio only for players with enough games
+		}
 	}
 	view.embed = LeaderboardOverviewEmbed(nil, rowData, title, ask.page, totalPages)
 	return view
@@ -268,7 +290,7 @@ func renderLeaderboardBanner(s *discordgo.Session, ask leaderboardAsk, rows []sd
 	<-rowsDone
 	maps.Copy(vars, rowVars)
 	for n := range rows {
-		vars[fmt.Sprintf("lb.%d.value", n+1)] = fmt.Sprint(ask.stat.value(&rows[n].PlayerStatsModel))
+		vars[fmt.Sprintf("lb.%d.value", n+1)] = ask.stat.show(&rows[n].PlayerStatsModel)
 	}
 	vars["page.number"], vars["page.total"] = fmt.Sprint(ask.page), fmt.Sprint(totalPages)
 	<-youDone
@@ -434,7 +456,7 @@ func youFresh(guildID string, invoker *discordgo.User, view *sdk.PlayerView, sea
 		return
 	}
 	banner.EntryVars(vars, "me.", pos, view.Config.Username, banner.AvatarOf(invoker), st)
-	vars["me.value"] = fmt.Sprint(stat.value(st))
+	vars["me.value"] = stat.show(st)
 }
 
 // positionOn is a player's place on the leaderboard ordered by stat, or 0 when it cannot be found. The database ranks by ELO only, so

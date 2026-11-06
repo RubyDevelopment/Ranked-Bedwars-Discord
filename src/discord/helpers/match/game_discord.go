@@ -175,6 +175,9 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventScored:
 		d.scheduleTeamStatuses(s, g, true)
+		for _, hook := range ScoredHooks {
+			go hook(s, g)
+		}
 		// One message: the scored embed (text, mentions, a box or none) with the results card attached. When the server switched that
 		// embed off, the card alone is posted.
 		go func() {
@@ -804,3 +807,7 @@ func resultPingUsers(g Game) []string {
 	}
 	return out
 }
+
+// ScoredHooks run, each on its own, when a ranked game has been scored. Things that read results (the integrity check) register here, as the
+// match package cannot depend on them.
+var ScoredHooks []func(s *discordgo.Session, g Game)

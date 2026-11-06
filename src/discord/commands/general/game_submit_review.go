@@ -75,6 +75,9 @@ func reviewFields(game match.Game, res proofread.Result) []*discordgo.MessageEmb
 	if res.Held != "" {
 		notes = append(notes, "🛑 Not scored automatically: "+res.Held+". Staff must confirm it.")
 	}
+	if res.Weak {
+		notes = append(notes, "⚠️ No win message was visible, so the winner is a guess from the last final kill. Check the screenshot.")
+	}
 	if res.Mismatch != "" {
 		notes = append(notes, "⚠️ "+res.Mismatch)
 	}
@@ -97,6 +100,8 @@ func autoScoreBlocker(game match.Game, res proofread.Result, claimed string, min
 	switch {
 	case res.Winner == "":
 		return "the winner could not be read from the screenshot"
+	case res.Weak:
+		return "the winner was only inferred from the kills in view: the chat does not say it"
 	case res.Mismatch != "" || !strings.EqualFold(res.Winner, claimed):
 		return "the chat shows " + res.Winner + " won, but " + claimed + " submitted"
 	case len(game.Players) > 0 && len(res.Seen)*100 < minPlayersPercent*len(game.Players):

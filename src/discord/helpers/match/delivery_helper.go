@@ -43,6 +43,7 @@ var AlertKinds = map[string]struct {
 	"game_voided":   {"Game voided", 0xef4444},
 	"tracking_lost": {"Match tracking lost", 0xf97316},
 	"team_call":     {"Team call", 0x38bdf8},
+	"integrity":     {"Ladder integrity", 0xdc2626},
 }
 
 // resultsChannel is where the results card goes: the channel chosen in the profile, else the game's own chat.

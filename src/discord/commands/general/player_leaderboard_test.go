@@ -145,3 +145,14 @@ func TestLeaderboardPageEditRequest(t *testing.T) {
 		t.Errorf("an embed answer must have no files, no buttons and one embed: %+v", e)
 	}
 }
+
+// =lb kdr, =lb wlr ... pick the ratio stats, and the words of the older stats still mean what they did.
+func TestLeaderboardPrefixWordsPickTheRatios(t *testing.T) {
+	for word, want := range map[string]string{"kdr": "kdr", "wlr": "wlr", "fkdr": "fkdr", "bdr": "bdr", "beds": "beds_destroyed", "final": "final_kills", "wins": "wins"} {
+		msg := &discordgo.Message{ID: "1", GuildID: "2", ChannelID: "3", Author: &discordgo.User{ID: "4"}, Member: &discordgo.Member{User: &discordgo.User{ID: "4"}}}
+		i := helpers.BuildPrefixInteraction(nil, msg, PlayerLeaderboardCommand, &types.PrefixCommandRoute{CommandName: "leaderboard", RemainingArgs: []string{word}})
+		if got := helpers.OptionString(i, "stat"); got != want {
+			t.Errorf("=lb %s: stat %q, want %q", word, got, want)
+		}
+	}
+}

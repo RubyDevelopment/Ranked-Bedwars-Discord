@@ -21,6 +21,7 @@ type Result struct {
 	BedBreaks []Count  // bed breaks by player, most first
 	MVP       Member
 	MVPBy     string
+	Weak      bool   // the winner was inferred from the kills, not stated by the chat: never enough to score a game without staff
 	Mismatch  string // set when the chat's winner is not the team that submitted
 	Held      string // set by the caller when auto scoring was not trusted, and why
 }
@@ -266,6 +267,9 @@ func Analyze(lines []string, profile Profile, roster []Member, claimed string, c
 				}
 			}
 		}
+	}
+	if res.Winner == "" { // no win or elimination line in view (cut off, or scrolled away): the final kills in view may still say who won
+		res.Winner, res.WinnerBy, res.Weak = winnerFromFinalKills(events, roster, teamList)
 	}
 	if res.Winner != "" && claimed != "" && !strings.EqualFold(res.Winner, claimed) {
 		res.Mismatch = fmt.Sprintf("the chat says %s won, but %s submitted", res.Winner, claimed)
@@ -516,4 +520,50 @@ func lastKill(events []event, i int) *event {
 		}
 	}
 	return nil
+}
+
+// winnerFromFinalKills tells who won when the chat shows no win or elimination line. A team all of whose players were final-killed in view has
+// lost, which is firm. Otherwise the team of whoever made the last final kill is taken to have won (the one that ends a game), which is a
+// guess, and is reported as weak.
+func winnerFromFinalKills(events []event, roster []Member, teams []string) (winner, by string, weak bool) {
+	size := map[string]int{}
+	seenPlayer := map[string]bool{}
+	for _, m := range roster {
+		key := m.Team + "|" + strings.ToLower(m.Name)
+		if m.ID != "" {
+			key = m.Team + "|" + m.ID
+		}
+		if !seenPlayer[key] {
+			seenPlayer[key] = true
+			size[m.Team]++
+		}
+	}
+	finalled := map[string]map[string]bool{}
+	var last *event
+	for i := range events {
+		ev := &events[i]
+		if ev.kind != "kill" || !ev.final || ev.victim == nil || ev.actor == nil || ev.victim.Team == ev.actor.Team {
+			continue
+		}
+		if finalled[ev.victim.Team] == nil {
+			finalled[ev.victim.Team] = map[string]bool{}
+		}
+		finalled[ev.victim.Team][ev.victim.Name] = true
+		last = ev
+	}
+	if len(teams) == 2 {
+		for _, t := range teams {
+			if size[t] > 0 && len(finalled[t]) >= size[t] {
+				for _, o := range teams {
+					if o != t {
+						return o, fmt.Sprintf("every player of %s was final-killed in the chat", t), false
+					}
+				}
+			}
+		}
+	}
+	if last != nil {
+		return last.actor.Team, fmt.Sprintf("inferred: the last final kill in the chat was made by %s", last.actor.Name), true
+	}
+	return "", "", false
 }
