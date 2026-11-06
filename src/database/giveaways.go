@@ -106,3 +106,58 @@ func HasWonGiveaway(guildID, userID string, excludeID uint) (bool, error) {
 	}
 	return out.Won, nil
 }
+
+// NewGiveaway is what a giveaway is made from.
+type NewGiveaway struct {
+	Prize       string
+	Description string
+	Winners     int
+	ChannelID   string
+	EndsAt      time.Time
+	Rules       json.RawMessage
+	CreatedBy   string
+}
+
+// CreateGiveaway saves a giveaway (scheduled: the bot posts it within moments) and answers the saved row.
+func CreateGiveaway(guildID string, g NewGiveaway) (*Giveaway, error) {
+	rules := g.Rules
+	if len(rules) == 0 {
+		rules = json.RawMessage("{}")
+	}
+	body := map[string]any{
+		"prize": g.Prize, "description": g.Description, "winners": g.Winners, "channel_id": g.ChannelID,
+		"ends_at": g.EndsAt.UTC(), "rules": rules, "created_by": g.CreatedBy, "status": "scheduled",
+	}
+	var out Giveaway
+	if err := apiCall(http.MethodPost, giveawaysPath(guildID), body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetGiveawayWinners names new winners of an ended giveaway. With replace the earlier winners lose the mark. It answers all the winners
+// the giveaway has afterwards.
+func SetGiveawayWinners(guildID string, id uint, winners []string, replace bool) ([]string, error) {
+	var out struct {
+		Winners []string `json:"winners"`
+	}
+	err := apiCall(http.MethodPost, giveawaysPath(guildID, idPart(id), "winners"), map[string]any{"winners": winners, "replace": replace}, &out)
+	return out.Winners, err
+}
+
+// RecentGiveaways lists the guild's giveaways, newest first (up to 25), for staff to pick from.
+func RecentGiveaways(guildID string) ([]Giveaway, error) {
+	var list []Giveaway
+	err := apiCall(http.MethodGet, giveawaysPath(guildID)+"?limit=25&order=desc", nil, &list)
+	return list, err
+}
+
+// GiveawayEntryCount is how many entries a giveaway holds (0 when it cannot be read).
+func GiveawayEntryCount(guildID string, id uint) int64 {
+	headers, err := apiCallHeaders(http.MethodGet, giveawaysPath(guildID, idPart(id), "entries")+"?limit=1", nil, nil)
+	if err != nil || headers == nil {
+		return 0
+	}
+	n, _ := strconv.ParseInt(headers.Get("X-Total-Count"), 10, 64)
+	return n
+}

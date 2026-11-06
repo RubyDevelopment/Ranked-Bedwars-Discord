@@ -2,6 +2,7 @@ package panels
 
 import (
 	"slices"
+	"time"
 
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
@@ -10,11 +11,18 @@ import (
 	"ranked-bedwars/src/discord/helpers"
 )
 
-// gatherEntrant collects what the giveaway's rules need to know about the member who pressed Enter, reading only what they ask for: the
-// stats, the punishment record and the other giveaways' winners are not looked up for a giveaway that does not use them. The second
+// gatherEntrant collects what the giveaway's rules need to know about a member (who pressed Enter, or was drawn), reading only what they ask
+// for: the stats, the punishment record and the other giveaways' winners are not looked up for a giveaway that does not use them. The second
 // result is the server's rank names, lowest first.
-func gatherEntrant(guildID, userID string, roles []string, g giveawayDoc, giveawayID uint) (entrant, []string, error) {
-	e := entrant{Roles: slices.Clone(roles)}
+func gatherEntrant(guildID, userID string, m *discordgo.Member, g giveawayDoc, giveawayID uint) (entrant, []string, error) {
+	e := entrant{JoinedDays: -1, IdleDays: -1}
+	if m != nil {
+		e.Roles = slices.Clone(m.Roles)
+		e.Booster = m.PremiumSince != nil
+		if !m.JoinedAt.IsZero() {
+			e.JoinedDays = int(time.Since(m.JoinedAt).Hours() / 24)
+		}
+	}
 	var order []string
 
 	if g.ExcludePastWinners {
@@ -23,7 +31,7 @@ func gatherEntrant(guildID, userID string, roles []string, g giveawayDoc, giveaw
 		}
 	}
 
-	wantsPlayer := g.needsStats() || g.NoActivePunishment
+	wantsPlayer := g.needsRegistration() || g.needsStats() || g.NoActivePunishment
 	if !wantsPlayer {
 		return e, nil, nil
 	}
@@ -42,10 +50,11 @@ func gatherEntrant(guildID, userID string, roles []string, g giveawayDoc, giveaw
 		}
 		e.Elo, e.Games, e.Wins = stats.Elo, stats.GamesPlayed, stats.Wins
 		e.Rank = stats.Rank
-		if ranks, err := helpers.GuildMetaRanks(guildID); err == nil {
-			for _, r := range helpers.SortedRanks(ranks) {
-				order = append(order, r.RankName)
-			}
+		if stats.LastPlayedAt != nil {
+			e.IdleDays = int(time.Since(*stats.LastPlayedAt).Hours() / 24)
+		}
+		if names, err := rankNames(guildID); err == nil {
+			order = names
 		}
 	}
 	if g.NoActivePunishment {
@@ -57,12 +66,4 @@ func gatherEntrant(guildID, userID string, roles []string, g giveawayDoc, giveaw
 		}
 	}
 	return e, order, nil
-}
-
-// memberRoles are the roles of the member who pressed a button.
-func memberRoles(i *discordgo.InteractionCreate) []string {
-	if i.Member == nil {
-		return nil
-	}
-	return i.Member.Roles
 }
