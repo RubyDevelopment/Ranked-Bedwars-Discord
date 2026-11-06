@@ -200,6 +200,9 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		ip.Tickets.Open[ticket.ThreadID] = ticket
 		return nil
 	}); err != nil {
+		// The ticket could not be saved: without a record every ticket command in its channel answers "Not A Ticket", so the
+		// channel is removed instead of being left behind (the member is told it failed and can open it again).
+		_, _ = s.ChannelDelete(channelID)
 		return nil, err
 	}
 	ticketActivityIndex.Lock()
