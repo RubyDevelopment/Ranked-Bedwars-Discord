@@ -24,7 +24,6 @@ import (
 
 func init() {
 	helpers.Register(FactionCommand)
-	helpers.Register(FactionInfoCommand)
 	helpers.Register(FactionLeaderboardCommand)
 	helpers.RegisterComponentHandler(handleFactionInvite)
 	helpers.RegisterComponentHandler(handleFactionLeaderboardPage)
@@ -96,21 +95,6 @@ var FactionCommand = &types.Command{
 		},
 	},
 	Execute: executeFactionCommand,
-}
-
-// FactionInfoCommand is /faction info on its own, so =factioninfo works.
-var FactionInfoCommand = &types.Command{
-	Name:          "factioninfo",
-	Description:   "View a faction's profile: level, trophies, members and cosmetics.",
-	PrefixAliases: []string{"finfo"},
-	Cooldown:      3 * time.Second,
-	Data: &discordgo.ApplicationCommand{Options: []*discordgo.ApplicationCommandOption{
-		{Name: "faction", Description: "A faction's name or tag", Type: discordgo.ApplicationCommandOptionString},
-		{Name: "user", Description: "Show the faction this player is in (default: yours)", Type: discordgo.ApplicationCommandOptionUser},
-	}},
-	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-		return factionInfo(s, i, i.GuildID, helpers.InteractionUserID(i), nil, helpers.OptionString(i, "faction"), helpers.OptionUser(s, i, "user"))
-	},
 }
 
 // FactionLeaderboardCommand is /faction leaderboard on its own, so =factionlb works.

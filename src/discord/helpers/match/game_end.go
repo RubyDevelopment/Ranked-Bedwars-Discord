@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"ranked-bedwars/src/discord/helpers/factionmgr"
+	"ranked-bedwars/src/discord/helpers/queue"
 	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
 	"slices"
@@ -358,6 +359,12 @@ func (m *GameManager) finish(lg *liveGame, g Game) {
 	if fn := m.fx().Released; fn != nil {
 		fn(g.GuildID, g.QueueChannelID)
 	}
+	// Players may be sitting in another queue channel than the one the game came from.
+	ids := make([]string, len(g.Players))
+	for n, p := range g.Players {
+		ids[n] = p.UserID
+	}
+	queue.ReleasedPlayers(g.GuildID, ids...)
 }
 
 func (m *GameManager) scheduleChannelCleanup(g Game) {

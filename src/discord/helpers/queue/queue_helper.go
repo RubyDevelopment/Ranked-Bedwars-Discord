@@ -79,6 +79,25 @@ func Released(guildID, channelID string) {
 	}
 }
 
+// ReleasedPlayers re-checks the queue channels the given players are sitting in. They may have joined while still counted as in their
+// game (and been refused); once freed (final death, team eliminated, match over) nothing else would let them in until a voice event.
+func ReleasedPlayers(guildID string, userIDs ...string) {
+	s := base.Session.Load()
+	if s == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for _, id := range userIDs {
+		vs, err := s.State.VoiceState(guildID, id)
+		if err != nil || vs.ChannelID == "" || seen[vs.ChannelID] {
+			continue
+		}
+		seen[vs.ChannelID] = true
+		go SweepQueueChannel(s, guildID, vs.ChannelID)
+		ScheduleVoiceStatus(s, guildID, vs.ChannelID)
+	}
+}
+
 func HandleQueue(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
 	base.Session.Store(s)
 	if v == nil || v.VoiceState == nil || v.GuildID == "" || v.UserID == "" {

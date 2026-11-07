@@ -321,6 +321,44 @@ func FactionCustomize(guildID string, factionID uint, actor string, force bool, 
 	return &p, err
 }
 
+// The calls below are the staff versions: they skip the Founder, level and creation checks.
+
+// FactionAdminCreate founds a faction with the player as its Founder, whatever the creation requirements say.
+func FactionAdminCreate(guildID, founder, name, tag string) (*FactionProfile, error) {
+	var p FactionProfile
+	err := apiCall(http.MethodPost, factionsPath(guildID), map[string]any{"actor": founder, "name": name, "tag": tag, "force": true}, &p)
+	return &p, err
+}
+
+// FactionAdminAdd seats a player in a faction without an invitation.
+func FactionAdminAdd(guildID string, factionID uint, target string) (*FactionProfile, error) {
+	var p FactionProfile
+	err := apiCall(http.MethodPost, factionsPath(guildID, idPart(factionID), "members"), map[string]any{"target": target}, &p)
+	return &p, err
+}
+
+// FactionAdminKick removes any member but the Founder.
+func FactionAdminKick(guildID string, factionID uint, target string) error {
+	return apiCall(http.MethodPost, factionsPath(guildID, idPart(factionID), "kick"), map[string]any{"target": target, "force": true}, nil)
+}
+
+// FactionAdminRole makes a member an officer or a plain member.
+func FactionAdminRole(guildID string, factionID uint, target, role string) error {
+	return apiCall(http.MethodPost, factionsPath(guildID, idPart(factionID), "role"), map[string]any{"target": target, "role": role, "force": true}, nil)
+}
+
+// FactionAdminTransfer makes the target the Founder.
+func FactionAdminTransfer(guildID string, factionID uint, target string) error {
+	return apiCall(http.MethodPost, factionsPath(guildID, idPart(factionID), "transfer"), map[string]any{"target": target, "force": true}, nil)
+}
+
+// FactionAdminTrophies changes a faction's trophies: board is "lifetime" or "seasonal", mode "add" or "set".
+func FactionAdminTrophies(guildID string, factionID uint, board, mode string, amount int) (*FactionProfile, error) {
+	var p FactionProfile
+	err := apiCall(http.MethodPost, factionsPath(guildID, idPart(factionID), "trophies"), map[string]any{"board": board, "mode": mode, "amount": amount}, &p)
+	return &p, err
+}
+
 // FactionGameTrophiesFor is what a finished game gave each faction.
 func FactionGameTrophiesFor(guildID string, gameID uint) ([]FactionGameTrophies, error) {
 	var list []FactionGameTrophies

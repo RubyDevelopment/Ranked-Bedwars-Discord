@@ -244,6 +244,7 @@ func (m *GameManager) ReleasePlayers(gameID uint, userIDs ...string) {
 		}
 	}
 	m.mu.Unlock()
+	queue.ReleasedPlayers(guildID, userIDs...)
 }
 
 func (m *GameManager) unregister(lg *liveGame) {
