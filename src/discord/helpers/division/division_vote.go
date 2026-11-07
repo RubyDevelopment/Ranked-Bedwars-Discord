@@ -390,6 +390,51 @@ func myVotesEmbed(guildID, userID string, d Div) *discordgo.MessageEmbed {
 	return helpers.Preset("info", types.PresetOptions{Title: "Your " + d.Label + " Votes", Description: strings.Join(lines, "\n"), Thumbnail: helpers.ThumbPlayers})
 }
 
+// votesEmbed is the answer to /<division> votes, for managers: each open vote of the division (only the one on target when given)
+// with who approved, who denied and who has not voted yet.
+func votesEmbed(guildID, targetID string, d Div) *discordgo.MessageEmbed {
+	loadOpen(guildID)
+	open.mu.Lock()
+	var list []*vote
+	for _, v := range open.by {
+		if v.guildID == guildID && v.div.Key == d.Key && (targetID == "" || v.targetID == targetID) {
+			list = append(list, v)
+		}
+	}
+	open.mu.Unlock()
+	if len(list) == 0 {
+		return helpers.Preset("info", types.PresetOptions{Title: d.Label + " Votes", Description: "There are no matching open " + d.Label + " votes.", Thumbnail: helpers.ThumbPlayers})
+	}
+	sort.Slice(list, func(a, b int) bool { return list[a].messageID < list[b].messageID })
+	if len(list) > 8 { // ponytail: 3 fields per vote, Discord caps an embed at 25 fields; page it if more are ever open at once
+		list = list[:8]
+	}
+	var fields []*discordgo.MessageEmbedField
+	for _, v := range list {
+		v.mu.Lock()
+		var yes, no, none []string
+		for id, name := range v.eligible {
+			if approves, voted := v.votes[id]; !voted {
+				none = append(none, name)
+			} else if approves {
+				yes = append(yes, name)
+			} else {
+				no = append(no, name)
+			}
+		}
+		for _, l := range [][]string{yes, no, none} {
+			sort.Strings(l)
+		}
+		head := fmt.Sprintf("%s · %s", v.name, v.link())
+		fields = append(fields,
+			&discordgo.MessageEmbedField{Name: fmt.Sprintf("%s: ✅ Approved (%d)", v.name, len(yes)), Value: mentions(yes, 1000) + "\n" + head},
+			&discordgo.MessageEmbedField{Name: fmt.Sprintf("%s: ❌ Denied (%d)", v.name, len(no)), Value: mentions(no, 1000)},
+			&discordgo.MessageEmbedField{Name: fmt.Sprintf("%s: ⏳ Not voted (%d)", v.name, len(none)), Value: mentions(none, 1000)})
+		v.mu.Unlock()
+	}
+	return helpers.Preset("info", types.PresetOptions{Title: d.Label + " Votes", Fields: fields, Thumbnail: helpers.ThumbPlayers})
+}
+
 // finish ends the vote (the caller holds v.mu): the message shows the result, and the result and who voted go to the log channel.
 func (v *vote) finish(s *discordgo.Session, status, by string, update func(status, by string)) {
 	v.closed = true

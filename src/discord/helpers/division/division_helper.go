@@ -358,7 +358,9 @@ func subcommands(d Div, managers bool) []*discordgo.ApplicationCommandOption {
 	if d.Vote {
 		subs = append(subs,
 			sub("vote", "Start a vote to add a player to "+d.Label, user("The player to vote on"), reason),
-			sub("my-vote", "Check your votes on the open "+d.Label+" votes"))
+			sub("my-vote", "Check your votes on the open "+d.Label+" votes"),
+			sub("votes", "Managers: see who approved, denied or has not voted on the open "+d.Label+" votes",
+				&discordgo.ApplicationCommandOption{Name: "user", Description: "Only the vote on this player", Type: discordgo.ApplicationCommandOptionUser}))
 	}
 	// The administrator's side: where the roles and channels are, and the managers of every division.
 	setting := func(kind types.RequirementType) *discordgo.ApplicationCommandOption {
@@ -412,11 +414,20 @@ func execute(s *discordgo.Session, i *discordgo.InteractionCreate, d Div) error 
 		return reply(settingsEmbed(d, cfg))
 	case "my-vote":
 		return reply(myVotesEmbed(i.GuildID, helpers.InteractionUserID(i), d))
+	case "votes":
+		if !IsManager(s, i, d, cfg) {
+			return reply(errorEmbed("Permission Denied", "Only "+d.Label+" managers, or managers of a higher division, can see who voted."))
+		}
+		targetID := ""
+		if t := helpers.SubOptionUser(s, opts, "user"); t != nil {
+			targetID = t.ID
+		}
+		return reply(votesEmbed(i.GuildID, targetID, d))
 	case "set-role", "set-channel", "clear":
 		return reply(configure(s, i, d, sub, opts))
 	case "vote", "add", "remove", "add-spec", "remove-spec":
 	default:
-		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.path()+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec`, `vote` or `my-vote`."))
+		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.path()+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec`, `vote`, `my-vote` or `votes`."))
 	}
 
 	if !IsManager(s, i, d, cfg) {
