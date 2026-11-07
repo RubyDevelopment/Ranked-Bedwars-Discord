@@ -149,11 +149,12 @@ func executePartyManageCommand(s *discordgo.Session, i *discordgo.InteractionCre
 // ============================================================================
 
 func partyCreate(s *discordgo.Session, i *discordgo.InteractionCreate, guildID, userID string) error {
-	if _, err := partymgr.Parties.Create(guildID, userID); err != nil {
+	party, err := partymgr.Parties.Create(guildID, userID)
+	if err != nil {
 		return err
 	}
 	cfg := partymgr.Parties.Config(guildID)
-	return helpers.EditInteractionEmbed(s, i, PartyCreatedEmbed(cfg.InactivityDisbandTime))
+	return helpers.EditInteractionEmbed(s, i, PartyCreatedEmbed(party.MaxSize, cfg.InactivityDisbandTime))
 }
 
 func partyInvite(s *discordgo.Session, i *discordgo.InteractionCreate, guildID, userID string, options []*discordgo.ApplicationCommandInteractionDataOption) error {
@@ -363,10 +364,10 @@ func PartyTargetNotRegisteredEmbed(user *discordgo.User) *discordgo.MessageEmbed
 	})
 }
 
-func PartyCreatedEmbed(inactivity int) *discordgo.MessageEmbed {
+func PartyCreatedEmbed(maxSize, inactivity int) *discordgo.MessageEmbed {
 	return helpers.Preset("success", types.PresetOptions{
 		Title:       "Party Created",
-		Description: fmt.Sprintf("Your party is ready! Invite players with `/party invite` to build your team.\n\n> **Leader:** You\n> **Members:** 1/4\n> **Invites:** Open\n> **Disbands After:** %d minutes of inactivity", inactivity),
+		Description: fmt.Sprintf("Your party is ready! Invite players with `/party invite` to build your team.\n\n> **Leader:** You\n> **Members:** 1/%d\n> **Invites:** Open\n> **Disbands After:** %d minutes of inactivity", maxSize, inactivity),
 		Thumbnail:   helpers.ThumbPlayers,
 	})
 }
