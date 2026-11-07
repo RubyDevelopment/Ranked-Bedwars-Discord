@@ -21,21 +21,41 @@ import (
 // Divisions & settings
 // ============================================================================
 
-// Div is one division. Key is its command name and the prefix of its requirement slots; Vote says whether managers can
-// start a vote for a player (Premium has none).
+// Div is one division. Key is the prefix of its requirement slots and, unless Cmd says otherwise, its command name; Vote says whether
+// managers can start a vote for a player (Premium has none). Cmd is set for a tier that lives inside another division's command
+// (PUGS Trial is the "trial" group of /pugs).
 type Div struct {
 	Key   string
 	Label string
 	Vote  bool
+	Cmd   string
 }
 
 var (
-	Premium = Div{"premium", "Premium", false}
-	Pugs    = Div{"pugs", "PUGS", true}
-	Pups    = Div{"pups", "PUPS", true}
-	Pit     = Div{"pit", "Pit", true}
-	All     = []Div{Premium, Pugs, Pups, Pit}
+	Premium   = Div{Key: "premium", Label: "Premium"}
+	Pugs      = Div{Key: "pugs", Label: "PUGS", Vote: true}
+	PugsTrial = Div{Key: "pugs_trial", Label: "PUGS Trial", Vote: true, Cmd: "pugs"}
+	Pups      = Div{Key: "pups", Label: "PUPS", Vote: true}
+	Pit       = Div{Key: "pit", Label: "Pit", Vote: true}
+	// All lists the divisions from the highest level to the lowest; PUGS Trial sits just below PUGS.
+	All = []Div{Premium, Pugs, PugsTrial, Pups, Pit}
 )
+
+// cmd is the command the division is managed with.
+func (d Div) cmd() string {
+	if d.Cmd != "" {
+		return d.Cmd
+	}
+	return d.Key
+}
+
+// path is how a staff member types the division's commands: "pugs", or "pugs trial".
+func (d Div) path() string {
+	if d.Cmd != "" {
+		return d.Cmd + " " + strings.TrimPrefix(d.Key, d.Cmd+"_")
+	}
+	return d.Key
+}
 
 // tag is how a message names the division: its member role mention, or its label when no role is set.
 func (d Div) tag(roleID string) string {
@@ -126,11 +146,11 @@ type Config struct {
 
 // Load reads the division's assignments.
 func Load(guildID string, d Div) (Config, error) {
-	roles, _, err := helpers.CommandRequirementSlots(guildID, d.Key, types.ReqRole)
+	roles, _, err := helpers.CommandRequirementSlots(guildID, d.cmd(), types.ReqRole)
 	if err != nil {
 		return Config{}, err
 	}
-	channels, _, err := helpers.CommandRequirementSlots(guildID, d.Key, types.ReqChannel)
+	channels, _, err := helpers.CommandRequirementSlots(guildID, d.cmd(), types.ReqChannel)
 	if err != nil {
 		return Config{}, err
 	}
@@ -291,15 +311,37 @@ func unexpectedEmbed() *discordgo.MessageEmbed {
 }
 
 func notConfiguredEmbed(d Div, st Setting) *discordgo.MessageEmbed {
-	return errorEmbed("Not Configured", fmt.Sprintf("The %s **%s** is not set. An administrator can set it with `/%s set-role` or `/%s set-channel`.", d.Label, strings.ToLower(st.Name), d.Key, d.Key))
+	return errorEmbed("Not Configured", fmt.Sprintf("The %s **%s** is not set. An administrator can set it with `/%s set-role` or `/%s set-channel`.", d.Label, strings.ToLower(st.Name), d.path(), d.path()))
 }
 
 // ============================================================================
 // Command
 // ============================================================================
 
-// NewCommand builds the /pugs, /pups or /premium command.
+// NewCommand builds the /pugs, /pups, /pit or /premium command. /pugs also carries the "trial" group: the same subcommands for the
+// PUGS Trial tier.
 func NewCommand(d Div) *types.Command {
+	subs := subcommands(d, true)
+	reqs := d.Requirements()
+	if d.Key == Pugs.Key {
+		subs = append(subs, &discordgo.ApplicationCommandOption{
+			Name: "trial", Description: "Manage the " + PugsTrial.Label + " tier", Type: discordgo.ApplicationCommandOptionSubCommandGroup,
+			Options: subcommands(PugsTrial, false),
+		})
+		reqs = append(reqs, PugsTrial.Requirements()...)
+	}
+	return &types.Command{
+		Name:         d.Key,
+		Description:  "Manages the " + d.Label + " division: its members, specs and managers.",
+		Cooldown:     3 * time.Second,
+		Requirements: reqs,
+		Data:         &discordgo.ApplicationCommand{Options: subs},
+		Execute:      func(s *discordgo.Session, i *discordgo.InteractionCreate) error { return execute(s, i, d) },
+	}
+}
+
+// subcommands are the subcommands that manage d; the managers overview (every division at once) is only on the command itself.
+func subcommands(d Div, managers bool) []*discordgo.ApplicationCommandOption {
 	user := func(desc string) *discordgo.ApplicationCommandOption {
 		return &discordgo.ApplicationCommandOption{Name: "user", Description: desc, Type: discordgo.ApplicationCommandOptionUser, Required: true}
 	}
@@ -330,8 +372,10 @@ func NewCommand(d Div) *types.Command {
 		}
 		return o
 	}
+	if managers {
+		subs = append(subs, sub("managers", "Show the managers of every division"))
+	}
 	subs = append(subs,
-		sub("managers", "Show the managers of every division"),
 		sub("settings", "Show the "+d.Label+" roles and channels"),
 		sub("set-role", "Set the "+d.Label+" member, spec or manager role (administrators)", setting(types.ReqRole),
 			&discordgo.ApplicationCommandOption{Name: "role", Description: "The role", Type: discordgo.ApplicationCommandOptionRole, Required: true}),
@@ -340,19 +384,19 @@ func NewCommand(d Div) *types.Command {
 				ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews}}),
 		sub("clear", "Clear a "+d.Label+" role or channel (administrators)", setting("")),
 	)
-	return &types.Command{
-		Name:         d.Key,
-		Description:  "Manages the " + d.Label + " division: its members, specs and managers.",
-		Cooldown:     3 * time.Second,
-		Requirements: d.Requirements(),
-		Data:         &discordgo.ApplicationCommand{Options: subs},
-		Execute:      func(s *discordgo.Session, i *discordgo.InteractionCreate) error { return execute(s, i, d) },
-	}
+	return subs
 }
 
 func execute(s *discordgo.Session, i *discordgo.InteractionCreate, d Div) error {
 	reply := func(e *discordgo.MessageEmbed) error { return helpers.EditInteractionEmbed(s, i, e) }
 	sub, opts := types.SelectedSubcommand(i)
+	if data := i.ApplicationCommandData().Options; d.Key == Pugs.Key && len(data) > 0 && data[0].Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+		d = PugsTrial // /pugs trial <subcommand>
+		sub, opts = "", nil
+		if len(data[0].Options) > 0 {
+			sub, opts = data[0].Options[0].Name, data[0].Options[0].Options
+		}
+	}
 	cfg, err := Load(i.GuildID, d)
 	if err != nil {
 		return reply(unexpectedEmbed())
@@ -374,7 +418,7 @@ func execute(s *discordgo.Session, i *discordgo.InteractionCreate, d Div) error 
 		return reply(configure(s, i, d, sub, opts))
 	case "vote", "add", "remove", "add-spec", "remove-spec":
 	default:
-		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.Key+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec`, `vote` or `my-vote`."))
+		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.path()+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec`, `vote` or `my-vote`."))
 	}
 
 	if !IsManager(s, i, d, cfg) {
@@ -555,7 +599,7 @@ func configure(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, sub 
 	if sub != "clear" && id == "" {
 		return errorEmbed("Missing Value", "You must pick a "+string(st.Type)+".")
 	}
-	if err := helpers.SetRequirementSlotID(helpers.InteractionUserID(i), i.GuildID, d.Key, st.Type, d.Slot(st), id); err != nil {
+	if err := helpers.SetRequirementSlotID(helpers.InteractionUserID(i), i.GuildID, d.cmd(), st.Type, d.Slot(st), id); err != nil {
 		return errorEmbed("Not Saved", "The setting could not be saved. If this is a new server, run `/config sync` first so the division commands are set up.")
 	}
 	value := "`Cleared`"

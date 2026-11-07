@@ -86,7 +86,7 @@ func (v *vote) embed(status, by string) *discordgo.MessageEmbed {
 	preset, title, result := "default", v.div.Label+" Vote", ""
 	switch status {
 	case "approved":
-		preset, result = "success", fmt.Sprintf("Closed by <@%s>: **Approved**. No role was added: a manager can add them with `/%s add`.", by, v.div.Key)
+		preset, result = "success", fmt.Sprintf("Closed by <@%s>: **Approved**. No role was added: a manager can add them with `/%s add`.", by, v.div.path())
 	case "denied":
 		preset, result = "error", fmt.Sprintf("Closed by <@%s>: **Denied**.", by)
 	case "tied":
@@ -174,7 +174,7 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 		return notConfiguredEmbed(d, SetVotes)
 	}
 	if cfg.Member == "" && cfg.Spec == "" && cfg.Manager == "" {
-		return errorEmbed("Not Configured", "The "+d.Label+" member, spec and manager roles are not set, so nobody could vote. An administrator can set them with `/"+d.Key+" set-role`.")
+		return errorEmbed("Not Configured", "The "+d.Label+" member, spec and manager roles are not set, so nobody could vote. An administrator can set them with `/"+d.path()+" set-role`.")
 	}
 	if why == "" {
 		why = "No reason given."
