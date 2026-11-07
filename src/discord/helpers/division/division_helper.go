@@ -65,14 +65,12 @@ func (d Div) tag(roleID string) string {
 	return "<@&" + roleID + ">"
 }
 
-// voters are the divisions whose members, specs and managers may vote on a vote for d: d itself and every voting division above it
-// (PUGS, PUPS, Pit), never Premium, which has no votes.
+// voters are the divisions whose members, specs and managers may vote on a vote for d: d itself and every division above it, Premium
+// included (it has no votes of its own, but its holders vote on everyone's).
 func (d Div) voters() []Div {
 	var out []Div
 	for _, o := range All {
-		if o.Vote {
-			out = append(out, o)
-		}
+		out = append(out, o)
 		if o.Key == d.Key {
 			break
 		}
