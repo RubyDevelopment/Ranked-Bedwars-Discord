@@ -57,6 +57,9 @@ func executePlayerWipeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 	fromGame := helpers.OptionInt(i, "from_game")
 	reason := strings.TrimSpace(helpers.OptionString(i, "reason"))
+	if reason == "" {
+		reason = "No reason provided" // the database requires one
+	}
 	actor := helpers.InteractionUserID(i)
 
 	// 2. Fetch Player Profile

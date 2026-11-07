@@ -3,6 +3,7 @@ package match
 import (
 	"errors"
 	"fmt"
+	"ranked-bedwars/src/discord/helpers/factionmgr"
 	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
 	"slices"
@@ -253,6 +254,9 @@ func (m *GameManager) commitRankedDeferred(actor string, g Game, winningTeam, st
 	return results, func() {
 		m.deps.Elo.RecordStartingGrants(actor, g.GuildID, results)
 		m.deps.Elo.ApplyRanks(actor, g.GuildID, results)
+		if !rescore {
+			factionmgr.AfterGame(g.GuildID, g.ID) // the trophies the win earned the players' factions
+		}
 		if !rescore && m.deps.Parties != nil {
 			for _, pg := range g.Parties {
 				m.deps.Parties.RecordGame(g.GuildID, pg.Leader)

@@ -13,6 +13,7 @@ import (
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/match"
+	"ranked-bedwars/src/discord/helpers/partymgr"
 	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/discord/helpers/queue"
 	"ranked-bedwars/src/types"
@@ -192,13 +193,13 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 	// Check eligibility of each member. The two lookups per member run side by side across members; the lines keep
 	// the channel's order.
 	verdicts := make([]string, len(vcMembers)) // "" = eligible, otherwise the line explaining why not
-	blockedRow := func(userID, reason string) string {
-		return helpers.FillLayout(guildID, helpers.LayoutQueuesBlockedRow, map[string]string{"mention": "<@" + userID + ">", "id": userID, "reason": helpers.FillLayout(guildID, reason, nil)})
+	blockedRow := func(userID, reason string, vars map[string]string) string {
+		return helpers.FillLayout(guildID, helpers.LayoutQueuesBlockedRow, map[string]string{"mention": "<@" + userID + ">", "id": userID, "reason": helpers.FillLayout(guildID, reason, vars)})
 	}
 	var wg sync.WaitGroup
 	for n, userID := range vcMembers {
 		if match.Games.InGame(guildID, userID) {
-			verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonInGame)
+			verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonInGame, nil)
 			continue
 		}
 		wg.Add(1)
@@ -206,15 +207,42 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 			defer wg.Done()
 			player, err := database.Must().Player.Get(guildID, userID)
 			if err != nil {
-				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonNoReg)
+				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonNoReg, nil)
 				return
 			}
 			if hasQueueRestriction(guildID, sdk.UintToString(player.Player.ID)) {
-				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonBanned)
+				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonBanned, nil)
 			}
 		}()
 	}
 	wg.Wait()
+
+	// Party members whose party isn't fully in the channel are held back by the queue, so flag them too.
+	if cfg := queue.Queues.PartyConfig(guildID, binding.Mode); binding.Mode.IsPartyQueueEnabled && partymgr.PartiesEnabled(cfg) && cfg.RequireAllMembersInQueue {
+		inVC := make(map[string]bool, len(vcMembers))
+		for _, id := range vcMembers {
+			inVC[id] = true
+		}
+		for n, userID := range vcMembers {
+			if verdicts[n] != "" {
+				continue
+			}
+			party := partymgr.Parties.PartyOf(guildID, userID)
+			if party == nil || !party.IsEffective() {
+				continue
+			}
+			here := 0
+			for _, id := range party.Members {
+				if inVC[id] {
+					here++
+				}
+			}
+			if here < len(party.Members) {
+				verdicts[n] = blockedRow(userID, helpers.LayoutQueuesReasonPartyIncomplete, map[string]string{"present": strconv.Itoa(here), "total": strconv.Itoa(len(party.Members))})
+			}
+		}
+	}
+
 	var eligible, blocked []string
 	for n, userID := range vcMembers {
 		if verdicts[n] != "" {

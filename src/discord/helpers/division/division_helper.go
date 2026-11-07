@@ -37,6 +37,29 @@ var (
 	All     = []Div{Premium, Pugs, Pups, Pit}
 )
 
+// tag is how a message names the division: its member role mention, or its label when no role is set.
+func (d Div) tag(roleID string) string {
+	if roleID == "" {
+		return "`" + d.Label + "`"
+	}
+	return "<@&" + roleID + ">"
+}
+
+// voters are the divisions whose members, specs and managers may vote on a vote for d: d itself and every voting division above it
+// (PUGS, PUPS, Pit), never Premium, which has no votes.
+func (d Div) voters() []Div {
+	var out []Div
+	for _, o := range All {
+		if o.Vote {
+			out = append(out, o)
+		}
+		if o.Key == d.Key {
+			break
+		}
+	}
+	return out
+}
+
 // Setting is one role or channel a division is configured with.
 type Setting struct {
 	Key    string // the value set-role / set-channel take
@@ -293,7 +316,9 @@ func NewCommand(d Div) *types.Command {
 		sub("specs", "List the "+d.Label+" specs"),
 	}
 	if d.Vote {
-		subs = append(subs, sub("vote", "Start a vote to add a player to "+d.Label, user("The player to vote on"), reason))
+		subs = append(subs,
+			sub("vote", "Start a vote to add a player to "+d.Label, user("The player to vote on"), reason),
+			sub("my-vote", "Check your votes on the open "+d.Label+" votes"))
 	}
 	// The administrator's side: where the roles and channels are, and the managers of every division.
 	setting := func(kind types.RequirementType) *discordgo.ApplicationCommandOption {
@@ -343,11 +368,13 @@ func execute(s *discordgo.Session, i *discordgo.InteractionCreate, d Div) error 
 	switch sub {
 	case "settings":
 		return reply(settingsEmbed(d, cfg))
+	case "my-vote":
+		return reply(myVotesEmbed(i.GuildID, helpers.InteractionUserID(i), d))
 	case "set-role", "set-channel", "clear":
 		return reply(configure(s, i, d, sub, opts))
 	case "vote", "add", "remove", "add-spec", "remove-spec":
 	default:
-		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.Key+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec` or `vote`."))
+		return reply(errorEmbed("Invalid Subcommand", "Use `/"+d.Key+" list`, `specs`, `managers`, `add`, `remove`, `add-spec`, `remove-spec`, `vote` or `my-vote`."))
 	}
 
 	if !IsManager(s, i, d, cfg) {
@@ -425,11 +452,11 @@ func change(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg Con
 
 	username := playerName(i.GuildID, target)
 	actor := helpers.InteractionUserID(i)
-	notice := roleNotice{div: d, target: target, username: username, by: actor, roleID: roleID, add: add, spec: spec, reason: why, moved: moved}
+	notice := roleNotice{div: d, target: target, username: username, by: actor, divRole: cfg.Member, add: add, spec: spec, reason: why, moved: moved}
 	if cfg.AlertChannel != "" {
-		_, _ = helpers.SendChannelMessage(s, i.GuildID, cfg.AlertChannel, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{notice.embed(true)}})
+		_, _ = helpers.SendChannelMessage(s, i.GuildID, cfg.AlertChannel, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{notice.embed()}})
 	}
-	return notice.embed(false)
+	return notice.embed()
 }
 
 // roleNotice is a promotion, demotion or spec change, as the alert channel and the staff member who made it see it.
@@ -438,7 +465,7 @@ type roleNotice struct {
 	target   *discordgo.User
 	username string
 	by       string
-	roleID   string
+	divRole  string // the division's member role, mentioned on the Division line
 	add      bool
 	spec     bool
 	reason   string
@@ -446,8 +473,8 @@ type roleNotice struct {
 }
 
 // embed is the notice written the way the other commands write theirs: a title, a sentence, then the details as quoted lines with the
-// player's Minecraft bust beside them. The alert (alert true) leaves out the role line; the answer to the staff member shows it.
-func (n roleNotice) embed(alert bool) *discordgo.MessageEmbed {
+// player's Minecraft bust beside them. The division is named by its role mention, in the alert and the answer alike.
+func (n roleNotice) embed() *discordgo.MessageEmbed {
 	who := fmt.Sprintf("<@%s> (**%s**)", n.target.ID, n.username)
 	title, preset, sentence := n.div.Label+" Demotion", "caution", fmt.Sprintf("%s was removed from **%s**.", who, n.div.Label)
 	switch {
@@ -461,10 +488,7 @@ func (n roleNotice) embed(alert bool) *discordgo.MessageEmbed {
 	lines := []string{
 		sentence, "",
 		fmt.Sprintf("> **Player:** %s", who),
-		fmt.Sprintf("> **Division:** `%s`", n.div.Label),
-	}
-	if !alert {
-		lines = append(lines, "> **Role:** <@&"+n.roleID+">")
+		"> **Division:** " + n.div.tag(n.divRole),
 	}
 	if len(n.moved) > 0 {
 		lines = append(lines, "> **Left:** "+strings.Join(n.moved, ", "))

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/discord/helpers/guildlink"
+	"ranked-bedwars/src/discord/helpers/partymgr"
 	"strings"
 	"time"
 
@@ -56,12 +57,31 @@ func voiceStatusText(s *discordgo.Session, guildID, channelID string, bind Queue
 	if len(roster) == 0 {
 		return "" // nobody in the channel: no status
 	}
+	inVC := make(map[string]bool, len(roster))
+	for _, id := range roster {
+		inVC[id] = true
+	}
+	cfg := Queues.PartyConfig(guildID, bind.Mode)
+	holdParties := bind.Mode.IsPartyQueueEnabled && partymgr.PartiesEnabled(cfg) && cfg.RequireAllMembersInQueue
+	// partyIncomplete: the player's party is effective but not all of it is in the channel, so the queue holds them back.
+	partyIncomplete := func(userID string) bool {
+		party := Queues.deps.Parties.PartyOf(guildID, userID)
+		if !holdParties || party == nil || !party.IsEffective() {
+			return false
+		}
+		for _, id := range party.Members {
+			if !inVC[id] {
+				return true
+			}
+		}
+		return false
+	}
 	var queued, inGame, ineligible int
 	for _, userID := range roster {
 		switch {
 		case Queues.deps.InGame(guildID, userID):
 			inGame++
-		case isDenied(channelID, userID):
+		case isDenied(channelID, userID), partyIncomplete(userID):
 			ineligible++
 		default:
 			queued++

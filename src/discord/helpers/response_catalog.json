@@ -172,12 +172,6 @@
 					"look": "success",
 					"description": "**…** received **…** starting ELO.",
 					"has_fields": true
-				},
-				{
-					"key": "claim.already-claimed",
-					"slug": "already-claimed",
-					"title": "Already Claimed",
-					"look": "error"
 				}
 			]
 		},
@@ -501,6 +495,227 @@
 					"title": "Insufficient Permissions",
 					"look": "error",
 					"description": "The bot does not have permission to send messages in that channel. Grant **Send Messages** to the bot role and try again."
+				}
+			]
+		},
+		{
+			"name": "faction",
+			"responses": [
+				{
+					"key": "faction.permission-denied",
+					"slug": "permission-denied",
+					"title": "Permission Denied",
+					"look": "error",
+					"description": "Only the player who ran this command can change pages. Run `/faction leaderboard` to see your own."
+				},
+				{
+					"key": "faction.invalid-subcommand",
+					"slug": "invalid-subcommand",
+					"title": "Invalid Subcommand",
+					"look": "error",
+					"description": "That faction subcommand does not exist. Use the slash command menu to see the available options."
+				},
+				{
+					"key": "faction.unexpected-error",
+					"slug": "unexpected-error",
+					"title": "Unexpected Error",
+					"look": "error",
+					"description": "An unexpected error occurred while processing the faction request. Please contact an administrator for assistance or try again later."
+				},
+				{
+					"key": "faction.faction-request-refused",
+					"slug": "faction-request-refused",
+					"title": "Faction Request Refused",
+					"look": "error"
+				},
+				{
+					"key": "faction.registration-required",
+					"slug": "registration-required",
+					"title": "Registration Required",
+					"look": "error",
+					"description": "You must be registered to use factions. Run `/register` first, then try again."
+				},
+				{
+					"key": "faction.not-in-a-faction",
+					"slug": "not-in-a-faction",
+					"title": "Not in a Faction",
+					"look": "error",
+					"description": "You are not in a faction. Use `/faction create` to found one or ask a faction's Founder or an Officer to invite you."
+				},
+				{
+					"key": "faction.no-faction",
+					"slug": "no-faction",
+					"title": "No Faction",
+					"look": "error",
+					"description": "\u003c@…\u003e is not in a faction."
+				},
+				{
+					"key": "faction.faction-not-found",
+					"slug": "faction-not-found",
+					"title": "Faction Not Found",
+					"look": "error",
+					"description": "No faction is named or tagged **…**. Check the spelling or use `/faction leaderboard` to browse the factions."
+				},
+				{
+					"key": "faction.player-not-found",
+					"slug": "player-not-found",
+					"title": "Player Not Found",
+					"look": "error",
+					"description": "Could not find that player. Select a user from the command options."
+				},
+				{
+					"key": "faction.invalid-target",
+					"slug": "invalid-target",
+					"title": "Invalid Target",
+					"look": "error",
+					"description": "Automated bot accounts cannot be in a faction. Select a registered player instead."
+				},
+				{
+					"key": "faction.player-not-registered",
+					"slug": "player-not-registered",
+					"title": "Player Not Registered",
+					"look": "error",
+					"description": "\u003c@…\u003e is not registered in this guild. They must run `/register` before they can join a faction."
+				},
+				{
+					"key": "faction.not-your-invitation",
+					"slug": "not-your-invitation",
+					"title": "Not Your Invitation",
+					"look": "error",
+					"description": "Only the invited player can answer this invitation."
+				},
+				{
+					"key": "faction.nothing-to-change",
+					"slug": "nothing-to-change",
+					"title": "Nothing to Change",
+					"look": "error",
+					"description": "Fill in at least one option: `name`, `tag`, `color`, `icon` or `symbol`."
+				},
+				{
+					"key": "faction.faction-founded",
+					"slug": "faction-founded",
+					"title": "Faction Founded",
+					"look": "success",
+					"description": "**…** `[…]` is now a faction, and you are its **Founder**.\n\n\u003e **Seats:** … (… Officer)\n\u003e **Level:** …\n\nInvite players with `/faction invite`. Every ranked win by a member earns the faction trophies."
+				},
+				{
+					"key": "faction.invite-sent",
+					"slug": "invite-sent",
+					"title": "Invite Sent",
+					"look": "success",
+					"description": "Invited \u003c@…\u003e to **…**. They can accept with the buttons below the invitation or with `/faction accept`."
+				},
+				{
+					"key": "faction.invite-saved",
+					"slug": "invite-saved",
+					"title": "Invite Saved",
+					"look": "caution",
+					"description": "Invited \u003c@…\u003e to **…**, but the invitation message could not be posted here. Ask them to run `/faction accept`."
+				},
+				{
+					"key": "faction.faction-invitation",
+					"slug": "faction-invitation",
+					"title": "Faction Invitation",
+					"look": "info",
+					"description": "\u003c@…\u003e invited you to join **…**.\n\n\u003e **Level:** …\n\u003e **Members:** …/…\n\u003e **Founder:** \u003c@…\u003e\n\u003e **Expires:** \u003ct:…:R\u003e"
+				},
+				{
+					"key": "faction.no-invitations",
+					"slug": "no-invitations",
+					"title": "No Invitations",
+					"look": "info",
+					"description": "You have no faction invitations right now. Ask a faction's Founder or an Officer to invite you."
+				},
+				{
+					"key": "faction.faction-invitations",
+					"slug": "faction-invitations",
+					"title": "Faction Invitations",
+					"look": "info",
+					"description": "Accept one with `/faction accept`, or decline it with `/faction decline`.\n\n…"
+				},
+				{
+					"key": "faction.faction-joined",
+					"slug": "faction-joined",
+					"title": "Faction Joined",
+					"look": "success",
+					"description": "You joined **…**!\n\n\u003e **Members:** …/…\n\u003e **Level:** …\n\u003e **Founder:** \u003c@…\u003e\n\nEvery ranked win you earn adds trophies to the faction."
+				},
+				{
+					"key": "faction.invitation-declined",
+					"slug": "invitation-declined",
+					"title": "Invitation Declined",
+					"look": "info",
+					"description": "You declined the faction invitation. If you change your mind, ask for a new one."
+				},
+				{
+					"key": "faction.faction-left",
+					"slug": "faction-left",
+					"title": "Faction Left",
+					"look": "info",
+					"description": "You left **…**. You can create a faction with `/faction create` or accept another invitation."
+				},
+				{
+					"key": "faction.member-removed",
+					"slug": "member-removed",
+					"title": "Member Removed",
+					"look": "success",
+					"description": "Removed \u003c@…\u003e from **…**."
+				},
+				{
+					"key": "faction.member-promoted",
+					"slug": "member-promoted",
+					"title": "Member Promoted",
+					"look": "success",
+					"description": "\u003c@…\u003e is now an **Officer** of **…**. They can invite players and remove members."
+				},
+				{
+					"key": "faction.officer-demoted",
+					"slug": "officer-demoted",
+					"title": "Officer Demoted",
+					"look": "success",
+					"description": "\u003c@…\u003e is now a **Member** of **…**."
+				},
+				{
+					"key": "faction.ownership-transferred",
+					"slug": "ownership-transferred",
+					"title": "Ownership Transferred",
+					"look": "success",
+					"description": "\u003c@…\u003e is now the **Founder** of **…**. You stay in the faction as an Officer, or a Member when no Officer seat is free."
+				},
+				{
+					"key": "faction.confirm-disband",
+					"slug": "confirm-disband",
+					"title": "Confirm Disband",
+					"look": "caution",
+					"description": "Disbanding **…** removes every member and erases its trophies and badges. This cannot be undone. Run `/faction disband` again with `confirm` set to true."
+				},
+				{
+					"key": "faction.faction-disbanded",
+					"slug": "faction-disbanded",
+					"title": "Faction Disbanded",
+					"look": "info",
+					"description": "**…** has been disbanded. You can create a new faction with `/faction create`."
+				},
+				{
+					"key": "faction.faction-updated",
+					"slug": "faction-updated",
+					"title": "Faction Updated",
+					"look": "success",
+					"description": "Updated the … of **…**. Members' names and the faction role are refreshing now.\n\n\u003e **Tag:** …"
+				},
+				{
+					"key": "faction.faction-leaderboard",
+					"slug": "faction-leaderboard",
+					"title": "Faction Leaderboard · …",
+					"look": "success",
+					"description": "No factions exist yet. Be the first with `/faction create`."
+				},
+				{
+					"key": "faction.page-empty",
+					"slug": "page-empty",
+					"title": "Page Empty",
+					"look": "error",
+					"description": "There are no leaderboard entries on page `…`. Try a lower page number."
 				}
 			]
 		},
@@ -951,6 +1166,46 @@
 			]
 		},
 		{
+			"name": "giveaway",
+			"responses": [
+				{
+					"key": "giveaway.giveaway-posted",
+					"slug": "giveaway-posted",
+					"title": "Giveaway posted",
+					"look": "success",
+					"description": "**#… · …** is up in \u003c#…\u003e and ends \u003ct:…:R\u003e.\n\nManage it with … (draw now), … (new winners), … and …. Players can check where they stand with …."
+				},
+				{
+					"key": "giveaway.giveaway-ended",
+					"slug": "giveaway-ended",
+					"title": "Giveaway ended",
+					"look": "success",
+					"description": "Giveaway **#…** was drawn. …"
+				},
+				{
+					"key": "giveaway.new-winners-drawn",
+					"slug": "new-winners-drawn",
+					"title": "New winners drawn",
+					"look": "success",
+					"description": "Giveaway **#…**: … They were announced under the giveaway's post."
+				},
+				{
+					"key": "giveaway.giveaway-cancelled",
+					"slug": "giveaway-cancelled",
+					"title": "Giveaway cancelled",
+					"look": "success",
+					"description": "Giveaway **#…** is cancelled and its post is marked."
+				},
+				{
+					"key": "giveaway.giveaways",
+					"slug": "giveaways",
+					"title": "Giveaways",
+					"look": "info",
+					"description": "There are no giveaways yet. Make one with … or on the dashboard."
+				}
+			]
+		},
+		{
 			"name": "host",
 			"responses": [
 				{
@@ -1020,6 +1275,13 @@
 		{
 			"name": "leaderboard",
 			"responses": [
+				{
+					"key": "leaderboard.permission-denied",
+					"slug": "permission-denied",
+					"title": "Permission Denied",
+					"look": "error",
+					"description": "Only the player who ran this command can change pages. Run `/leaderboard` to see your own."
+				},
 				{
 					"key": "leaderboard.unexpected-error",
 					"slug": "unexpected-error",
@@ -1519,7 +1781,7 @@
 					"slug": "party-created",
 					"title": "Party Created",
 					"look": "success",
-					"description": "Your party is ready! Invite players with `/party invite` to build your team.\n\n\u003e **Leader:** You\n\u003e **Members:** 1/4\n\u003e **Invites:** Open\n\u003e **Disbands After:** … minutes of inactivity"
+					"description": "Your party is ready! Invite players with `/party invite` to build your team.\n\n\u003e **Leader:** You\n\u003e **Members:** 1/…\n\u003e **Invites:** Open\n\u003e **Disbands After:** … minutes of inactivity"
 				},
 				{
 					"key": "party.party-invitation",
@@ -1761,18 +2023,6 @@
 			]
 		},
 		{
-			"name": "premium",
-			"responses": [
-				{
-					"key": "premium.premium-features",
-					"slug": "premium-features",
-					"title": "Premium Features",
-					"look": "info",
-					"description": "Premium management features are currently under development. Check back soon for subscription benefits, perk overrides, and custom styling options."
-				}
-			]
-		},
-		{
 			"name": "profile",
 			"responses": [
 				{
@@ -1809,32 +2059,6 @@
 					"title": "Player Not Registered",
 					"look": "error",
 					"description": "That player is not registered in this guild. They must run `/register` before a profile is available."
-				}
-			]
-		},
-		{
-			"name": "pugs",
-			"responses": [
-				{
-					"key": "pugs.not-yet-implemented",
-					"slug": "not-yet-implemented",
-					"title": "Not Yet Implemented",
-					"look": "error",
-					"description": "The PUGS division list requires additional infrastructure (snapshot system, role management) and is not available yet."
-				},
-				{
-					"key": "pugs.invalid-target",
-					"slug": "invalid-target",
-					"title": "Invalid Target",
-					"look": "error",
-					"description": "You must specify a real player to vote for. Select a member from the command options."
-				},
-				{
-					"key": "pugs.invalid-subcommand",
-					"slug": "invalid-subcommand",
-					"title": "Invalid Subcommand",
-					"look": "error",
-					"description": "Use `/pugs list` or `/pugs vote`."
 				}
 			]
 		},
@@ -2668,6 +2892,39 @@
 					"slug": "screenshare-history",
 					"title": "Screenshare History — …",
 					"look": "default"
+				}
+			]
+		},
+		{
+			"name": "staff",
+			"responses": [
+				{
+					"key": "staff.staff-role-not-set",
+					"slug": "staff-role-not-set",
+					"title": "Staff Role Not Set",
+					"look": "error",
+					"description": "This server has not chosen its staff role yet, so there is no staff list to show."
+				},
+				{
+					"key": "staff.could-not-load-staff",
+					"slug": "could-not-load-staff",
+					"title": "Could Not Load Staff",
+					"look": "error",
+					"description": "The server's member list is not loaded yet. Try again in a moment."
+				},
+				{
+					"key": "staff.no-staff-found",
+					"slug": "no-staff-found",
+					"title": "No Staff Found",
+					"look": "info",
+					"description": "Nobody in the member list holds the staff role."
+				},
+				{
+					"key": "staff.staff",
+					"slug": "staff",
+					"title": "Staff",
+					"look": "success",
+					"has_fields": true
 				}
 			]
 		},

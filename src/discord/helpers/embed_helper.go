@@ -183,7 +183,8 @@ var (
 	LayoutQueuesReasonInGame  = DefineLayout("queues.reason_in_game", "Blocked: already in a game", "currently in a game")
 	LayoutQueuesReasonNoReg   = DefineLayout("queues.reason_unregistered", "Blocked: not registered", "not registered")
 	LayoutQueuesReasonBanned  = DefineLayout("queues.reason_restricted", "Blocked: has a restriction", "has active restriction")
-	LayoutQueuesReadyTitle    = DefineLayout("queues.ready_title", "Ready heading", "✅ Ready to Start")
+	LayoutQueuesReasonPartyIncomplete = DefineLayout("queues.reason_party_incomplete", "Blocked: party not fully in the channel", "party incomplete (`{present}/{total}` in VC)", "present", "total")
+	LayoutQueuesReadyTitle    =DefineLayout("queues.ready_title", "Ready heading", "✅ Ready to Start")
 	LayoutQueuesReadyText     = DefineLayout("queues.ready_text", "Ready text", "`{eligible}/{slots}` eligible players present", "eligible", "slots")
 
 	// /bots

@@ -12,6 +12,7 @@ import (
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/banner"
+	"ranked-bedwars/src/discord/helpers/factionmgr"
 	"ranked-bedwars/src/types"
 )
 
@@ -136,6 +137,9 @@ func sendStatsBanner(s *discordgo.Session, i *discordgo.InteractionCreate, targe
 
 	vars := banner.GuildVars(s, i.GuildID, invoker)
 	for k, v := range banner.StatsVars(target, config, st, position, season, seasonID) {
+		vars[k] = v
+	}
+	for k, v := range factionmgr.BannerVars(i.GuildID, target.ID) {
 		vars[k] = v
 	}
 	img, err := banner.RenderBanner(chosen, vars)

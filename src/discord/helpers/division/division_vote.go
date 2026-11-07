@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"sort"
 	"strings"
 	"sync"
 
@@ -38,6 +39,7 @@ type vote struct {
 	targetID  string
 	name      string // the target's username
 	nominator string
+	divRole   string // the division's member role, mentioned on the Division line (loaded again after a restart)
 	reason    string
 	eligible  map[string]string              // who may vote (id -> name), fixed when the vote starts
 	votes     map[string]bool                // voter -> approves
@@ -81,7 +83,6 @@ func (v *vote) link() string {
 
 // embed is the vote message while open (status "") and its result once a manager closed it ("approved", "denied" or "tied", by <@id>).
 func (v *vote) embed(status, by string) *discordgo.MessageEmbed {
-	yes, no := v.counts()
 	preset, title, result := "default", v.div.Label+" Vote", ""
 	switch status {
 	case "approved":
@@ -91,15 +92,12 @@ func (v *vote) embed(status, by string) *discordgo.MessageEmbed {
 	case "tied":
 		preset, result = "info", fmt.Sprintf("Closed by <@%s>: **Tied**.", by)
 	}
-	desc := fmt.Sprintf("<@%s> (**%s**) was nominated for **%s**.\n\n> **Nominated by:** <@%s>\n> **Division:** `%s`\n> **Reason:** %s\n\nPress Approve or Deny below. You can change your vote until a manager closes it.",
-		v.targetID, v.name, v.div.Label, v.nominator, v.div.Label, v.reason)
+	desc := fmt.Sprintf("<@%s> (**%s**) was nominated for **%s**.\n\n> **Nominated by:** <@%s>\n> **Division:** %s\n> **Reason:** %s\n\nPress Approve or Deny below. You can change your vote until a manager closes it.",
+		v.targetID, v.name, v.div.Label, v.nominator, v.div.tag(v.divRole), v.reason)
 	if result != "" {
 		desc += "\n\n" + result
 	}
-	fields := append([]*discordgo.MessageEmbedField{}, v.stats...)
-	fields = append(fields,
-		&discordgo.MessageEmbedField{Name: "Approve", Value: fmt.Sprint(yes), Inline: true},
-		&discordgo.MessageEmbedField{Name: "Deny", Value: fmt.Sprint(no), Inline: true})
+	fields := append([]*discordgo.MessageEmbedField{}, v.stats...) // the counts are on the buttons
 	opts := types.PresetOptions{Title: title, Description: desc, Fields: fields, Thumbnail: helpers.MinecraftBustAvatarURL(v.name)}
 	if v.image {
 		opts.Image = "attachment://stats.png"
@@ -201,27 +199,40 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	if err != nil {
 		return unexpectedEmbed()
 	}
+	// The division's own members, specs and managers vote, and so do those of the voting divisions above it.
 	eligible := map[string]string{}
-	for _, roleID := range []string{cfg.Member, cfg.Spec, cfg.Manager} {
-		if roleID == "" {
-			continue
+	for _, vd := range d.voters() {
+		vc := cfg
+		if vd.Key != d.Key {
+			if vc, err = Load(i.GuildID, vd); err != nil {
+				return unexpectedEmbed()
+			}
 		}
-		for _, m := range holders(members, roleID) {
-			if id := m.User.ID; id != target.ID {
-				eligible[id] = nameOf(m)
+		for _, roleID := range []string{vc.Member, vc.Spec, vc.Manager} {
+			if roleID == "" {
+				continue
+			}
+			for _, m := range holders(members, roleID) {
+				if id := m.User.ID; id != target.ID {
+					eligible[id] = nameOf(m)
+				}
 			}
 		}
 	}
 	if len(eligible) == 0 {
-		return errorEmbed("No Voters", "Nobody holds the "+d.Label+" roles, so nobody could vote.")
+		return errorEmbed("No Voters", "Nobody holds the "+d.Label+" roles (or those of a higher division), so nobody could vote.")
 	}
 
 	v := &vote{
-		div: d, guildID: i.GuildID, channelID: cfg.VoteChannel, logChan: cfg.LogChannel, targetID: target.ID, name: name,
+		div: d, divRole: cfg.Member, guildID: i.GuildID, channelID: cfg.VoteChannel, logChan: cfg.LogChannel, targetID: target.ID, name: name,
 		nominator: helpers.InteractionUserID(i), reason: why, eligible: eligible, votes: map[string]bool{},
 		image: png != nil, stats: summary,
 	}
 	msg := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{v.embed("", "")}, Components: v.buttons()}
+	if cfg.Member != "" { // ping the division so its members come and vote
+		msg.Content = "<@&" + cfg.Member + ">"
+		msg.AllowedMentions = &discordgo.MessageAllowedMentions{Roles: []string{cfg.Member}}
+	}
 	if png != nil {
 		msg.Files = []*discordgo.File{{Name: "stats.png", ContentType: "image/png", Reader: bytes.NewReader(png)}}
 	}
@@ -245,7 +256,7 @@ func startVote(s *discordgo.Session, i *discordgo.InteractionCreate, d Div, cfg 
 	v.save("", "")
 	return helpers.Preset("success", types.PresetOptions{
 		Title:       d.Label + " Vote Started",
-		Description: fmt.Sprintf("The %s vote for <@%s> (**%s**) is open.\n\n> **Player:** <@%s>\n> **Division:** `%s`\n> **Channel:** <#%s>\n> **Vote:** %s", d.Label, target.ID, name, target.ID, d.Label, cfg.VoteChannel, v.link()),
+		Description: fmt.Sprintf("The %s vote for <@%s> (**%s**) is open.\n\n> **Player:** <@%s>\n> **Division:** %s\n> **Channel:** <#%s>\n> **Vote:** %s", d.Label, target.ID, name, target.ID, d.tag(cfg.Member), cfg.VoteChannel, v.link()),
 		Thumbnail:   helpers.MinecraftBustAvatarURL(name),
 	})
 }
@@ -290,6 +301,11 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 	uid := helpers.InteractionUserID(i)
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	if v.divRole == "" { // a vote from before a restart
+		if c, err := Load(v.guildID, v.div); err == nil {
+			v.divRole = c.Member
+		}
+	}
 	if v.closed {
 		say("This vote is already over.")
 		return true
@@ -315,7 +331,7 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 		case v.eligible[uid] != "":
 			say(fmt.Sprintf("You have not voted yet on the %s vote for <@%s>.", v.div.Label, v.targetID))
 		default:
-			say(fmt.Sprintf("You cannot vote on the %s vote for <@%s>: only %s members, specs and managers can.", v.div.Label, v.targetID, v.div.Label))
+			say(fmt.Sprintf("You cannot vote on the %s vote for <@%s>: only %s members, specs and managers (and those of higher divisions) can.", v.div.Label, v.targetID, v.div.Label))
 		}
 		return true
 
@@ -331,7 +347,7 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 
 	case "yes", "no":
 		if v.eligible[uid] == "" {
-			say(fmt.Sprintf("Only %s members, specs and managers can vote here (and not on their own nomination).", v.div.Label))
+			say(fmt.Sprintf("Only %s members, specs and managers (and those of higher divisions) can vote here, and not on their own nomination.", v.div.Label))
 			return true
 		}
 		v.votes[uid] = action == "yes"
@@ -340,6 +356,38 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 		return true
 	}
 	return false
+}
+
+// myVotesEmbed is the answer to /<division> my-vote, open to everyone: each open vote of the division with what the player chose on it
+// and where it stands.
+func myVotesEmbed(guildID, userID string, d Div) *discordgo.MessageEmbed {
+	loadOpen(guildID)
+	open.mu.Lock()
+	var mine []*vote
+	for _, v := range open.by {
+		if v.guildID == guildID && v.div.Key == d.Key {
+			mine = append(mine, v)
+		}
+	}
+	open.mu.Unlock()
+	if len(mine) == 0 {
+		return helpers.Preset("info", types.PresetOptions{Title: d.Label + " Votes", Description: "There are no open " + d.Label + " votes right now.", Thumbnail: helpers.ThumbPlayers})
+	}
+	sort.Slice(mine, func(a, b int) bool { return mine[a].messageID < mine[b].messageID })
+	var lines []string
+	for _, v := range mine {
+		v.mu.Lock()
+		yes, no := v.counts()
+		choice := "can't vote"
+		if approves, voted := v.votes[userID]; voted {
+			choice = map[bool]string{true: "you **approved**", false: "you **denied**"}[approves]
+		} else if v.eligible[userID] != "" {
+			choice = "not voted yet"
+		}
+		lines = append(lines, fmt.Sprintf("> <@%s> · %s · ✅ %d · ❌ %d · %s", v.targetID, choice, yes, no, v.link()))
+		v.mu.Unlock()
+	}
+	return helpers.Preset("info", types.PresetOptions{Title: "Your " + d.Label + " Votes", Description: strings.Join(lines, "\n"), Thumbnail: helpers.ThumbPlayers})
 }
 
 // finish ends the vote (the caller holds v.mu): the message shows the result, and the result and who voted go to the log channel.

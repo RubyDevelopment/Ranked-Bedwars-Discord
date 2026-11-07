@@ -317,6 +317,11 @@ var CallRequirements = []Requirement{{Type: ReqChannel, Key: CallAlertsKey, Opti
 // PartyRequirements is the optional alerts channel of /party.
 var PartyRequirements = []Requirement{{Type: ReqChannel, Key: PartyAlertsKey, Optional: true}}
 
+// FactionAlertsKey is the channel factions announce their trophies and level-ups in; FactionRequirements is the optional slot of it.
+const FactionAlertsKey = "faction_alerts"
+
+var FactionRequirements = []Requirement{{Type: ReqChannel, Key: FactionAlertsKey, Optional: true}}
+
 // StrikeAlertRequirements is the strike alerts channel, for the commands that show strikes.
 var StrikeAlertRequirements = []Requirement{{Type: ReqChannel, Key: StrikeAlertsKey, Optional: true}}
 

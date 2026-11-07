@@ -972,6 +972,12 @@ const maxNicknameLength = 32
 // whatever room is left (cut short, or left out when there is none). Only a username too long on its own is ever cut: the ELO goes first,
 // then the end of the username.
 func FormatPlayerDisplayName(elo int, username string, nickname *string, showElo bool) string {
+	return FormatPlayerDisplayNameTagged(elo, username, nickname, showElo, "")
+}
+
+// FormatPlayerDisplayNameTagged is FormatPlayerDisplayName with the player's faction tag after the username, "[190] Player [VOID]". The tag
+// is left out when it does not fit beside the ELO and the username, which always come first.
+func FormatPlayerDisplayNameTagged(elo int, username string, nickname *string, showElo bool, factionTag string) string {
 	prefix := ""
 	if showElo {
 		prefix = fmt.Sprintf("[%d] ", elo)
@@ -984,6 +990,9 @@ func FormatPlayerDisplayName(elo int, username string, nickname *string, showElo
 		}
 	}
 	base := prefix + string(name)
+	if tag := strings.TrimSpace(factionTag); tag != "" && len([]rune(base))+1+len([]rune(tag)) <= maxNicknameLength {
+		base += " " + tag
+	}
 
 	nick := []rune{}
 	if nickname != nil {
@@ -1072,7 +1081,11 @@ func SyncRegisteredPlayerProfile(
 		}
 	}
 
-	expectedNick := FormatPlayerDisplayName(elo, config.Username, config.Nickname, config.IsEloVisible)
+	factionTag := ""
+	if brief, err := database.FactionBriefFor(guildID, discordUserID); err == nil && brief != nil {
+		factionTag = brief.DisplayTag
+	}
+	expectedNick := FormatPlayerDisplayNameTagged(elo, config.Username, config.Nickname, config.IsEloVisible, factionTag)
 	if member != nil && member.Nick != expectedNick {
 		if err := SetMemberNickname(s, guildID, discordUserID, expectedNick); err == nil {
 			actions = append(actions, fmt.Sprintf("Updated server nickname to **%s**.", expectedNick))

@@ -1472,6 +1472,7 @@ func replyPrefixEmbed(s *discordgo.Session, m *discordgo.MessageCreate, emb *dis
 	if s == nil || m == nil || emb == nil {
 		return
 	}
+	WithGuildFooterIconForGuild(s, m.GuildID, emb)
 	_, _ = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{emb},
 		Reference: &discordgo.MessageReference{
