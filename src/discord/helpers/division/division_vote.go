@@ -315,7 +315,7 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 		if status == "" {
 			components = v.buttons()
 		}
-		respond(discordgo.InteractionResponseUpdateMessage, &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{v.embed(status, by)}, Components: components})
+		respond(discordgo.InteractionResponseUpdateMessage, &discordgo.InteractionResponseData{Content: i.Message.Content, Embeds: []*discordgo.MessageEmbed{v.embed(status, by)}, Components: components})
 	}
 
 	switch action {
