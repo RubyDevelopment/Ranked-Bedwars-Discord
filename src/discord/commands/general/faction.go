@@ -72,6 +72,13 @@ var FactionCommand = &types.Command{
 				{Name: "faction", Description: "A faction's name or tag", Type: discordgo.ApplicationCommandOptionString},
 				{Name: "user", Description: "Show the faction this player is in (default: yours)", Type: discordgo.ApplicationCommandOptionUser},
 			}},
+			{Name: "level", Description: "Your faction's level and rewards, or what a level takes and unlocks", Type: discordgo.ApplicationCommandOptionSubCommand, Options: []*discordgo.ApplicationCommandOption{
+				{Name: "level", Description: "Show this level of the ruleset", Type: discordgo.ApplicationCommandOptionInteger, MinValue: ptrToFloat64(1)},
+				{Name: "faction", Description: "A faction's name or tag (default: yours)", Type: discordgo.ApplicationCommandOptionString},
+			}},
+			{Name: "levels", Description: "Every faction level with its trophies, seats and rewards", Type: discordgo.ApplicationCommandOptionSubCommand, Options: []*discordgo.ApplicationCommandOption{
+				{Name: "page", Description: "The page to display", Type: discordgo.ApplicationCommandOptionInteger, MinValue: ptrToFloat64(1)},
+			}},
 			{Name: "leaderboard", Description: "View the lifetime or seasonal faction leaderboard", Type: discordgo.ApplicationCommandOptionSubCommand, Options: factionBoardOptions()},
 			{Name: "invite", Description: "Invite a player to your faction", Type: discordgo.ApplicationCommandOptionSubCommand, Options: []*discordgo.ApplicationCommandOption{factionUserOption("Player to invite")}},
 			{Name: "invites", Description: "See the faction invitations waiting for you", Type: discordgo.ApplicationCommandOptionSubCommand},
@@ -134,6 +141,10 @@ func executeFactionCommand(s *discordgo.Session, i *discordgo.InteractionCreate)
 		result = factionCreate(s, i, guildID, userID, options)
 	case "info":
 		result = factionInfo(s, i, guildID, userID, options, helpers.SubOptionString(options, "faction"), helpers.SubOptionUser(s, options, "user"))
+	case "level":
+		result = factionLevel(s, i, guildID, userID, options)
+	case "levels":
+		result = factionLevels(s, i, guildID, userID, options)
 	case "leaderboard":
 		result = factionLeaderboard(s, i, guildID, helpers.SubOptionString(options, "board"), max(1, helpers.SubOptionInt(options, "page")))
 	case "invite":

@@ -40,7 +40,14 @@ type FactionConfig struct {
 	Trophies           struct {
 		PerWin   int `json:"per_win"`
 		MvpBonus int `json:"mvp_bonus"`
+		PerLoss  int `json:"per_loss"`
 	} `json:"trophies"`
+	Levels   []int `json:"levels"` // Levels[n] is the lifetime trophies needed for level n+1
+	MaxSlots int   `json:"max_slots"`
+	Prestige []struct {
+		Level int    `json:"level"`
+		Name  string `json:"name"`
+	} `json:"prestige"`
 	Slots []struct {
 		Level    int `json:"level"`
 		Slots    int `json:"slots"`
