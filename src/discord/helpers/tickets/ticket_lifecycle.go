@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 	"ranked-bedwars/src/database"
-	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers/storage"
 	"ranked-bedwars/src/types"
 	"regexp"
@@ -27,6 +27,11 @@ import (
 // OpenTicket creates a private thread or text channel for the member, records the ticket,
 // posts the welcome message and logs the new ticket.
 func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner *discordgo.User, fallbackChannelID string) (*types.Ticket, error) {
+	return OpenTicketWith(s, guildID, panelID, categoryID, owner, fallbackChannelID, OpenOptions{})
+}
+
+// OpenTicketWith is OpenTicket with the extras of OpenOptions.
+func OpenTicketWith(s *discordgo.Session, guildID, panelID, categoryID string, owner *discordgo.User, fallbackChannelID string, opts OpenOptions) (*types.Ticket, error) {
 	ip, err := Tickets.Load(guildID)
 	if err != nil {
 		return nil, err
@@ -39,7 +44,8 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 	if category == nil {
 		return nil, ErrTicketCategoryNotFound
 	}
-	if entry := TicketBlacklistEntryFor(ip, owner.ID); entry != nil {
+	// The support blacklist keeps people from asking for help; a system ticket (screenshare) is opened on them, not by them.
+	if entry := TicketBlacklistEntryFor(ip, owner.ID); entry != nil && !isSystemPanel(panelID) {
 		if entry.Reason != "" {
 			return nil, fmt.Errorf("you cannot open tickets: %s", entry.Reason)
 		}
@@ -127,6 +133,16 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 			},
 		}
 
+		for _, id := range opts.ExtraMembers {
+			if id != "" && id != owner.ID {
+				overwrites = append(overwrites, &discordgo.PermissionOverwrite{
+					Type:  discordgo.PermissionOverwriteTypeMember,
+					ID:    id,
+					Allow: overwrites[1].Allow,
+				})
+			}
+		}
+
 		channel, err := s.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
 			Name:                 ticket.ThreadName,
 			Type:                 discordgo.ChannelTypeGuildText,
@@ -163,6 +179,11 @@ func OpenTicket(s *discordgo.Session, guildID, panelID, categoryID string, owner
 		if err := s.ThreadMemberAdd(thread.ID, owner.ID); err != nil {
 			_, _ = s.ChannelDelete(thread.ID)
 			return nil, err
+		}
+		for _, id := range opts.ExtraMembers {
+			if id != "" && id != owner.ID {
+				_ = s.ThreadMemberAdd(thread.ID, id)
+			}
 		}
 	}
 
@@ -364,6 +385,9 @@ func setTicketClaim(s *discordgo.Session, guildID, threadID, staffID string, cla
 	}
 
 	RefreshTicketWelcome(s, guildID, ticket, panel)
+	if claim {
+		runClaimed(s, guildID, ticket)
+	}
 
 	title, color := "Ticket Claimed", helpers.ColorDefault
 	description := fmt.Sprintf("<@%s> claimed this ticket.", staffID)
@@ -447,6 +471,7 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 		return nil, err
 	}
 	removeTicketActivityChannel(guildID, threadID)
+	runClosed(s, guildID, ticket)
 
 	settings := types.TicketSettings{}
 	if panel != nil && panel.Ticket != nil {
@@ -534,11 +559,13 @@ func isUnknownChannel(err error) bool {
 // closeMissingTicket closes a ticket whose channel was deleted: it moves to the history as closed (by "system", with the reason),
 // and stops being tracked. There is no conversation left to build a transcript from or to tell anybody in, so that is all it does.
 func closeMissingTicket(guildID, threadID string) {
+	var closed *types.Ticket
 	err := Tickets.Update(sdk.SystemActor, guildID, func(ip *types.InteractivePanels) error {
 		found := ip.Tickets.Open[threadID]
 		if found == nil {
 			return nil
 		}
+		closed = found
 		found.Status = types.TicketStatusClosed
 		found.ClosedAt = time.Now().Unix()
 		found.ClosedBy = "system"
@@ -553,6 +580,9 @@ func closeMissingTicket(guildID, threadID string) {
 		return
 	}
 	log.Printf("[Tickets] closed ticket %s in guild %s: its channel no longer exists", threadID, guildID)
+	if closed != nil {
+		runClosed(nil, guildID, copyTicket(closed))
+	}
 }
 
 func ticketLastActivity(ticket *types.Ticket) int64 {

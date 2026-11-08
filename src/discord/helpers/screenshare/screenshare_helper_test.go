@@ -4,7 +4,34 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+
+	"ranked-bedwars/src/types"
 )
+
+// The ticket's welcome fields come from {ss_*} placeholders: empty ones must be present (so no raw {…} shows) and image evidence
+// must go to the image, not to a link field.
+func TestTicketPlaceholders(t *testing.T) {
+	if placeholderVars(&types.Ticket{PanelID: "other"}) != nil {
+		t.Error("other tickets must not get screenshare placeholders")
+	}
+	ticket := &types.Ticket{PanelID: PanelID, ThreadID: "chan-1", OwnerID: "u1", Status: types.TicketStatusOpen}
+	if v := placeholderVars(ticket); v["ss_reason"] != "" || v["ss_player"] != "<@u1>" {
+		t.Errorf("without a request got %v", v)
+	}
+	Requests.guilds["g"] = &guildState{reqs: map[int]*types.ScreenshareRequest{1: {
+		ID: 1, Kind: types.ScreenshareKindTicket, ChannelID: "chan-1", TargetID: "u1", TargetName: "Steve", RequesterID: "u2",
+		Reason: "aim", EvidenceURL: "https://cdn/x.png", EvidenceImage: true, ExpiresAt: 99,
+	}}}
+	defer delete(Requests.guilds, "g")
+	v := placeholderVars(ticket)
+	if v["ss_image"] != "https://cdn/x.png" || v["ss_evidence"] != "" || v["ss_reporter"] != "<@u2>" || v["ss_player"] != "<@u1> (`Steve`)" {
+		t.Errorf("with a request got %v", v)
+	}
+	ticket.Status, ticket.ClaimedBy = types.TicketStatusClaimed, "u3"
+	if v := placeholderVars(ticket); v["ss_claimed"] != "<@u3>" {
+		t.Errorf("claimed ticket got %v", v)
+	}
+}
 
 func TestEvidenceAndTimestamps(t *testing.T) {
 	for link, want := range map[string]string{"https://medal.tv/clips/abc": "https://medal.tv/clips/abc", "<https://youtu.be/x>": "https://youtu.be/x", "not a link": "", "ftp://a.b/c": "", "https://localhost": ""} {

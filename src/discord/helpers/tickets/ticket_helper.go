@@ -180,7 +180,7 @@ func (st *TicketStore) update(actorID, guildID string, history int, fn func(ip *
 		return err
 	}
 	if snapshot.panelsChanged(ip) {
-		return db.GuildConfig.SaveField(actorID, guildID, interactivePanelsField, ip)
+		return db.GuildConfig.SaveField(actorID, guildID, interactivePanelsField, storedPanels(ip))
 	}
 	return nil
 }
@@ -203,6 +203,7 @@ func loadInteractivePanels(guildID string, history int) (*types.InteractivePanel
 	}
 	ip.Tickets = state
 	normalizeInteractivePanels(ip)
+	addSystemPanels(guildID, ip) // after normalizing: they carry their own settings, and are never saved
 	return ip, nil
 }
 

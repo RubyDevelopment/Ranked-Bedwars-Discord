@@ -50,7 +50,10 @@ func TicketWelcomeMessage(ticket *types.Ticket, panel *types.InteractivePanel, c
 		Color:       color,
 		Fields:      fields,
 		Footer:      &discordgo.MessageEmbedFooter{Text: footer},
-		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: welcome.ThumbnailURL},
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: TicketPlaceholders(welcome.ThumbnailURL, ticket, panel, category, guildName)},
+	}
+	if image := strings.TrimSpace(TicketPlaceholders(welcome.ImageURL, ticket, panel, category, guildName)); image != "" {
+		embed.Image = &discordgo.MessageEmbedImage{URL: image}
 	}
 
 	return embed

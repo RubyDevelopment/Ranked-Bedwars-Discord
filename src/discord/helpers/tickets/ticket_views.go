@@ -23,7 +23,13 @@ func TicketPlaceholders(text string, ticket *types.Ticket, panel *types.Interact
 		}
 		staff = strings.Join(mentions, " ")
 	}
-	return strings.NewReplacer(
+	pairs := []string{}
+	if PlaceholderVars != nil {
+		for name, value := range PlaceholderVars(ticket) {
+			pairs = append(pairs, "{"+name+"}", value)
+		}
+	}
+	return strings.NewReplacer(append(pairs,
 		"{user}", "<@"+ticket.OwnerID+">",
 		"{username}", ticket.OwnerName,
 		"{category}", ticket.CategoryLabel,
@@ -33,7 +39,7 @@ func TicketPlaceholders(text string, ticket *types.Ticket, panel *types.Interact
 		"{server}", guildName,
 		"{created}", fmt.Sprintf("<t:%d:R>", ticket.CreatedAt),
 		"{status}", TicketStatusLabel(ticket),
-	).Replace(text)
+	)...).Replace(text)
 }
 
 // TicketPanelMessage renders the published panel members open tickets from.

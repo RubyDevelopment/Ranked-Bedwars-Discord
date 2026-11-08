@@ -150,7 +150,7 @@ func matchTicketCategory(ip *types.InteractivePanels, channel *discordgo.Channel
 	var bestPanel *types.InteractivePanel
 	var bestCategory *types.TicketCategory
 	for _, panel := range ip.Panels {
-		if panel == nil || panel.Ticket == nil {
+		if panel == nil || panel.Ticket == nil || isSystemPanel(panel.ID) {
 			continue
 		}
 		for _, category := range panel.Ticket.Categories {

@@ -21,15 +21,17 @@ import (
 	guildmodel "github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models/guild"
 
 	"ranked-bedwars/src/database"
-	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers"
-	"ranked-bedwars/src/discord/helpers/punish"
+	"ranked-bedwars/src/discord/helpers/guildlink"
 	"ranked-bedwars/src/discord/helpers/tickets"
 	"ranked-bedwars/src/types"
 )
 
-// Screenshare tickets: a private channel per request where a screensharer works with the player, plus the review step for
-// players with the SS Restricted role. The commands (screenshare, ssclose, sshistory) and the buttons share this file.
+// Screenshare tickets: a ticket of the ticket system (the built-in "screenshare" ticket type, which has no panel) per request,
+// where a screensharer works with the player, plus the review step for players who already hold the SS Restricted role.
+// Claiming, closing, the transcript and the log come from the ticket system. This file adds what is specific to a screenshare: the
+// request's details, the SS Restricted (Frozen) role the player holds while the ticket is open, and the expiry of a ticket nobody
+// claims. The commands (screenshare, ssclose, sshistory) and the review buttons share it.
 
 // ============================================================================
 // Constants & Configuration
@@ -39,18 +41,21 @@ const (
 	// Command is the command whose requirement slots (category, roles, channels) every screenshare feature reads.
 	Command = "screenshare"
 
+	// PanelID and CategoryID identify the screenshare ticket type inside the ticket system.
+	PanelID    = "screenshare"
+	CategoryID = "screenshare"
+
 	KeyCategory     = "screenshare_category"
 	KeyScreensharer = "screensharer_role"
+	KeyManager      = "screenshare_manager_role"
 	KeyRestricted   = "ss_restricted_role"
 	KeyLogs         = "screenshare_logs"
 	KeyReviews      = "ss_restricted_reviews"
 
 	// TicketTimeout is how long a ticket waits for a screensharer before it expires.
 	TicketTimeout = 10 * time.Minute
-	// restrictionCap ends the queue ban on its own if the ticket is never closed.
-	restrictionCap = 12 * time.Hour
 
-	idPrefix = "ss:" // ss:claim:<id>, ss:close:<id>, ss:approve:<id>, ss:deny:<id>
+	idPrefix = "ss:" // ss:approve:<id>, ss:deny:<id>
 
 	eventType = "screenshare"
 )
@@ -59,6 +64,7 @@ const (
 var Requirements = []types.Requirement{
 	{Type: types.ReqCategory, Key: KeyCategory, Label: "Screenshare Category"},
 	{Type: types.ReqRole, Key: KeyScreensharer, Label: "Screensharer Role", Grants: true},
+	{Type: types.ReqRole, Key: KeyManager, Label: "Screenshare Manager Role", Optional: true, Grants: true},
 	{Type: types.ReqRole, Key: KeyRestricted, Label: "SS Restricted Role", Optional: true, Grants: true},
 	{Type: types.ReqChannel, Key: KeyLogs, Label: "Screenshare Logs Channel", Optional: true},
 	{Type: types.ReqChannel, Key: KeyReviews, Label: "SS Restricted Reviews Channel", Optional: true},
@@ -219,6 +225,32 @@ func (st *store) ByChannel(guildID, channelID string) (types.ScreenshareRequest,
 	return found[0], true
 }
 
+// byChannelAny is the ticket request whose channel this is, searching the guilds already loaded (no database call, so it is safe to
+// use while a ticket message is being built).
+func (st *store) byChannelAny(channelID string) (types.ScreenshareRequest, bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	for _, g := range st.guilds {
+		for _, r := range g.reqs {
+			if r.Kind == types.ScreenshareKindTicket && r.ChannelID == channelID {
+				return *r, true
+			}
+		}
+	}
+	return types.ScreenshareRequest{}, false
+}
+
+// OpenTicketOn is the ticket request on the player that is still open (waiting or claimed), if there is one.
+func (st *store) OpenTicketOn(guildID, targetID string) (types.ScreenshareRequest, bool) {
+	found := st.find(guildID, func(r *types.ScreenshareRequest) bool {
+		return r.Kind == types.ScreenshareKindTicket && r.TargetID == targetID && (r.Status == types.ScreenshareActive || r.Status == types.ScreenshareClaimed)
+	})
+	if len(found) == 0 {
+		return types.ScreenshareRequest{}, false
+	}
+	return found[0], true
+}
+
 // PendingReview is the open investigation request on the player, if there is one.
 func (st *store) PendingReview(guildID, targetID string) (types.ScreenshareRequest, bool) {
 	found := st.find(guildID, func(r *types.ScreenshareRequest) bool {
@@ -316,18 +348,28 @@ func NormalizeTimestamps(raw string) (value, problem string) {
 // Permissions
 // ============================================================================
 
-// CanHandle reports whether the member who clicked or ran the command is a screensharer (or an administrator).
+// CanHandle reports whether the member who clicked or ran the command is a screensharer or a screenshare manager (or an administrator).
 func CanHandle(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
-	if helpers.MemberIsAdministrator(s, i) {
-		return true
+	if helpers.MemberIsAdministrator(s, i) || i.Member == nil {
+		return helpers.MemberIsAdministrator(s, i)
 	}
-	role := slotRole(i.GuildID, KeyScreensharer)
-	return role != "" && i.Member != nil && slices.Contains(i.Member.Roles, role)
+	for _, key := range []string{KeyScreensharer, KeyManager} {
+		if role := slotRole(i.GuildID, key); role != "" && slices.Contains(i.Member.Roles, role) {
+			return true
+		}
+	}
+	return false
 }
 
 // ============================================================================
 // Tickets
 // ============================================================================
+
+func init() {
+	helpers.RegisterComponentHandler(handleComponent)
+	tickets.RegisterSystemPanel(PanelID, tickets.SystemPanel{Build: buildPanel, Claimed: onTicketClaimed, Closed: onTicketClosed})
+	tickets.PlaceholderVars = placeholderVars
+}
 
 // TicketParams is what a ticket is opened for.
 type TicketParams struct {
@@ -347,121 +389,199 @@ func TicketReady(guildID string) bool {
 	return slotChannel(guildID, types.ReqCategory, KeyCategory) != ""
 }
 
-var channelNameUnsafe = regexp.MustCompile(`[^a-z0-9_-]+`)
+// buildPanel is the screenshare ticket type, made from the /screenshare command's own settings: the screensharer role works the
+// tickets, the category holds them, the logs channel receives the ticket log and transcripts. It is never stored or published.
+func buildPanel(guildID string) *types.InteractivePanel {
+	var roles []string // screensharers: they work the tickets and are pinged for them
+	if role := slotRole(guildID, KeyScreensharer); role != "" {
+		roles = []string{role}
+	}
+	staff := roles // managers work the tickets too, without being pinged
+	if role := slotRole(guildID, KeyManager); role != "" {
+		staff = append(append([]string{}, roles...), role)
+	}
+	fields := []types.TicketField{
+		{Name: "Suspect", Value: "{ss_player}", Inline: true},
+		{Name: "Reporter", Value: "{ss_reporter}", Inline: true},
+		{Name: "Status", Value: "{status}", Inline: true},
+		{Name: "Screensharer", Value: "{ss_claimed}", Inline: true},
+		{Name: "Approved By", Value: "{ss_approved}", Inline: true},
+		{Name: "Reference", Value: "{reference}", Inline: true},
+		{Name: "Reason", Value: "{ss_reason}"},
+		{Name: "Timestamps", Value: "{ss_timestamps}"},
+		{Name: "Evidence", Value: "{ss_evidence}"},
+	}
+	return &types.InteractivePanel{
+		Type: types.PanelTypeTicket,
+		Name: "Screenshare",
+		Ticket: &types.TicketPanelConfig{
+			Settings: types.TicketSettings{
+				LogChannelID:   slotChannel(guildID, types.ReqChannel, KeyLogs),
+				StaffRoleIDs:   staff,
+				MaxOpenPerUser: 1,
+				ClaimEnabled:   true,
+				DeleteOnClose:  true,
+				Mode:           types.TicketModeChannel,
+				// A ticket nobody has written in for a while is closed, which also lifts the role the player holds meanwhile.
+				InactivityEnabled:       true,
+				InactivityReminderHours: 6,
+				InactivityCloseEnabled:  true,
+				InactivityCloseHours:    6,
+				InactivityMessage:       "{user} this screenshare has been quiet for {inactive_hours} hours. It will be closed in {close_hours} hours if nobody replies.",
+			},
+			Categories: []*types.TicketCategory{{
+				ID:                CategoryID,
+				Label:             "Screenshare",
+				NameFormat:        "ss-{username}",
+				ChannelNameFormat: "ss-{username}",
+				Mode:              types.TicketModeChannel,
+				CategoryID:        slotChannel(guildID, types.ReqCategory, KeyCategory),
+				StaffRoleIDs:      roles,
+				PingStaff:         len(roles) > 0,
+				Welcome: types.TicketWelcome{
+					Title:        "Screenshare Request",
+					Body:         "{ss_note}",
+					ThumbnailURL: "{ss_avatar}",
+					ImageURL:     "{ss_image}",
+					Fields:       &fields,
+				},
+			}},
+		},
+	}
+}
 
-// CreateTicket opens the private channel, posts the claimable request and queue bans the player while it is open.
+// placeholderVars fills the {ss_*} placeholders of a screenshare ticket's welcome message. A value that is empty hides its field.
+func placeholderVars(ticket *types.Ticket) map[string]string {
+	if ticket.PanelID != PanelID {
+		return nil
+	}
+	vars := map[string]string{
+		"ss_player": "<@" + ticket.OwnerID + ">", "ss_reporter": "", "ss_claimed": "", "ss_approved": "", "ss_reason": "", "ss_timestamps": "",
+		"ss_evidence": "", "ss_image": "", "ss_avatar": "", "ss_note": "",
+	}
+	if ticket.ClaimedBy != "" {
+		vars["ss_claimed"] = "<@" + ticket.ClaimedBy + ">"
+	}
+	req, ok := Requests.byChannelAny(ticket.ThreadID)
+	if !ok {
+		return vars // the details are added right after the ticket is opened
+	}
+	vars["ss_player"] = playerText(req.TargetID, req.TargetName)
+	vars["ss_reporter"] = "<@" + req.RequesterID + ">"
+	vars["ss_reason"] = req.Reason
+	vars["ss_timestamps"] = req.Timestamps
+	vars["ss_avatar"] = avatar(req)
+	if req.ApprovedBy != "" {
+		vars["ss_approved"] = "<@" + req.ApprovedBy + ">"
+	}
+	if req.EvidenceImage {
+		vars["ss_image"] = req.EvidenceURL
+	} else {
+		vars["ss_evidence"] = evidenceText(req)
+	}
+	switch {
+	case ticket.Status == types.TicketStatusClaimed:
+		vars["ss_note"] = fmt.Sprintf("<@%s> is handling this screenshare. Close the ticket with the button below or `/ssclose` when it is finished.", ticket.ClaimedBy)
+	case ticket.Status == types.TicketStatusOpen && req.ExpiresAt > 0:
+		vars["ss_note"] = fmt.Sprintf("A screenshare was requested. A screensharer will claim this ticket shortly, and the request expires <t:%d:R>.", req.ExpiresAt)
+	}
+	return vars
+}
+
+// CreateTicket opens a screenshare ticket on the player and gives them the SS Restricted role while it is open.
 func CreateTicket(s *discordgo.Session, p TicketParams) (types.ScreenshareRequest, error) {
-	categoryID := slotChannel(p.GuildID, types.ReqCategory, KeyCategory)
-	if categoryID == "" {
+	if !TicketReady(p.GuildID) {
 		return types.ScreenshareRequest{}, ErrNoCategory
 	}
-	roleID := slotRole(p.GuildID, KeyScreensharer)
-	expires := time.Now().Add(TicketTimeout).Unix()
-
-	access := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionReadMessageHistory)
-	overwrites := []*discordgo.PermissionOverwrite{
-		{ID: p.GuildID, Type: discordgo.PermissionOverwriteTypeRole, Deny: discordgo.PermissionViewChannel},
-		{ID: p.RequesterID, Type: discordgo.PermissionOverwriteTypeMember, Allow: access},
-		{ID: p.Target.ID, Type: discordgo.PermissionOverwriteTypeMember, Allow: access},
-	}
-	// Only screensharers get explicit access; administrators see it through their permission. Other staff are left out.
-	if roleID != "" {
-		overwrites = append(overwrites, &discordgo.PermissionOverwrite{ID: roleID, Type: discordgo.PermissionOverwriteTypeRole, Allow: access})
-	}
-	name := "ss-" + channelNameUnsafe.ReplaceAllString(strings.ToLower(p.Target.Username), "")
-	channel, err := s.GuildChannelCreateComplex(p.GuildID, discordgo.GuildChannelCreateData{
-		Name: name, Type: discordgo.ChannelTypeGuildText, ParentID: categoryID, PermissionOverwrites: overwrites,
-	})
+	// The reporter can see the ticket until a screensharer claims it.
+	ticket, err := tickets.OpenTicketWith(s, p.GuildID, PanelID, CategoryID, p.Target, "", tickets.OpenOptions{ExtraMembers: []string{p.RequesterID}})
 	if err != nil {
 		return types.ScreenshareRequest{}, err
 	}
-
-	req := types.ScreenshareRequest{
+	req, err := Requests.Create(p.GuildID, types.ScreenshareRequest{
 		Kind: types.ScreenshareKindTicket, Status: types.ScreenshareActive, TargetID: p.Target.ID, TargetName: p.TargetName, RequesterID: p.RequesterID,
 		Reason: p.Reason, EvidenceURL: p.EvidenceURL, EvidenceImage: p.EvidenceImage, Timestamps: p.Timestamps,
-		ChannelID: channel.ID, ApprovedBy: p.ApprovedBy, ExpiresAt: expires,
-	}
-	content := "<@" + p.Target.ID + ">"
-	mentions := &discordgo.MessageAllowedMentions{Users: []string{p.Target.ID}}
-	if roleID != "" {
-		content = "<@&" + roleID + "> " + content
-		mentions.Roles = []string{roleID}
-	}
-	embed := requestEmbed(req)
-	helpers.WithGuildFooterIconForGuild(s, p.GuildID, embed)
-	message, err := s.ChannelMessageSendComplex(channel.ID, &discordgo.MessageSend{Content: content, Embeds: []*discordgo.MessageEmbed{embed}, AllowedMentions: mentions})
+		ChannelID: ticket.ThreadID, MessageID: ticket.WelcomeMessageID, ApprovedBy: p.ApprovedBy, ExpiresAt: time.Now().Add(TicketTimeout).Unix(),
+	})
 	if err != nil {
-		_, _ = s.ChannelDelete(channel.ID)
+		_, _ = tickets.CloseTicket(s, p.GuildID, ticket.ThreadID, p.RequesterID, false)
 		return types.ScreenshareRequest{}, err
 	}
-	req.MessageID = message.ID
-	if req, err = Requests.Create(p.GuildID, req); err != nil {
-		_, _ = s.ChannelDelete(channel.ID)
-		return types.ScreenshareRequest{}, err
-	}
-	editMessage(s, req, nil, buttons(button("Claim", discordgo.SuccessButton, "claim", req.ID)))
 
-	// The player cannot queue while the ticket is open; the ban is lifted when it closes or expires.
-	staff := p.ApprovedBy
-	if staff == "" {
-		staff = p.RequesterID
-	}
-	applied, hadPrior := punish.ApplyScreenshareRestriction(s, p.GuildID, staff, p.Target, req.ID, p.Reason, time.Now().Add(restrictionCap))
+	applied, hadPrior := freeze(s, p.GuildID, p.Target.ID)
 	if changed, ok, err := Requests.Change(p.GuildID, req.ID, func(r *types.ScreenshareRequest) bool {
 		r.RestrictionApplied, r.HadPriorRestriction = applied, hadPrior
 		return true
 	}); ok && err == nil {
 		req = changed
 	}
-
-	go Log(s, p.GuildID, logEmbed("Screenshare Requested", fmt.Sprintf("<@%s> requested a screenshare on <@%s> in <#%s>.\n\n> **Reason:** %s", p.RequesterID, p.Target.ID, channel.ID, req.Reason), types.ScreenshareActive), channel.ID, req.ID)
+	tickets.RefreshWelcome(s, p.GuildID, ticket) // now the request's details exist
 	return req, nil
 }
 
-// Claim hands the ticket to the screensharer who clicked. changed is false when someone else claimed it first.
-func Claim(s *discordgo.Session, guildID string, id int, staffID string) (req types.ScreenshareRequest, changed bool, err error) {
-	req, changed, err = Requests.Change(guildID, id, func(r *types.ScreenshareRequest) bool {
-		if r.Kind != types.ScreenshareKindTicket || r.Status != types.ScreenshareActive {
+// freeze gives the player the SS Restricted role (the one the /screenshare command is set up with). hadPrior reports they held it
+// already, so it is not taken off when the ticket ends; applied that this call added it.
+func freeze(s *discordgo.Session, guildID, userID string) (applied, hadPrior bool) {
+	role := slotRole(guildID, KeyRestricted)
+	if role == "" {
+		return false, false
+	}
+	if member, _ := helpers.FetchGuildMember(s, guildID, userID); member != nil && slices.Contains(member.Roles, role) {
+		return false, true
+	}
+	return s.GuildMemberRoleAdd(guildID, userID, role) == nil, false
+}
+
+// thaw takes the role the ticket gave the player off again.
+func thaw(s *discordgo.Session, guildID string, req types.ScreenshareRequest) {
+	if s == nil || !req.RestrictionApplied || req.HadPriorRestriction {
+		return
+	}
+	if role := slotRole(guildID, KeyRestricted); role != "" {
+		_ = s.GuildMemberRoleRemove(guildID, req.TargetID, role)
+	}
+}
+
+// sweeperSession is the session ticket hooks fall back on when a ticket is closed without one at hand.
+var sweeperSession *discordgo.Session
+
+func onTicketClaimed(s *discordgo.Session, guildID string, ticket *types.Ticket) {
+	req, ok := Requests.ByChannel(guildID, ticket.ThreadID)
+	if !ok {
+		return
+	}
+	req, changed, err := Requests.Change(guildID, req.ID, func(r *types.ScreenshareRequest) bool {
+		if r.Status != types.ScreenshareActive {
 			return false
 		}
-		r.Status, r.ClaimedBy = types.ScreenshareClaimed, staffID
+		r.Status, r.ClaimedBy = types.ScreenshareClaimed, ticket.ClaimedBy
 		return true
 	})
-	if !changed {
-		return req, false, err
-	}
 	// The player who asked for it steps out once a screensharer has it.
-	if req.RequesterID != req.TargetID && req.RequesterID != staffID {
+	if err == nil && changed && s != nil && req.RequesterID != req.TargetID && req.RequesterID != ticket.ClaimedBy {
 		_ = s.ChannelPermissionDelete(req.ChannelID, req.RequesterID)
 	}
-	editMessage(s, req, []*discordgo.MessageEmbed{claimedEmbed(req)}, buttons(button("Close", discordgo.DangerButton, "close", req.ID)))
-	go Log(s, guildID, logEmbed("Screenshare Claimed", fmt.Sprintf("<@%s> claimed the screenshare on <@%s> in <#%s>.", staffID, req.TargetID, req.ChannelID), types.ScreenshareClaimed), req.ChannelID, req.ID)
-	return req, true, nil
 }
 
-// Close ends a claimed ticket: the queue ban is lifted, a transcript is logged and the channel goes away a moment later.
-func Close(s *discordgo.Session, guildID string, id int, closerID string) (types.ScreenshareRequest, error) {
-	req, changed, err := Requests.Change(guildID, id, func(r *types.ScreenshareRequest) bool {
-		if r.Kind != types.ScreenshareKindTicket || r.Status != types.ScreenshareClaimed {
-			return false
+func onTicketClosed(s *discordgo.Session, guildID string, ticket *types.Ticket) {
+	if s == nil {
+		s = sweeperSession
+	}
+	req, ok := Requests.ByChannel(guildID, ticket.ThreadID)
+	if !ok {
+		return
+	}
+	req, _, _ = Requests.Change(guildID, req.ID, func(r *types.ScreenshareRequest) bool {
+		if r.Status != types.ScreenshareActive && r.Status != types.ScreenshareClaimed {
+			return false // already expired
 		}
-		r.Status, r.ClosedAt, r.ClosedBy = types.ScreenshareClosed, time.Now().Unix(), closerID
+		r.Status, r.ClosedAt, r.ClosedBy = types.ScreenshareClosed, time.Now().Unix(), ticket.ClosedBy
 		return true
 	})
-	if err != nil {
-		return req, err
-	}
-	if !changed {
-		return req, ErrNotOpen
-	}
-	release(s, guildID, req, closerID, fmt.Sprintf("Screenshare ticket #%d closed", id))
-	editMessage(s, req, []*discordgo.MessageEmbed{closedEmbed(req)}, []discordgo.MessageComponent{})
-	Log(s, guildID, logEmbed("Screenshare Closed", fmt.Sprintf("<@%s> closed the screenshare ticket for <@%s>.", closerID, req.TargetID), types.ScreenshareClosed), req.ChannelID, req.ID)
-	deleteChannelLater(s, req.ChannelID, 5*time.Second)
-	return req, nil
+	thaw(s, guildID, req)
 }
 
-// expire ends a ticket nobody claimed in time.
+// expire closes a ticket nobody claimed in time.
 func expire(s *discordgo.Session, guildID string, id int) {
 	req, changed, err := Requests.Change(guildID, id, func(r *types.ScreenshareRequest) bool {
 		if r.Kind != types.ScreenshareKindTicket || r.Status != types.ScreenshareActive {
@@ -473,21 +593,14 @@ func expire(s *discordgo.Session, guildID string, id int) {
 	if err != nil || !changed {
 		return
 	}
-	release(s, guildID, req, s.State.User.ID, fmt.Sprintf("Screenshare ticket #%d expired", id))
-	editMessage(s, req, []*discordgo.MessageEmbed{expiredEmbed(req)}, []discordgo.MessageComponent{})
-	Log(s, guildID, logEmbed("Screenshare Expired", fmt.Sprintf("The screenshare request on <@%s> by <@%s> expired without a screensharer.", req.TargetID, req.RequesterID), types.ScreenshareExpired), req.ChannelID, req.ID)
-	deleteChannelLater(s, req.ChannelID, 15*time.Second)
-}
-
-// release lifts the queue ban the ticket added (one the player already had is left alone).
-func release(s *discordgo.Session, guildID string, req types.ScreenshareRequest, actor, note string) {
-	if req.RestrictionApplied && !req.HadPriorRestriction {
-		punish.ReleaseScreenshareRestriction(s, guildID, actor, req.TargetID, req.ID, note)
+	bot := s.State.User.ID
+	_ = tickets.SetPendingCloseReason(bot, guildID, req.ChannelID, "No screensharer claimed this ticket in time.")
+	_, _ = s.ChannelMessageSend(req.ChannelID, "No screensharer claimed this request in time, so the ticket is being closed.")
+	if _, err := tickets.CloseTicket(s, guildID, req.ChannelID, bot, false); err != nil {
+		// No ticket record (one from before screenshares were tickets, or already gone): tidy up directly.
+		thaw(s, guildID, req)
+		_, _ = s.ChannelDelete(req.ChannelID)
 	}
-}
-
-func deleteChannelLater(s *discordgo.Session, channelID string, after time.Duration) {
-	time.AfterFunc(after, func() { _, _ = s.ChannelDelete(channelID) })
 }
 
 // ============================================================================
@@ -528,8 +641,6 @@ func Review(s *discordgo.Session, guildID, channelID string, p TicketParams) (ty
 // Buttons
 // ============================================================================
 
-func init() { helpers.RegisterComponentHandler(handleComponent) }
-
 func button(label string, style discordgo.ButtonStyle, action string, id int) discordgo.Button {
 	return discordgo.Button{Label: label, Style: style, CustomID: idPrefix + action + ":" + strconv.Itoa(id)}
 }
@@ -566,10 +677,6 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, custo
 	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 	go func() {
 		switch parts[1] {
-		case "claim":
-			onClaim(s, i, id)
-		case "close":
-			onClose(s, i, id)
 		case "approve":
 			onDecide(s, i, id, true)
 		case "deny":
@@ -581,44 +688,6 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, custo
 
 func refuse(s *discordgo.Session, i *discordgo.InteractionCreate, title, text string) {
 	helpers.FollowupEmbed(s, i, helpers.Preset("error", types.PresetOptions{Title: title, Description: text, Thumbnail: helpers.ThumbFlag}))
-}
-
-func refuseInactive(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	refuse(s, i, "Request Inactive", "This screenshare request is no longer open.")
-}
-
-func refuseNotScreensharer(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	refuse(s, i, "Not Eligible", "Only members with the screensharer role can do this.")
-}
-
-func onClaim(s *discordgo.Session, i *discordgo.InteractionCreate, id int) {
-	req, ok := Requests.Get(i.GuildID, id)
-	if !ok || req.Kind != types.ScreenshareKindTicket || req.Status != types.ScreenshareActive {
-		refuseInactive(s, i)
-		return
-	}
-	if !CanHandle(s, i) {
-		refuseNotScreensharer(s, i)
-		return
-	}
-	if time.Now().Unix() > req.ExpiresAt {
-		expire(s, i.GuildID, id)
-		refuseInactive(s, i)
-		return
-	}
-	if _, changed, _ := Claim(s, i.GuildID, id, helpers.InteractionUserID(i)); !changed {
-		refuseInactive(s, i)
-	}
-}
-
-func onClose(s *discordgo.Session, i *discordgo.InteractionCreate, id int) {
-	if !CanHandle(s, i) {
-		refuseNotScreensharer(s, i)
-		return
-	}
-	if _, err := Close(s, i.GuildID, id, helpers.InteractionUserID(i)); err != nil {
-		refuseInactive(s, i)
-	}
 }
 
 func onDecide(s *discordgo.Session, i *discordgo.InteractionCreate, id int, approve bool) {
@@ -663,7 +732,7 @@ func onDecide(s *discordgo.Session, i *discordgo.InteractionCreate, id int, appr
 	if !approve {
 		editMessage(s, req, []*discordgo.MessageEmbed{reviewEmbed(req)}, []discordgo.MessageComponent{})
 		say(fmt.Sprintf("<@%s> your investigation request for <@%s> was denied by <@%s>.", req.RequesterID, req.TargetID, user))
-		go Log(s, guildID, logEmbed("Investigation Denied", fmt.Sprintf("<@%s> denied the investigation request on <@%s> from <@%s>.\n\n> **Reason:** %s", user, req.TargetID, req.RequesterID, req.Reason), types.ScreenshareDenied), "", 0)
+		go Log(s, guildID, logEmbed("Investigation Denied", fmt.Sprintf("<@%s> denied the investigation request on <@%s> from <@%s>.\n\n> **Reason:** %s", user, req.TargetID, req.RequesterID, req.Reason), types.ScreenshareDenied))
 		return
 	}
 
@@ -680,7 +749,7 @@ func onDecide(s *discordgo.Session, i *discordgo.InteractionCreate, id int, appr
 	req, _, _ = Requests.Change(guildID, id, func(r *types.ScreenshareRequest) bool { r.TicketChannelID = ticket.ChannelID; return true })
 	editMessage(s, req, []*discordgo.MessageEmbed{reviewEmbed(req)}, []discordgo.MessageComponent{})
 	say(fmt.Sprintf("<@%s> your investigation request was approved: <#%s>", req.RequesterID, ticket.ChannelID))
-	go Log(s, guildID, logEmbed("Investigation Approved", fmt.Sprintf("<@%s> approved the investigation request on <@%s> from <@%s>.\n\n> **Reason:** %s", user, req.TargetID, req.RequesterID, req.Reason), types.ScreenshareApproved), "", 0)
+	go Log(s, guildID, logEmbed("Investigation Approved", fmt.Sprintf("<@%s> approved the investigation request on <@%s> from <@%s>.\n\n> **Reason:** %s", user, req.TargetID, req.RequesterID, req.Reason), types.ScreenshareApproved))
 }
 
 // ============================================================================
@@ -689,6 +758,7 @@ func onDecide(s *discordgo.Session, i *discordgo.InteractionCreate, id int, appr
 
 // StartSweeper expires tickets nobody claimed in time, including ones left open while the bot was down.
 func StartSweeper(s *discordgo.Session) {
+	sweeperSession = s
 	go func() {
 		for _, g := range append([]*discordgo.Guild(nil), s.State.Guilds...) {
 			if guildlink.IsSecondary(g.ID) {
@@ -710,22 +780,14 @@ func StartSweeper(s *discordgo.Session) {
 // Log
 // ============================================================================
 
-// Log posts embed to the screenshare logs channel. With a ticket channel it attaches that channel's transcript, so call it
-// before the channel is deleted.
-func Log(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed, ticketChannelID string, ticketID int) {
+// Log posts embed to the screenshare logs channel. Tickets log themselves through the ticket system; this is for the reviews.
+func Log(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed) {
 	channelID := slotChannel(guildID, types.ReqChannel, KeyLogs)
 	if channelID == "" {
 		return
 	}
 	helpers.WithGuildFooterIconForGuild(s, guildID, embed)
-	send := &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}}
-	if ticketChannelID != "" {
-		ticket := &types.Ticket{ThreadID: ticketChannelID, ThreadName: "Screenshare #" + strconv.Itoa(ticketID), Ref: "SS-" + strconv.Itoa(ticketID), CategoryLabel: "Screenshare", CreatedAt: time.Now().Unix()}
-		if page, _, _ := tickets.BuildTicketTranscript(s, ticket); len(page) > 0 {
-			send.Files = []*discordgo.File{{Name: fmt.Sprintf("screenshare-%d.html", ticketID), ContentType: "text/html", Reader: strings.NewReader(string(page))}}
-		}
-	}
-	_, _ = s.ChannelMessageSendComplex(channelID, send)
+	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{embed}})
 }
 
 // ============================================================================
@@ -733,9 +795,9 @@ func Log(s *discordgo.Session, guildID string, embed *discordgo.MessageEmbed, ti
 // ============================================================================
 
 func logEmbed(title, description, status string) *discordgo.MessageEmbed {
-	preset := map[string]string{types.ScreenshareActive: "caution", types.ScreenshareClaimed: "success", types.ScreenshareApproved: "success"}[status]
-	if preset == "" {
-		preset = "error"
+	preset := "error"
+	if status == types.ScreenshareApproved {
+		preset = "success"
 	}
 	return helpers.Preset(preset, types.PresetOptions{Title: title, Description: description})
 }
@@ -760,59 +822,6 @@ func playerText(id, name string) string {
 }
 
 func avatar(r types.ScreenshareRequest) string { return helpers.MinecraftBustAvatarURL(r.TargetName) }
-
-func requestEmbed(r types.ScreenshareRequest) *discordgo.MessageEmbed {
-	fields := []*discordgo.MessageEmbedField{field("Suspect", playerText(r.TargetID, r.TargetName)), field("Reporter", "<@"+r.RequesterID+">")}
-	if r.ApprovedBy != "" {
-		fields = append(fields, field("Approved By", "<@"+r.ApprovedBy+">"))
-	}
-	fields = append(fields, &discordgo.MessageEmbedField{Name: "Reason", Value: r.Reason})
-	if r.Timestamps != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Timestamps", Value: r.Timestamps})
-	}
-	if !r.EvidenceImage && r.EvidenceURL != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Evidence", Value: evidenceText(r)})
-	}
-	opts := types.PresetOptions{
-		Title:       "Screenshare Request",
-		Description: fmt.Sprintf("A screenshare was requested. A screensharer will claim this ticket shortly, and the request expires <t:%d:R>.", r.ExpiresAt),
-		Thumbnail:   avatar(r),
-		Fields:      fields,
-	}
-	if r.EvidenceImage {
-		opts.Image = r.EvidenceURL
-	}
-	return helpers.Preset("default", opts)
-}
-
-func claimedEmbed(r types.ScreenshareRequest) *discordgo.MessageEmbed {
-	fields := []*discordgo.MessageEmbedField{field("Suspect", playerText(r.TargetID, r.TargetName)), field("Screensharer", "<@"+r.ClaimedBy+">"), &discordgo.MessageEmbedField{Name: "Reason", Value: r.Reason}}
-	if r.EvidenceURL != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Evidence", Value: evidenceText(r)})
-	}
-	return helpers.Preset("success", types.PresetOptions{
-		Title:       "Screenshare Claimed",
-		Description: fmt.Sprintf("<@%s> is handling this screenshare. Close the ticket with the button below or `/ssclose` when it is finished.", r.ClaimedBy),
-		Thumbnail:   avatar(r),
-		Fields:      fields,
-	})
-}
-
-func closedEmbed(r types.ScreenshareRequest) *discordgo.MessageEmbed {
-	return helpers.Preset("default", types.PresetOptions{
-		Title:       "Screenshare Closed",
-		Description: fmt.Sprintf("<@%s> closed the screenshare ticket for %s. This channel will be deleted in a few seconds.", r.ClosedBy, playerText(r.TargetID, r.TargetName)),
-		Thumbnail:   avatar(r),
-	})
-}
-
-func expiredEmbed(r types.ScreenshareRequest) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Screenshare Expired",
-		Description: fmt.Sprintf("No screensharer claimed the request on %s in time. This channel will be deleted shortly.\n\n> **Reporter:** <@%s>\n> **Reason:** %s", playerText(r.TargetID, r.TargetName), r.RequesterID, r.Reason),
-		Thumbnail:   helpers.ThumbFlag,
-	})
-}
 
 func reviewEmbed(r types.ScreenshareRequest) *discordgo.MessageEmbed {
 	preset, state := "caution", "Waiting for a screensharer to approve or deny it."

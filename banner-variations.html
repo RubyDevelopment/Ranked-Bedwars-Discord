@@ -1,0 +1,213 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Banner variations v8</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0e0f13;color:#ddd;font:14px system-ui;padding:24px}
+h1{font-size:18px;margin:0 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(700px,1fr));gap:28px}
+.slot .t{margin:0 0 6px;font-weight:600}
+.box{width:700px;height:400px;overflow:hidden;border-radius:10px}
+.card{width:1400px;height:800px;transform:scale(.5);transform-origin:0 0;position:relative;overflow:hidden;font-family:Rajdhani,sans-serif;color:#fff;font-weight:600}
+.card *{box-sizing:border-box;margin:0}
+.card b{font-weight:700}
+.bg{position:absolute;inset:-40px;filter:blur(14px) brightness(.75);
+ background:radial-gradient(ellipse 500px 300px at 20% 25%,#b5603a,transparent 70%),radial-gradient(ellipse 600px 400px at 80% 30%,#5a4a7a,transparent 70%),radial-gradient(ellipse 700px 300px at 50% 90%,#3f6b2f,transparent 70%),radial-gradient(ellipse 400px 300px at 60% 60%,#7a5b3a,transparent 70%),#2a2430}
+.abs{position:absolute}
+.pn{position:absolute;background:rgba(16,16,18,.6);border-radius:32px;backdrop-filter:blur(8px)}
+.col{display:flex;flex-direction:column;padding:30px 38px}
+.ph{font-size:26px;letter-spacing:4px;color:#b9c0cc;font-weight:600}
+.rows{flex:1;display:flex;flex-direction:column;justify-content:space-around;margin-top:8px}
+.row{display:flex;justify-content:space-between;align-items:baseline;font-size:32px}
+.row span{color:#e5e7eb}.row b{font-weight:700}
+.w{color:#3ddc3d}.l{color:#ff4545}.y{color:#ffc933}.o{color:#ffa733}.g{color:#9a9a9a}
+.rg b{font-weight:700}.rg small{font-size:22px;color:#ffffff99;font-weight:500;margin-left:12px}
+.tight{padding:22px 32px}
+.fr{position:absolute;overflow:hidden;display:flex;justify-content:center;align-items:flex-end}
+section{margin:0 0 40px}h2{font-size:20px;margin:0 0 10px}h2 small{font-weight:400;color:#889;font-size:14px;margin-left:10px}
+.dc{display:flex;gap:10px;align-items:center;margin-top:8px;width:700px}.sel{flex:1;display:flex;justify-content:space-between;background:#1e1f22;border:1px solid #3f4147;border-radius:6px;padding:8px 12px;color:#dbdee1;font-size:14px}.btns{display:flex;gap:6px}.btns span{background:#4e5058;color:#fff;border-radius:6px;padding:8px 14px;font-size:14px}.menu{width:700px;margin-top:6px;background:#2b2d31;border:1px solid #3f4147;border-radius:8px;padding:6px;columns:2;font-size:14px;color:#dbdee1}.menu div{padding:5px 10px;border-radius:4px;break-inside:avoid}.menu .on{background:#404249;color:#fff}
+img{image-rendering:pixelated}
+</style></head><body>
+<h1>10 themes × (stats, leaderboard, game results, achievements) (1400×800, shown at 50%)</h1>
+<div id="g"></div>
+<script>
+const U='BUTTERFLYCREEPER',bust='https://mc-api.bisai.dev/v1/render/3d/full/ButterflyCreeper?transparent=1';
+const ic=n=>`https://mc-api.bisai.dev/v1/assets/items/${n}/texture.png?size=128`;
+const B=(st='')=>`<img src="${bust}" style="${st}">`;
+const IC=(n,st='')=>`<img src="${ic(n)}" style="${st}">`;
+const G=[['W','+25','Lighthouse'],['W','+22','Aquarium'],['L','-18','Castle'],['W','+24','Hanging Gardens Remastered'],['V','±0','Lighthouse']];
+const CL={W:'w',L:'l',V:'g'},LAB={W:'WIN',L:'LOSS',V:'VOID'};
+const stats=`<div class="row"><span>Wins</span><b class="w">38</b></div><div class="row"><span>Losses</span><b class="l">45</b></div><div class="row"><span>Win / Loss</span><b class="y">0.84</b></div><div class="row"><span>Streak</span><b class="o">2</b></div><div class="row"><span>MVPs</span><b class="o">9</b></div>`;
+const recent=G.map(([r,d,m])=>`<div class="row rg ${CL[r]}" style="gap:12px"><b style="width:2.6em;flex:none">${LAB[r]}</b><small style="flex:1;min-width:0;margin-left:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m}</small><b style="flex:none">${d}</b></div>`).join('');
+const panel=(st,title,rows,t='tight')=>`<div class="pn col ${t}" style="${st}"><div class="ph">${title}</div><div class="rows">${rows}</div></div>`;
+const bar=o=>`<div style="height:22px;border-radius:99px;background:#ffffff30;overflow:hidden"><div style="width:42%;height:100%;background:linear-gradient(90deg,${o.bar[0]},${o.bar[1]});border-radius:99px"></div></div>`;
+const barLabels=(mid)=>`<div style="display:flex;justify-content:space-between;font-size:32px;margin-bottom:10px"><span style="color:#3ddc3d">EMERALD</span><span style="color:#cbd5e1">${mid}</span><span style="color:#5aa9ff">SAPPHIRE</span></div>`;
+
+/* ---------- avatar frames: each draws the player inside a frame at x,y,w,h ---------- */
+const P=(x,y,w,h)=>`left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+const FR={
+ glass:(x,y,w,h,o)=>`<div class="pn fr" style="${P(x,y,w,h)}">${B('height:96%')}</div>${o&&o.tag?`<div class="abs" style="left:${x+w/2-90}px;top:${y-26}px;width:180px;padding:6px 0;text-align:center;border-radius:99px;background:rgba(16,16,18,.9);box-shadow:inset 0 0 0 2px ${o.acc};color:#fff;font-size:38px;font-weight:700">${o.tag}</div>`:''}`,
+ arch:(x,y,w,h,o)=>`<div class="fr" style="${P(x,y,w,h)};border-radius:${w/2}px ${w/2}px 32px 32px;border:5px solid #3ddc3d;background:linear-gradient(#14532d,#06170e);box-shadow:0 0 60px #22c55e66">${B('height:92%')}</div>`,
+ bracket:(x,y,w,h,o)=>{const c=(p)=>`<div class="abs" style="width:54px;height:54px;border:6px solid ${o.acc};border-radius:4px;${p}"></div>`;
+  return `<div class="abs" style="${P(x,y,w,h)};background:rgba(255,255,255,.05);border-radius:12px"><div class="fr" style="inset:0;position:absolute">${B('height:84%;margin-bottom:60px')}</div>
+  ${c('left:-3px;top:-3px;border-right:0;border-bottom:0')}${c('right:-3px;top:-3px;border-left:0;border-bottom:0')}${c('left:-3px;bottom:-3px;border-right:0;border-top:0')}${c('right:-3px;bottom:-3px;border-left:0;border-top:0')}
+  <div class="abs" style="left:24px;right:24px;bottom:30px;padding:8px 4px;text-align:center;white-space:nowrap;background:rgba(0,0,0,.55);font-size:26px;letter-spacing:4px;border-radius:8px">${o.plate||"#1516 · <span style=\"color:#3ddc3d\">EMERALD</span>"}</div></div>`},
+ polaroid:(x,y,w,h,o)=>`<div class="abs" style="${P(x,y,w,h)};background:#f5f1e6;padding:18px 18px 78px;transform:rotate(-2.5deg);border-radius:10px;box-shadow:0 20px 50px #000a"><div class="fr" style="position:relative;width:100%;height:100%;background:linear-gradient(#7ec8ff,#dff1ff);border-radius:4px">${B('height:94%')}</div><div class="abs" style="left:0;right:0;bottom:18px;text-align:center;color:#2a2a2a;font-size:38px;font-weight:700;letter-spacing:4px">${o.cap||"RANK #1516"}</div></div>`,
+ scene:(x,y,w,h)=>`<div class="fr" style="${P(x,y,w,h)};border-radius:32px;border:6px solid #ffffff55;background:linear-gradient(#6ab7f5 0,#cfe9ff 66%,#5fae3a 66%,#4d9230 74%,#7a5230 74%)">${B('height:80%;margin-bottom:6.5%')}</div>`,
+ gold:(x,y,w,h)=>`<div class="fr" style="${P(x,y,w,h)};border-radius:${w/2}px ${w/2}px 24px 24px;border:6px solid #d4a73a;box-shadow:0 0 0 10px rgba(16,16,18,.55),0 0 0 13px #d4a73a99;background:radial-gradient(circle at 50% 30%,#6d3fd6,#1b1236)">${B('height:92%')}</div>`,
+ badge:(x,y,w,h,o)=>`<div class="fr" style="${P(x,y,w,h)};border-radius:36px;border:4px solid #22c55e;background:${o.rect?'rgba(16,16,18,.6);backdrop-filter:blur(8px)':'linear-gradient(#14532d,#07140d)'}">${B('height:94%')}</div><div class="abs" style="left:${o.rect?x+w/2-80:x+w-120}px;top:${y-34}px;width:${o.rect?160:128}px;height:${o.rect?68:128}px;border-radius:${o.rect?'14px':'50%'};background:#16a34a;border:${o.rect?4:6}px solid #fff;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;box-shadow:0 8px 24px #0008">${o.tag||"#1516"}</div>`,
+ bracket2:(x,y,w,h,o)=>FR.bracket(x,y,w,h,o),
+ thick:(x,y,w,h,o)=>`<div class="fr" style="${P(x,y,w,h)};border-radius:44px;border:12px solid ${o.acc};background:radial-gradient(circle at 50% 35%,#4a1d5a,#14081c);box-shadow:inset 0 0 70px #000b">${B('height:92%')}</div><div class="abs" style="left:${x+w/2-90}px;top:${y-24}px;width:180px;padding:6px 0;text-align:center;border-radius:99px;background:${o.acc};color:#1a0a22;font-size:38px;font-weight:700">${o.tag||"#1516"}</div>`,
+};
+
+/* ---------- stats card layouts ----------
+   - no rank text above the ELO: the position (#1516) lives on the avatar frame
+   - the 4 best badges are icons on the avatar frame (no numbers, no header)
+   - narrower frame, smaller avatar; the saved width goes to the stats panels
+   - rank icons sit at both ends of the progress bar (current rank before it, next rank after it) */
+const KIND_MB={bracket:90}; // only the bracket frame has a plate under the avatar
+const FRs=(o,x,y,w,h)=>{const AR=.589,k=o.f;
+ const avh=Math.round(k==='polaroid'?Math.min(h-136,(w-66)/AR):k==='bracket'?Math.min(h-150,(w-60)/AR):Math.min(h-80,(w-60)/AR));
+ return FR[k](x,y,w,h,{...o,tag:'#1516'}).replace(/(<img src="https:\/\/mc-api\.bisai\.dev\/v1\/render\/3d\/full\/ButterflyCreeper[^"]*" style=")[^"]*"/,(m,a)=>a+'height:'+avh+'px;align-self:center;margin-bottom:'+(KIND_MB[k]||0)+'px"')};
+const BARBLOCK=(o,mid,fs)=>{const ic=Math.round(fs*1.25);const lab=(i,t,c)=>`<span style="display:flex;align-items:center;gap:8px;color:${c}">${IC(i,'width:'+ic+'px;height:'+ic+'px;flex:none')}${t}</span>`;
+ return `<div style="width:100%"><div style="display:flex;justify-content:space-between;align-items:center;font-size:${fs}px;margin-bottom:10px">${lab('emerald','EMERALD','#3ddc3d')}${mid?`<span style="color:#cbd5e1">${mid}</span>`:''}${lab('lapis_lazuli','SAPPHIRE','#5aa9ff')}</div>${bar(o)}</div>`};
+const ELOBLOCK=(o,fs,gap,ls)=>`<div style="display:flex;align-items:flex-start;gap:${gap}px;line-height:1"><div style="text-align:center"><b style="font-size:${fs}px;color:${o.elo};font-weight:700">430</b><div style="font-size:${ls}px;letter-spacing:4px;margin-top:4px">ELO</div></div><span style="font-size:${fs}px;color:#ffffff55;font-weight:500">/</span><div style="text-align:center"><b style="font-size:${fs}px;color:#fff;font-weight:700">${ME_OUT.peak}</b><div style="font-size:${ls}px;letter-spacing:4px;margin-top:4px;color:#cbd5e1">PEAK</div></div></div>`;
+const idPanel=(o,x)=>`<div class="pn col" style="left:${x}px;top:150px;width:400px;height:600px;align-items:center;text-align:center;justify-content:center;gap:70px">
+ ${ELOBLOCK(o,76,12,26)}
+ <div style="width:100%">${BARBLOCK(o,'',26)}<div style="font-size:26px;color:#cbd5e1;margin-top:10px">42% · 170 ELO to Sapphire</div></div></div>`;
+/* layout 1: identity panel | framed avatar | stats over recent */
+const L1=o=>bgd(o)+TITLE(60,40,U,88)+idPanel(o,60)+FRs(o,480,150,360,600)
+ +panel('left:860px;top:150px;width:480px;height:290px','GENERAL STATS',stats)+panel('left:860px;top:460px;width:480px;height:290px','RECENT GAMES',recent);
+/* layout 1, mirrored */
+const L1m=o=>bgd(o)+TITLE(60,40,U,88)+panel('left:60px;top:150px;width:480px;height:290px','GENERAL STATS',stats)+panel('left:60px;top:460px;width:480px;height:290px','RECENT GAMES',recent)
+ +FRs(o,560,150,360,600)+idPanel(o,940);
+/* layout 3: framed avatar left, open column right */
+const col3=(o,x)=>TITLE(x,40,U)
+ +`<div class="abs" style="left:${x}px;top:150px">${ELOBLOCK(o,104,18,26)}</div>`
+ +`<div class="abs" style="left:${x}px;top:334px;width:840px">${BARBLOCK(o,'170 ELO to go',26)}</div>`
+ +panel(`left:${x}px;top:458px;width:408px;height:302px`,'GENERAL STATS',stats)+panel(`left:${x+432}px;top:458px;width:408px;height:302px`,'RECENT GAMES',recent);
+const L3=o=>bgd(o)+FRs(o,60,40,400,720)+col3(o,500);
+/* layout 3, mirrored */
+const L3m=o=>bgd(o)+FRs(o,940,40,400,720)+col3(o,60);
+
+const BL=['#22c55e','#7dd3fc'];
+/* ================= THEMES ================= */
+// A theme = layout + avatar frame + tint + accent colours. Every card type (stats / leaderboard / results) reads the same theme.
+const T=[
+{n:'Azure Zones',lay:'zones',f:'thick',acc:'#7dd3fc',hue:0,elo:'#9bd0ff',bar:BL},
+{n:'Gilded Badge',lay:'zones',f:'badge',acc:'#ffd37a',hue:35,elo:'#ffd37a',bar:['#f59e0b','#fde68a']},
+{n:'Frost Polaroid',lay:'zones',f:'polaroid',acc:'#7dd3fc',hue:190,elo:'#7dd3fc',bar:['#38bdf8','#bae6fd']},
+{n:'Rose Polaroid',lay:'open',f:'polaroid',acc:'#ffb4d0',hue:-30,elo:'#ffb4d0',bar:['#ec4899','#fbcfe8']},
+{n:'Amber Frame',lay:'open',f:'thick',acc:'#fcd34d',hue:20,elo:'#fcd34d',bar:['#d97706','#fde68a']},
+{n:'Clear Glass',lay:'openM',f:'glass',acc:'#9bd0ff',hue:0,elo:'#9bd0ff',bar:BL},
+{n:'Ember Brackets',lay:'openM',f:'bracket',acc:'#fb923c',hue:340,elo:'#fdba74',bar:['#ea580c','#fdba74']},
+{n:'Emerald Badge',lay:'openM',f:'badge',rect:1,acc:'#86efac',hue:90,elo:'#86efac',bar:['#16a34a','#86efac']},
+{n:'Violet Glass',lay:'zonesM',f:'glass',acc:'#c4b5fd',hue:260,elo:'#c4b5fd',bar:['#8b5cf6','#c4b5fd']},
+{n:'Teal Frame',lay:'zonesM',f:'thick',acc:'#5eead4',hue:160,elo:'#5eead4',bar:['#14b8a6','#99f6e4']},
+];
+const STATS={zones:L1,zonesM:L1m,open:L3,openM:L3m};
+const bgd=o=>`<div class="bg" style="filter:blur(14px) brightness(.75) hue-rotate(${o.hue}deg)"></div>`;
+const head=n=>`https://mc-api.bisai.dev/v1/render/3d/bust/${n}?transparent=1`;
+const TITLE=(x,y,t,size=88)=>`<div class="abs" style="left:${x}px;top:${y}px;font-size:${size}px;font-weight:700;letter-spacing:2px;text-shadow:0 4px 20px #000a;line-height:1;white-space:nowrap">${t}</div>`;
+const SUB=(x,y,t,right)=>`<div class="abs" style="${right?'right:'+right:'left:'+x}px;top:${y}px;font-size:32px;color:#cbd5e1;letter-spacing:2px;white-space:nowrap">${t}</div>`;
+
+/* ---------- leaderboard: sortable by any stat ---------- */
+// The same 16 stats /leaderboard already accepts (count stats + ratios). The card shows the active sort in a chip, ranks by it,
+// and prints that stat as the big number on every tile; the other stats move to the small line.
+const SD=[
+ ['elo','ELO','ELO',p=>p.elo],['highest_elo','Peak ELO','PEAK',p=>p.peak],['wins','Wins','WINS',p=>p.wins],['losses','Losses','LOSS',p=>p.losses],
+ ['games_played','Games Played','GAMES',p=>p.games],['kills','Kills','KILLS',p=>p.kills],['final_kills','Final Kills','FINAL',p=>p.finals],['first_bloods','First Bloods','FIRST',p=>p.firsts],
+ ['assists','Assists','ASST',p=>p.assists],['beds_destroyed','Beds Destroyed','BEDS',p=>p.beds],['mvp_count','MVPs','MVPS',p=>p.mvps],['highest_win_streak','Best Win Streak','STRK',p=>p.streak],
+ ['kdr','KDR (kills/deaths)','KDR',p=>p.kills/Math.max(1,p.deaths),1],['wlr','WLR (wins/losses)','WLR',p=>p.wins/Math.max(1,p.losses),1],
+ ['fkdr','FKDR (final kills/deaths)','FKDR',p=>p.finals/Math.max(1,p.deaths),1],['bdr','BDR (beds destroyed/lost)','BDR',p=>p.beds/Math.max(1,p.bedsLost),1],
+].map(([key,label,short,get,ratio])=>({key,label,short,get,ratio}));
+const sdf=(st,p)=>st.ratio?st.get(p).toFixed(2):String(Math.round(st.get(p)));
+const SUBS=['elo','wins','losses','kdr','wlr'].map(k=>SD.find(s=>s.key===k));
+const NAMES=['Notch','jeb_','Dinnerbone','Grumm','Searge','Technoblade','Dream','Hypixel','Herobrine','Steve','Alex','Kelp'];
+const mk=(n,i)=>{const r=(k,b,sp)=>Math.round(b*(1-sp/2+sp*Math.abs(Math.sin(i*7.3+k*2.1))));const elo=r(5,500,.9)+800,wins=r(1,70,1.2)+20,losses=r(2,45,1)+10;
+ return {n,elo,peak:elo+r(13,80,1)+10,wins,losses,games:wins+losses,kills:r(3,520,1.2)+150,deaths:r(4,400,1)+100,finals:r(6,160,1.1)+30,firsts:r(7,30,1.2)+4,assists:r(8,120,1.2)+10,beds:r(9,60,1.2)+10,bedsLost:r(10,50,1)+15,mvps:r(11,18,1.2)+3,streak:r(12,9,1)+3}};
+const OTHERS=NAMES.map(mk);
+const ME_OUT={n:'ButterflyCreeper',elo:430,peak:455,wins:38,losses:45,games:83,kills:346,deaths:400,finals:61,firsts:8,assists:90,beds:8,bedsLost:30,mvps:9,streak:5};
+const ME_IN={n:'ButterflyCreeper',elo:1440,peak:1490,wins:92,losses:38,games:130,kills:600,deaths:360,finals:120,firsts:20,assists:80,beds:62,bedsLost:30,mvps:19,streak:15};
+const ranked=(pool,st)=>[...pool].sort((a,b)=>st.get(b)-st.get(a));
+const medal=['#fbbf24','#d1d5db','#cd7f32'];
+const youPill=o=>`<i style="font-style:normal;font-size:22px;letter-spacing:4px;margin-left:12px;padding:2px 12px;border-radius:99px;background:${o.acc};color:#111;vertical-align:3px">YOU</i>`;
+const cell=(o,i,p,st,open)=>{const you=p.n==='ButterflyCreeper';const sub=SUBS.filter(s=>s.key!==st.key).slice(0,3).map(s=>sdf(s,p)+' '+s.short).join(' · ');
+ return `<div style="display:flex;align-items:center;gap:16px;padding:0 24px;min-height:0;${open?'border-bottom:2px solid #ffffff1c;':'background:rgba(16,16,18,.6);border-radius:22px;backdrop-filter:blur(8px);'}${you?`background:${o.acc}26;box-shadow:inset 0 0 0 2px ${o.acc};border-radius:22px;`:(!open&&i<3?`box-shadow:inset 6px 0 0 ${medal[i]};`:'')}"><b style="width:56px;text-align:center;font-size:38px;color:${you?o.acc:(medal[i]||'#cbd5e1')}">${i+1}</b><img src="${head(p.n)}" style="width:54px;height:54px;object-fit:contain"><div style="flex:1;min-width:0"><div style="font-size:32px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.n}${you?youPill(o):''}</div><div style="font-size:22px;color:#ffffff99;font-weight:500;margin-top:2px">${sub}</div></div><div style="text-align:right"><b style="font-size:38px;color:${o.elo};line-height:1">${sdf(st,p)}</b><div style="font-size:22px;letter-spacing:4px;color:#ffffff99">${st.short}</div></div></div>`};
+const sb=(lab,v,col)=>`<div style="text-align:right;min-width:118px"><div style="font-size:22px;letter-spacing:4px;color:#b9c0cc">${lab}</div><b style="font-size:38px;${col?'color:'+col:''}">${v}</b></div>`;
+const youRow=(o,st,rank)=>{const others=SUBS.filter(s=>s.key!==st.key).slice(0,3);
+ return `<div style="display:flex;align-items:center;gap:20px;padding:0 28px;height:100%;background:${o.acc}26;box-shadow:inset 0 0 0 2px ${o.acc};border-radius:22px"><b style="font-size:32px;color:${o.acc};min-width:100px;text-align:center">#${rank}</b><img src="${head(ME_OUT.n)}" style="width:58px;height:58px;object-fit:contain"><div style="flex:1;min-width:0"><div style="font-size:38px;font-weight:700;line-height:1.1">${ME_OUT.n}${youPill(o)}</div><div style="font-size:22px;color:#ffffff99;margin-top:2px">outside the top 10 by ${st.short}</div></div>${others.map(s=>sb(s.short,sdf(s,ME_OUT))).join('')}${sb(st.short,sdf(st,ME_OUT),o.elo)}</div>`};
+const lboard=(o,y,h,open,inTop,st)=>{const g=open?'0 48px':'10px 24px';
+ const L=inTop?ranked([...OTHERS,ME_IN],st).slice(0,12):ranked(OTHERS,st).slice(0,10);
+ const grid=`<div style="flex:1;min-height:0;display:grid;grid-auto-flow:column;grid-template-rows:repeat(5,1fr);grid-template-columns:1fr 1fr;gap:${g}">${L.slice(0,10).map((p,i)=>cell(o,i,p,st,open)).join('')}</div>`;
+ const rank=st.key==='elo'?1516:150+SD.indexOf(st)*173;
+ const last=inTop?`<div style="height:92px;margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:${open?'48px':'24px'}">${cell(o,10,L[10],st,open)}${cell(o,11,L[11],st,open)}</div>`:`<div style="height:92px;margin-top:18px">${youRow(o,st,rank)}</div>`;
+ return `<div class="abs" style="left:60px;top:${y}px;width:1280px;height:${h}px;display:flex;flex-direction:column">${grid}${last}</div>`};
+const CHIP=(o,st,pos)=>`<div class="abs" style="${pos};padding:8px 24px;border-radius:99px;background:${o.acc}26;box-shadow:inset 0 0 0 2px ${o.acc};font-size:32px;letter-spacing:4px;white-space:nowrap">SORTED BY <b style="color:${o.acc}">${st.label.split(' (')[0].toUpperCase()}</b></div>`;
+const BOARD={
+ zones:(o,t,st)=>bgd(o)+TITLE(60,40,'LEADERBOARD')+CHIP(o,st,'right:60px;top:62px')+lboard(o,150,600,false,t,st),
+ zonesM:(o,t,st)=>bgd(o)+TITLE(60,40,'LEADERBOARD')+CHIP(o,st,'right:60px;top:62px')+lboard(o,150,600,false,t,st),
+ open:(o,t,st)=>bgd(o)+TITLE(60,40,'LEADERBOARD')+CHIP(o,st,'right:60px;top:62px')+lboard(o,150,600,true,t,st),
+ openM:(o,t,st)=>bgd(o)+TITLE(60,40,'LEADERBOARD')+CHIP(o,st,'right:60px;top:62px')+lboard(o,150,600,true,t,st),
+};
+// what the player sees under the image in Discord: a select menu with every stat, plus page buttons
+const SORTS=['elo','wlr','kdr','kills','beds_destroyed','fkdr','wins','mvp_count','highest_win_streak','bdr'];
+const dcMock=(st,open)=>`<div class="dc"><div class="sel">Sort by · <b>${st.label}</b><span>▾</span></div><div class="btns"><span>◀</span><span>Page 1</span><span>▶</span></div></div>${open?`<div class="menu">${SD.map(s=>`<div class="${s.key===st.key?'on':''}">${s.key===st.key?'✔ ':''}${s.label}</div>`).join('')}</div>`:''}`;
+
+/* ---------- game results: no MVP frame; every player row carries the game's stats + rating ---------- */
+const RED=[['ButterflyCreeper',12,3,3,2,5,'emerald',455,'+25'],['Notch',9,2,5,1,4,'diamond',612,'+25'],['jeb_',7,1,6,0,6,'gold_ingot',388,'+25'],['Grumm',5,1,7,1,3,'iron_ingot',301,'+25']];
+const BLU=[['Dinnerbone',8,2,9,0,3,'emerald',498,'-22'],['Searge',6,1,8,0,2,'diamond',640,'-22'],['Technoblade',5,0,10,0,4,'gold_ingot',420,'-22'],['Dream',3,0,11,0,1,'iron_ingot',277,'-22']];
+const RG='52px 1fr 86px 86px 86px 86px 86px 64px 96px 96px';
+const rrow=(o,[n,k,fk,d,b,a,rk,elo,chg],open)=>`<div style="display:grid;grid-template-columns:${RG};align-items:center;gap:14px;flex:1;min-height:0;font-size:32px;font-weight:700;${open?'border-bottom:2px solid #ffffff1c':''}"><img src="${head(n)}" style="width:46px;height:46px;object-fit:contain"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n}</span><span style="text-align:center">${k}</span><span style="text-align:center;color:${o.acc}">${fk}</span><span style="text-align:center;color:#ff8a8a">${d}</span><span style="text-align:center;color:#ffa733">${b}</span><span style="text-align:center;color:#cbd5e1">${a}</span><span style="text-align:center">${IC(rk,'width:32px')}</span><span style="text-align:right;color:${o.elo}">${elo}</span><span style="text-align:right;color:${chg[0]=='+'?'#3ddc3d':'#ff4545'}">${chg}</span></div>`;
+const rhead=(name,col,win)=>`<div style="display:grid;grid-template-columns:${RG};gap:14px;align-items:center;height:38px;font-size:22px;letter-spacing:4px;color:#b9c0cc"><span></span><span style="font-size:26px;letter-spacing:4px;color:${col};font-weight:700;white-space:nowrap">${name} · ${win?'VICTORY':'DEFEAT'}</span><span style="text-align:center">KILLS</span><span style="text-align:center">FINAL</span><span style="text-align:center">DEATH</span><span style="text-align:center">BEDS</span><span style="text-align:center">ASST</span><span style="text-align:center">RANK</span><span style="text-align:right">ELO</span><span style="text-align:right">CHG</span></div>`;
+const rblock=(o,name,col,rows,win,open)=>`<div style="display:flex;flex-direction:column;height:100%">${rhead(name,col,win)}${rows.map(r=>rrow(o,r,open)).join('')}</div>`;
+const rpanel=(o,y,h,name,col,rows,win,open)=>`<div class="${open?'abs':'pn'}" style="left:60px;top:${y}px;width:1280px;height:${h}px;padding:12px 34px 10px;border-radius:26px;box-shadow:inset 0 0 0 3px ${col}">${rblock(o,name,col,rows,win,open)}</div>`;
+const WT='GAME #4128',WS='LIGHTHOUSE · 14:32';
+const TITLER=(y,t,size)=>`<div class="abs" style="right:60px;top:${y}px;font-size:${size}px;font-weight:700;letter-spacing:2px;text-shadow:0 4px 20px #000a;line-height:1;white-space:nowrap">${t}</div>`;
+const SUBR=(y,t)=>`<div class="abs" style="left:60px;top:${y}px;font-size:32px;color:#cbd5e1;letter-spacing:2px;white-space:nowrap">${t}</div>`;
+const RESULT={
+ zones:o=>bgd(o)+TITLE(60,40,WT)+SUB(0,64,WS,60)+rpanel(o,150,297,'TEAM A','#3ddc3d',RED,1,false)+rpanel(o,463,297,'TEAM B','#ff4545',BLU,0,false),
+ zonesM:o=>bgd(o)+TITLE(60,40,WT)+SUB(0,64,WS,60)+rpanel(o,150,297,'TEAM A','#3ddc3d',RED,1,false)+rpanel(o,463,297,'TEAM B','#ff4545',BLU,0,false),
+ open:o=>bgd(o)+TITLE(60,40,WT)+SUB(0,64,WS,60)+rpanel(o,150,300,'TEAM A','#3ddc3d',RED,1,true)+rpanel(o,460,300,'TEAM B','#ff4545',BLU,0,true),
+ openM:o=>bgd(o)+TITLE(60,40,WT)+SUB(0,64,WS,60)+rpanel(o,150,300,'TEAM A','#3ddc3d',RED,1,true)+rpanel(o,460,300,'TEAM B','#ff4545',BLU,0,true),
+};
+
+/* ---------- achievements: tiered milestone badges, 2 pages so everything stays big ---------- */
+// 5 tiers per category: bronze, silver, gold, diamond, master. A tier is earned once the stat reaches its threshold.
+const TIER=['#cd7f32','#d1d5db','#fbbf24','#67e8f9','#c084fc'];
+const ACH=[
+ {n:'Games Played',i:'clock',v:83,u:'played',t:[25,50,75,100,250]},
+ {n:'Wins',i:'totem_of_undying',v:38,u:'wins',t:[10,25,50,75,100]},
+ {n:'Kills',i:'diamond_sword',v:346,u:'kills',t:[25,50,75,100,250]},
+ {n:'Deaths',i:'skeleton_skull',v:400,u:'deaths',t:[25,50,75,100,250]},
+ {n:'Beds Broken',i:'red_bed',v:8,u:'beds',t:[5,10,25,50,100]},
+ {n:'MVPs',i:'nether_star',v:9,u:'mvps',t:[5,10,25,50,100]},
+ {n:'Win Streak',i:'blaze_powder',v:5,u:'best streak',t:[3,5,7,10,15]},
+];
+const PAGES=[ACH.slice(0,4),ACH.slice(4)];
+const HEX='polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)';
+const badge=(a,k)=>{const on=a.v>=a.t[k],c=TIER[k];return `<div style="width:84px;display:flex;flex-direction:column;align-items:center;gap:6px;${on?'':'opacity:.3;filter:grayscale(1)'}"><div style="width:82px;height:82px;clip-path:${HEX};background:linear-gradient(${c},${c}77);display:flex;align-items:center;justify-content:center"><div style="width:70px;height:70px;clip-path:${HEX};background:#141418;display:flex;align-items:center;justify-content:center">${IC(a.i,'width:42px')}</div></div><span style="font-size:26px;line-height:1;color:${c};font-weight:700">${a.t[k]}</span></div>`};
+const unlocked=ACH.reduce((s,a)=>s+a.t.filter(x=>a.v>=x).length,0),total=ACH.length*5;
+const arow=(o,a,open)=>{const nx=a.t.find(x=>a.v<x),pct=nx?Math.min(100,a.v/nx*100):100;
+ return `<div style="display:grid;grid-template-columns:250px 444px 150px;align-items:center;gap:16px;flex:0 0 132px;${open?'border-bottom:2px solid #ffffff1c':''}"><div><div style="font-size:38px;line-height:1.05;font-weight:700;white-space:nowrap">${a.n}</div><div style="font-size:26px;color:#ffffff99;font-weight:500;margin-top:4px"><b style="color:#fff">${a.v}</b> ${a.u}</div></div><div style="display:flex;gap:6px">${a.t.map((_,k)=>badge(a,k)).join('')}</div><div style="text-align:right"><div style="font-size:26px;color:#e5e7eb;margin-bottom:8px;font-weight:700">${nx?a.v+' / '+nx:'MAXED'}</div><div style="height:14px;border-radius:99px;background:#ffffff26;overflow:hidden"><div style="width:${pct}%;height:100%;background:${nx?o.acc:TIER[4]}"></div></div></div></div>`};
+const pager=(p)=>`<div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;font-size:26px;letter-spacing:4px;color:#cbd5e1"><span style="padding:4px 20px;border-radius:99px;background:#ffffff1a;${p==1?'opacity:.3':''}">◀ PREV</span><span>PAGE ${p} / 2</span><span style="padding:4px 20px;border-radius:99px;background:#ffffff1a;${p==2?'opacity:.3':''}">NEXT ▶</span></div>`;
+const alist=(o,open,p)=>`<div style="display:flex;flex-direction:column;height:100%">${PAGES[p-1].map(a=>arow(o,a,open)).join('')}${pager(p)}</div>`;
+const apanel=(o,x,y,w,h,open,p)=>open?`<div class="abs" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">${alist(o,true,p)}</div>`:`<div class="pn" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;padding:14px 34px 18px">${alist(o,false,p)}</div>`;
+const achf=o=>({...o,tag:unlocked+'/'+total,plate:unlocked+' / '+total,cap:unlocked+'/'+total+' BADGES'});
+// the 4 highest-tier badges earned, shown on the stats card
+const TOPB=ACH.map(a=>[a,a.t.filter(x=>a.v>=x).length-1]).filter(x=>x[1]>=0).sort((p,q)=>q[1]-p[1]).slice(0,4);
+const SHOW=z=>'<div style="display:flex;gap:6px;zoom:'+z+'">'+TOPB.map(([a,k])=>badge(a,k)).join('')+'</div>';
+const BHEAD='<div style="font-size:22px;letter-spacing:4px;color:#b9c0cc;margin-bottom:8px">BADGES · '+unlocked+'/'+total+'</div>';
+const SHOWC=x=>'<div class="abs" style="left:'+x+'px;top:196px;width:360px">'+BHEAD+SHOW(1)+'</div>';
+const ASUBS=unlocked+' / '+total+' BADGES';
+const ASUB=`${unlocked} / ${total} UNLOCKED`;
+const ACHV={
+ zones:(o,p)=>bgd(o)+TITLE(60,40,'ACHIEVEMENTS')+SUB(0,70,ASUB,60)+FR[o.f](60,150,300,600,achf(o))+apanel(o,380,150,960,600,false,p),
+ zonesM:(o,p)=>bgd(o)+TITLE(60,40,'ACHIEVEMENTS')+SUB(0,70,ASUB,60)+apanel(o,60,150,960,600,false,p)+FR[o.f](1040,150,300,600,achf(o)),
+ open:(o,p)=>bgd(o)+FR[o.f](60,40,340,720,achf(o))+TITLE(460,40,'ACHIEVEMENTS')+SUB(0,62,ASUBS,60)+apanel(o,460,170,880,590,true,p),
+ openM:(o,p)=>bgd(o)+FR[o.f](1000,40,340,720,achf(o))+TITLE(60,40,'ACHIEVEMENTS')+`<div class="abs" style="left:60px;width:880px;text-align:right;top:62px;font-size:32px;color:#cbd5e1;letter-spacing:2px;white-space:nowrap">${ASUBS}</div>`+apanel(o,60,170,880,590,true,p),
+};
+
+const slot=(t,h,x='')=>`<div class="slot"><p class="t">${t}</p><div class="box"><div class="card">${h}</div></div>${x}</div>`;
+g.className='';
+g.innerHTML=T.map((o,i)=>`<section><h2>Theme ${i+1} · ${o.n} <small>${o.lay} · ${o.f}</small></h2><div class="grid">${slot('Stats',STATS[o.lay](o))}${(()=>{const st=SD.find(x=>x.key===SORTS[i]);return slot('Leaderboard · sorted by '+st.short+' · you outside the top 10',BOARD[o.lay](o,false,st),dcMock(st,i==0))+slot('Leaderboard · sorted by '+st.short+' · you in the top 10',BOARD[o.lay](o,true,st),dcMock(st,false))})()}${slot('Game results',RESULT[o.lay](o))}${slot('Achievements · page 1',ACHV[o.lay](o,1))}${slot('Achievements · page 2',ACHV[o.lay](o,2))}</div></section>`).join('');
+</script></body></html>

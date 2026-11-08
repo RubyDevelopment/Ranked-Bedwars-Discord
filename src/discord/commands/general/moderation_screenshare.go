@@ -97,6 +97,11 @@ func executeModerationScreenshareCommand(s *discordgo.Session, i *discordgo.Inte
 	attachment := screenshareAttachment(i, "evidence")
 	link := helpers.OptionString(i, "evidence_link")
 
+	// The player holds the SS Restricted role while a ticket is open, so say so rather than sending a second request to review.
+	if open, found := screenshare.Requests.OpenTicketOn(i.GuildID, target.ID); found {
+		return helpers.EditInteractionEmbed(s, i, ModerationScreenshareInputEmbed(fmt.Sprintf("<@%s> already has a screenshare ticket open: <#%s>", target.ID, open.ChannelID)))
+	}
+
 	restrictedRole := helpers.SettingRole(i.GuildID, screenshare.Command, screenshare.KeyRestricted)
 	if restrictedRole != "" {
 		if member, _ := helpers.FetchGuildMember(s, i.GuildID, target.ID); member != nil && slices.Contains(member.Roles, restrictedRole) {

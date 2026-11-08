@@ -38,6 +38,6 @@ type ScreenshareRequest struct {
 	ExpiresAt           int64  `json:"expires_at,omitempty"`
 	ClosedAt            int64  `json:"closed_at,omitempty"`
 	ClosedBy            string `json:"closed_by,omitempty"`
-	RestrictionApplied  bool   `json:"restriction_applied,omitempty"`   // the queue ban this ticket put on the player
-	HadPriorRestriction bool   `json:"had_prior_restriction,omitempty"` // they were queue banned already, so it is not lifted on close
+	RestrictionApplied  bool   `json:"restriction_applied,omitempty"`   // the SS Restricted (Frozen) role this ticket gave the player
+	HadPriorRestriction bool   `json:"had_prior_restriction,omitempty"` // they held the role already, so it is not taken off on close
 }

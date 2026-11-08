@@ -30,10 +30,10 @@ type TicketCategory struct {
 	NameFormat        string        `json:"name_format"`
 	ChannelNameFormat string        `json:"channel_name_format,omitempty"`
 	ThreadNameFormat  string        `json:"thread_name_format,omitempty"`
-	StaffRoleIDs      []string      `json:"staff_role_ids"`                  // roles pinged on open (they can also see the ticket)
-	ViewRoleIDs       []string      `json:"view_role_ids,omitempty"`         // roles that can see the ticket without being pinged
-	Mode              string        `json:"mode,omitempty"`                  // "thread" or "channel"; empty uses the panel setting
-	ThreadChannelID   string        `json:"thread_channel_id,omitempty"`     // parent channel for thread tickets; empty uses the panel setting
+	StaffRoleIDs      []string      `json:"staff_role_ids"`              // roles pinged on open (they can also see the ticket)
+	ViewRoleIDs       []string      `json:"view_role_ids,omitempty"`     // roles that can see the ticket without being pinged
+	Mode              string        `json:"mode,omitempty"`              // "thread" or "channel"; empty uses the panel setting
+	ThreadChannelID   string        `json:"thread_channel_id,omitempty"` // parent channel for thread tickets; empty uses the panel setting
 	PingStaff         bool          `json:"ping_staff"`
 	Welcome           TicketWelcome `json:"welcome"`
 	CategoryID        string        `json:"category_id"` // Parent category ID for channel-based tickets
@@ -49,6 +49,7 @@ type TicketWelcome struct {
 	Color                 int                   `json:"color"`
 	NoColor               bool                  `json:"no_color,omitempty"` // no side colour: the bar takes the embed's own background colour
 	ThumbnailURL          string                `json:"thumbnail_url"`
+	ImageURL              string                `json:"image_url,omitempty"` // a large image under the fields; takes the same placeholders
 	HideDetails           bool                  `json:"hide_details"`
 	AllowedMentions       *PanelAllowedMentions `json:"allowed_mentions,omitempty"`
 	SuppressEmbeds        bool                  `json:"suppress_embeds,omitempty"`
