@@ -244,6 +244,10 @@ func ModerationScreenshareCreateErrorEmbed(err error) *discordgo.MessageEmbed {
 		description = "An administrator has to create a Screenshare ticket panel and assign it to the screenshare command in the dashboard (Tickets → Ticket Panels) before screenshares can be requested."
 	case errors.Is(err, screenshare.ErrNoCategory):
 		description = "The screenshare ticket panel has no category yet. An administrator has to add one under the panel's ticket setup."
+	case errors.Is(err, screenshare.ErrNoParent):
+		description = "The screenshare panel's category does not say where tickets are created. An administrator has to choose its Discord category (Ticket setup → Categories → Where this ticket is created)."
+	default:
+		description += "\n\n> **Reason:** " + err.Error() // Discord's own message, like \"Missing Permissions\"
 	}
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Screenshare Not Created",

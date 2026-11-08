@@ -52,6 +52,7 @@ const (
 var (
 	ErrNoPanel    = errors.New("no ticket panel is assigned to the screenshare command")
 	ErrNoCategory = errors.New("the screenshare panel has no category")
+	ErrNoParent   = errors.New("the screenshare panel's category has no Discord category (or thread channel) to create tickets in")
 	ErrNotFound   = errors.New("no screenshare ticket here")
 )
 
@@ -80,6 +81,17 @@ func load(guildID string) (setup, error) {
 	st := setup{panel: panel, category: panel.Ticket.Categories[0]}
 	if panel.Ticket.Screenshare != nil {
 		st.opts = *panel.Ticket.Screenshare
+	}
+	// Where the ticket is created: a Discord category for channels, a parent channel for threads.
+	mode := st.category.Mode
+	if mode == "" {
+		mode = panel.Ticket.Settings.Mode
+	}
+	if mode == types.TicketModeChannel && st.category.CategoryID == "" {
+		return st, ErrNoParent
+	}
+	if mode != types.TicketModeChannel && st.category.ThreadChannelID == "" && panel.Ticket.Settings.ThreadChannelID == "" {
+		return st, ErrNoParent
 	}
 	return st, nil
 }
