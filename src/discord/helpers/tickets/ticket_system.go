@@ -59,15 +59,35 @@ func CommandPanel(guildID, command string) *types.InteractivePanel {
 	return found[0]
 }
 
+// hooksFor are the hooks that apply to a ticket: its command's, or every command's when its panel is gone (a ticket whose panel was
+// deleted or renamed is still the command's ticket, and each hook ignores tickets it does not know).
+func hooksFor(panel *types.InteractivePanel) []CommandHooks {
+	if isCommandPanel(panel) {
+		return []CommandHooks{commandHooks[panel.Ticket.Command]}
+	}
+	if panel != nil {
+		return nil
+	}
+	all := make([]CommandHooks, 0, len(commandHooks))
+	for _, hooks := range commandHooks {
+		all = append(all, hooks)
+	}
+	return all
+}
+
 func runClaimed(s *discordgo.Session, guildID string, ticket *types.Ticket, panel *types.InteractivePanel) {
-	if isCommandPanel(panel) && commandHooks[panel.Ticket.Command].Claimed != nil {
-		commandHooks[panel.Ticket.Command].Claimed(s, guildID, ticket)
+	for _, hooks := range hooksFor(panel) {
+		if hooks.Claimed != nil {
+			hooks.Claimed(s, guildID, ticket)
+		}
 	}
 }
 
 func runClosed(s *discordgo.Session, guildID string, ticket *types.Ticket, panel *types.InteractivePanel) {
-	if isCommandPanel(panel) && commandHooks[panel.Ticket.Command].Closed != nil {
-		commandHooks[panel.Ticket.Command].Closed(s, guildID, ticket)
+	for _, hooks := range hooksFor(panel) {
+		if hooks.Closed != nil {
+			hooks.Closed(s, guildID, ticket)
+		}
 	}
 }
 

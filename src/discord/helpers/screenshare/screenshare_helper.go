@@ -528,6 +528,39 @@ func onTicketClosed(s *discordgo.Session, guildID string, ticket *types.Ticket) 
 	thaw(s, guildID, req)
 }
 
+// IsTicket reports whether the channel is a screenshare ticket: one the screenshare panel opened, or one this feature recorded (which
+// stays true when the panel it came from has since been deleted or replaced).
+func IsTicket(guildID, channelID string) bool {
+	if _, ok := Requests.ByChannel(guildID, channelID); ok {
+		return true
+	}
+	ctx, err := tickets.LoadTicketContext(guildID, channelID)
+	return err == nil && ctx.Panel.Ticket.Command == Command
+}
+
+// Close closes a screenshare ticket as the ticket system closes any ticket: transcript, log, role lifted, channel deleted. A screenshare
+// from before screenshares were tickets has no ticket record, so that one is closed directly.
+func Close(s *discordgo.Session, guildID, channelID, closerID string) error {
+	_, err := tickets.CloseTicket(s, guildID, channelID, closerID, true)
+	if !errors.Is(err, tickets.ErrTicketNotFound) {
+		return err
+	}
+	req, ok := Requests.ByChannel(guildID, channelID)
+	if !ok {
+		return ErrNotFound
+	}
+	req, _, _ = Requests.Change(guildID, req.ID, func(r *types.ScreenshareRequest) bool {
+		if r.Status != types.ScreenshareActive && r.Status != types.ScreenshareClaimed {
+			return false
+		}
+		r.Status, r.ClosedAt, r.ClosedBy = types.ScreenshareClosed, time.Now().Unix(), closerID
+		return true
+	})
+	thaw(s, guildID, req)
+	time.AfterFunc(5*time.Second, func() { _, _ = s.ChannelDelete(channelID) })
+	return nil
+}
+
 // expire closes a ticket nobody claimed in time.
 func expire(s *discordgo.Session, guildID string, id int) {
 	req, changed, err := Requests.Change(guildID, id, func(r *types.ScreenshareRequest) bool {

@@ -5,7 +5,6 @@ import (
 
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/screenshare"
-	"ranked-bedwars/src/discord/helpers/tickets"
 	"ranked-bedwars/src/types"
 )
 
@@ -37,14 +36,13 @@ var ModerationSsCloseCommand = &types.Command{
 // executeModerationSsCloseCommand closes the screenshare ticket in this channel the way the ticket's Close button does: the
 // transcript goes to the logs channel, the player's role is lifted and the channel is deleted.
 func executeModerationSsCloseCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
-	if err != nil || ctx.Panel.Ticket.Command != screenshare.Command {
+	if !screenshare.IsTicket(i.GuildID, i.ChannelID) {
 		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotInTicketEmbed(i))
 	}
 	if !screenshare.CanHandle(s, i) {
 		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotEligibleEmbed(i))
 	}
-	if _, err := tickets.CloseTicket(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i), true); err != nil {
+	if err := screenshare.Close(s, i.GuildID, i.ChannelID, helpers.InteractionUserID(i)); err != nil {
 		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotInTicketEmbed(i))
 	}
 	return helpers.EditInteractionEmbed(s, i, ModerationSsCloseClosedEmbed(i))
