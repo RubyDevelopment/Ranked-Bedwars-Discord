@@ -38,7 +38,7 @@ var ModerationSsCloseCommand = &types.Command{
 // transcript goes to the logs channel, the player's role is lifted and the channel is deleted.
 func executeModerationSsCloseCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	ctx, err := tickets.LoadTicketContext(i.GuildID, i.ChannelID)
-	if err != nil || ctx.Ticket.PanelID != screenshare.PanelID {
+	if err != nil || ctx.Panel.Ticket.Command != screenshare.Command {
 		return helpers.EditInteractionEmbed(s, i, ModerationSsCloseNotInTicketEmbed(i))
 	}
 	if !screenshare.CanHandle(s, i) {

@@ -17,6 +17,19 @@ const (
 type TicketPanelConfig struct {
 	Categories []*TicketCategory `json:"categories"`
 	Settings   TicketSettings    `json:"settings"`
+	// Command assigns the panel to a command ("screenshare"): that command opens this panel's tickets, and the panel is not
+	// published. Empty for an ordinary panel.
+	Command string `json:"command,omitempty"`
+	// Screenshare holds what only the screenshare command needs; set when Command is "screenshare".
+	Screenshare *ScreensharePanelOptions `json:"screenshare,omitempty"`
+}
+
+// ScreensharePanelOptions is the screenshare part of a panel assigned to the /screenshare command.
+type ScreensharePanelOptions struct {
+	RestrictedRoleID    string   `json:"restricted_role_id"`    // the SS Restricted (Frozen) role: held while a ticket is open, and makes a player need a review first
+	ReviewsChannelID    string   `json:"reviews_channel_id"`    // where investigation requests on SS Restricted players are posted
+	ManagerRoleIDs      []string `json:"manager_role_ids"`      // work the tickets and use the screenshare commands, like the staff roles, without being pinged
+	ClaimTimeoutMinutes int      `json:"claim_timeout_minutes"` // an unclaimed ticket is closed after this long (0: ten minutes)
 }
 
 // TicketCategory is one button on a ticket panel.

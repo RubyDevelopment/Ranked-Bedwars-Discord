@@ -229,7 +229,9 @@ func checkAdmission(s *discordgo.Session, guildID, userID, channelID string, sna
 	bannedRoles := []string{
 		helpers.EventRequirementID(guildID, QueueEventName, types.ReqRole, QueueRoleBanned),
 		punish.LadderRole(guildID, "queue_ban"), // the role /ban hands out
-		helpers.SettingRole(guildID, "screenshare", "ss_restricted_role"), // frozen: held while a screenshare ticket is open
+	}
+	if helpers.ScreenshareFrozenRole != nil { // frozen: held while a screenshare ticket is open
+		bannedRoles = append(bannedRoles, helpers.ScreenshareFrozenRole(guildID))
 	}
 	for _, id := range bannedRoles {
 		if id == "" || !memberHasRole(s, guildID, userID, id) {

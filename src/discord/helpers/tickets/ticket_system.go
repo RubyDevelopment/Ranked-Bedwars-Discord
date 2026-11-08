@@ -1,69 +1,73 @@
 package tickets
 
 import (
+	"encoding/json"
+	"sort"
+
+	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/types"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
 )
 
-// A system panel is a ticket type the bot provides itself (screenshare): it has no panel message and is not stored in the guild's
-// panels. It is built from another feature's own settings every time the panels are loaded, so its tickets use the whole ticket
-// system (claim, close, transcript, log channel, /ticket commands, history) without an admin setting up a panel.
+// A command panel is a ticket panel that is assigned to a command (screenshare) in the dashboard. The command opens its tickets
+// itself, so the panel is never published; everything else about it is an ordinary ticket panel: staff roles, log channel, claiming,
+// the welcome message, inactivity, transcripts, and the /ticket commands inside its tickets.
 
-// SystemPanel is one such ticket type. Claimed and Closed run after a ticket of it is claimed or closed, whichever way that happened.
-type SystemPanel struct {
-	Build   func(guildID string) *types.InteractivePanel
+// CommandHooks run after a ticket of a command's panel is claimed or closed, whichever way that happened.
+type CommandHooks struct {
 	Claimed func(s *discordgo.Session, guildID string, ticket *types.Ticket)
-	Closed  func(s *discordgo.Session, guildID string, ticket *types.Ticket)
+	Closed  func(s *discordgo.Session, guildID string, ticket *types.Ticket) // s is nil when no session is at hand
 }
 
-var systemPanels = map[string]SystemPanel{}
+var commandHooks = map[string]CommandHooks{}
 
-// RegisterSystemPanel adds a system ticket type. Call it from init.
-func RegisterSystemPanel(id string, panel SystemPanel) { systemPanels[id] = panel }
+// RegisterCommandHooks sets what happens to tickets of the panel assigned to command. Call it from init.
+func RegisterCommandHooks(command string, hooks CommandHooks) { commandHooks[command] = hooks }
 
-func isSystemPanel(id string) bool {
-	_, ok := systemPanels[id]
-	return ok
+// PlaceholderVars adds feature-specific placeholders ({name} -> value) to the text of a ticket's welcome message. panel is the
+// ticket's panel, so a feature can tell its own tickets.
+var PlaceholderVars func(ticket *types.Ticket, panel *types.InteractivePanel) map[string]string
+
+func isCommandPanel(panel *types.InteractivePanel) bool {
+	return panel != nil && panel.Ticket != nil && panel.Ticket.Command != ""
 }
 
-// PlaceholderVars adds feature-specific placeholders ({name} -> value) to the text of a ticket's welcome message.
-var PlaceholderVars func(ticket *types.Ticket) map[string]string
-
-// addSystemPanels puts the system panels into a freshly loaded set.
-func addSystemPanels(guildID string, ip *types.InteractivePanels) {
-	for id, system := range systemPanels {
-		if panel := system.Build(guildID); panel != nil {
-			panel.ID = id
-			ip.Panels[id] = panel
+// CommandPanel is the guild's ticket panel assigned to the command (the first by id when there are several), or nil. It reads
+// only the panel designs, so it is cheap enough for a hot path.
+func CommandPanel(guildID, command string) *types.InteractivePanel {
+	raw, err := database.Must().GuildConfig.Field(guildID, interactivePanelsField)
+	if err != nil && !sdk.IsNotFound(err) || len(raw) == 0 {
+		return nil
+	}
+	ip := &types.InteractivePanels{}
+	if json.Unmarshal(raw, ip) != nil {
+		return nil
+	}
+	normalizeInteractivePanels(ip)
+	var found []*types.InteractivePanel
+	for _, panel := range ip.Panels {
+		if panel != nil && panel.Ticket != nil && panel.Ticket.Command == command {
+			found = append(found, panel)
 		}
 	}
+	if len(found) == 0 {
+		return nil
+	}
+	sort.Slice(found, func(a, b int) bool { return found[a].ID < found[b].ID })
+	return found[0]
 }
 
-// storedPanels is ip without its system panels: what belongs in the guild config.
-func storedPanels(ip *types.InteractivePanels) *types.InteractivePanels {
-	if len(systemPanels) == 0 {
-		return ip
-	}
-	stored := &types.InteractivePanels{Panels: make(map[string]*types.InteractivePanel, len(ip.Panels))}
-	for id, panel := range ip.Panels {
-		if !isSystemPanel(id) {
-			stored.Panels[id] = panel
-		}
-	}
-	return stored
-}
-
-func runClaimed(s *discordgo.Session, guildID string, ticket *types.Ticket) {
-	if system, ok := systemPanels[ticket.PanelID]; ok && system.Claimed != nil {
-		system.Claimed(s, guildID, ticket)
+func runClaimed(s *discordgo.Session, guildID string, ticket *types.Ticket, panel *types.InteractivePanel) {
+	if isCommandPanel(panel) && commandHooks[panel.Ticket.Command].Claimed != nil {
+		commandHooks[panel.Ticket.Command].Claimed(s, guildID, ticket)
 	}
 }
 
-// runClosed runs the closed hook; s is nil when the ticket was closed without a session at hand.
-func runClosed(s *discordgo.Session, guildID string, ticket *types.Ticket) {
-	if system, ok := systemPanels[ticket.PanelID]; ok && system.Closed != nil {
-		system.Closed(s, guildID, ticket)
+func runClosed(s *discordgo.Session, guildID string, ticket *types.Ticket, panel *types.InteractivePanel) {
+	if isCommandPanel(panel) && commandHooks[panel.Ticket.Command].Closed != nil {
+		commandHooks[panel.Ticket.Command].Closed(s, guildID, ticket)
 	}
 }
 

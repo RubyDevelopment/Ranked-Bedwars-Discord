@@ -6,24 +6,23 @@ import (
 	"ranked-bedwars/src/types"
 )
 
-// A system panel is part of the loaded panels but never of what is saved or published.
-func TestSystemPanelsAreNeverStoredOrPublished(t *testing.T) {
-	RegisterSystemPanel("test-system", SystemPanel{Build: func(string) *types.InteractivePanel {
-		return &types.InteractivePanel{Type: types.PanelTypeTicket, Ticket: &types.TicketPanelConfig{}}
-	}})
-	defer delete(systemPanels, "test-system")
-
-	ip := &types.InteractivePanels{Panels: map[string]*types.InteractivePanel{
-		"own": {ID: "own", Type: types.PanelTypeTicket, Ticket: &types.TicketPanelConfig{}},
+// A panel assigned to a command is never published, and the command's managers count as its staff.
+func TestCommandPanels(t *testing.T) {
+	assigned := &types.InteractivePanel{ID: "ss", Type: types.PanelTypeTicket, Ticket: &types.TicketPanelConfig{
+		Command:     "screenshare",
+		Settings:    types.TicketSettings{StaffRoleIDs: []string{"staff"}},
+		Screenshare: &types.ScreensharePanelOptions{ManagerRoleIDs: []string{"manager"}},
 	}}
-	addSystemPanels("guild", ip)
-	if ip.Panels["test-system"] == nil || ip.Panels["test-system"].ID != "test-system" {
-		t.Fatal("the system panel was not added with its id")
-	}
-	if stored := storedPanels(ip); len(stored.Panels) != 1 || stored.Panels["own"] == nil {
-		t.Fatalf("stored panels = %v, want only the guild's own", stored.Panels)
-	}
+	plain := &types.InteractivePanel{ID: "own", Type: types.PanelTypeTicket, Ticket: &types.TicketPanelConfig{}}
+	ip := &types.InteractivePanels{Panels: map[string]*types.InteractivePanel{"ss": assigned, "own": plain}}
+
 	if listed := SortedTicketPanels(ip); len(listed) != 1 || listed[0].ID != "own" {
-		t.Fatalf("publishable panels = %v, want only the guild's own", listed)
+		t.Fatalf("publishable panels = %v, want only the unassigned one", listed)
+	}
+	if !isCommandPanel(assigned) || isCommandPanel(plain) {
+		t.Fatal("isCommandPanel must tell an assigned panel from a plain one")
+	}
+	if roles := staffRoleIDs(assigned, nil); len(roles) != 2 || roles[1] != "manager" {
+		t.Fatalf("staff roles = %v, want the staff role and the manager", roles)
 	}
 }

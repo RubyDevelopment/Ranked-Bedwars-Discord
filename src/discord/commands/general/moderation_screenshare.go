@@ -1,6 +1,7 @@
 package general
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -30,7 +31,6 @@ func init() {
 // ModerationScreenshareCommand requests a screenshare for a player.
 var ModerationScreenshareCommand = &types.Command{
 	Name:          "screenshare",
-	Requirements:  screenshare.Requirements,
 	Description:   "Requests a screenshare for a player to keep competitive play fair.",
 	PrefixAliases: []string{"ss"},
 	Ephemeral:     true,
@@ -56,6 +56,11 @@ var ModerationScreenshareCommand = &types.Command{
 func executeModerationScreenshareCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	if database.Get() == nil {
 		return helpers.EditInteractionEmbed(s, i, ModerationScreenshareDatabaseUnavailableEmbed(i))
+	}
+
+	// Everything about a screenshare (staff, category, roles, channels) is set on the ticket panel assigned to this command.
+	if err := screenshare.Ready(i.GuildID); err != nil {
+		return helpers.EditInteractionEmbed(s, i, ModerationScreenshareCreateErrorEmbed(err))
 	}
 
 	target := helpers.OptionUser(s, i, "user")
@@ -102,7 +107,7 @@ func executeModerationScreenshareCommand(s *discordgo.Session, i *discordgo.Inte
 		return helpers.EditInteractionEmbed(s, i, ModerationScreenshareInputEmbed(fmt.Sprintf("<@%s> already has a screenshare ticket open: <#%s>", target.ID, open.ChannelID)))
 	}
 
-	restrictedRole := helpers.SettingRole(i.GuildID, screenshare.Command, screenshare.KeyRestricted)
+	restrictedRole := screenshare.RestrictedRole(i.GuildID)
 	if restrictedRole != "" {
 		if member, _ := helpers.FetchGuildMember(s, i.GuildID, target.ID); member != nil && slices.Contains(member.Roles, restrictedRole) {
 			return submitRestrictedInvestigation(s, i, target, username, reason, timestamps, attachment, link)
@@ -234,8 +239,11 @@ func ModerationScreenshareReviewUnavailableEmbed(i *discordgo.InteractionCreate)
 
 func ModerationScreenshareCreateErrorEmbed(err error) *discordgo.MessageEmbed {
 	description := "The screenshare ticket could not be created. Make sure the bot can manage channels in the screenshare category, then try again."
-	if err == screenshare.ErrNoCategory {
-		description = "An administrator has to set the screenshare category before screenshares can be requested."
+	switch {
+	case errors.Is(err, screenshare.ErrNoPanel):
+		description = "An administrator has to create a Screenshare ticket panel and assign it to the screenshare command in the dashboard (Tickets → Ticket Panels) before screenshares can be requested."
+	case errors.Is(err, screenshare.ErrNoCategory):
+		description = "The screenshare ticket panel has no category yet. An administrator has to add one under the panel's ticket setup."
 	}
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Screenshare Not Created",

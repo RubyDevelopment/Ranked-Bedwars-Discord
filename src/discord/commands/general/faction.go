@@ -24,7 +24,6 @@ import (
 
 func init() {
 	helpers.Register(FactionCommand)
-	helpers.Register(FactionLeaderboardCommand)
 	helpers.RegisterComponentHandler(handleFactionInvite)
 	helpers.RegisterComponentHandler(handleFactionLeaderboardPage)
 }
@@ -102,18 +101,6 @@ var FactionCommand = &types.Command{
 		},
 	},
 	Execute: executeFactionCommand,
-}
-
-// FactionLeaderboardCommand is /faction leaderboard on its own, so =factionlb works.
-var FactionLeaderboardCommand = &types.Command{
-	Name:          "factionleaderboard",
-	Description:   "View the lifetime or seasonal faction leaderboard.",
-	PrefixAliases: []string{"factionlb", "flb"},
-	Cooldown:      5 * time.Second,
-	Data:          &discordgo.ApplicationCommand{Options: factionBoardOptions()},
-	Execute: func(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-		return factionLeaderboard(s, i, i.GuildID, helpers.OptionString(i, "board"), max(1, helpers.OptionInt(i, "page")))
-	},
 }
 
 // ============================================================================

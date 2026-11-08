@@ -358,7 +358,7 @@ func snapshotInteractivePanels(ip *types.InteractivePanels) ticketSnapshot {
 		tickets:   map[string]string{},
 		inOpen:    map[string]bool{},
 		blacklist: jsonString(ip.Tickets.Blacklist),
-		panels:    jsonString(storedPanels(ip)),
+		panels:    jsonString(ip),
 	}
 	for threadID, ticket := range ip.Tickets.Open {
 		snap.tickets[threadID] = jsonString(ticket)
@@ -372,7 +372,7 @@ func snapshotInteractivePanels(ip *types.InteractivePanels) ticketSnapshot {
 
 // panelsChanged reports whether the panel definitions differ from the snapshot.
 func (snap ticketSnapshot) panelsChanged(ip *types.InteractivePanels) bool {
-	return jsonString(storedPanels(ip)) != snap.panels
+	return jsonString(ip) != snap.panels
 }
 
 // changesSince builds the write that turns the snapshot into the current state: tickets that are new or differ are

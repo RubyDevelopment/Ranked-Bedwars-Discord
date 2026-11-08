@@ -25,7 +25,7 @@ func TicketPlaceholders(text string, ticket *types.Ticket, panel *types.Interact
 	}
 	pairs := []string{}
 	if PlaceholderVars != nil {
-		for name, value := range PlaceholderVars(ticket) {
+		for name, value := range PlaceholderVars(ticket, panel) {
 			pairs = append(pairs, "{"+name+"}", value)
 		}
 	}

@@ -19,7 +19,7 @@ import (
 func SortedTicketPanels(ip *types.InteractivePanels) []*types.InteractivePanel {
 	panels := make([]*types.InteractivePanel, 0, len(ip.Panels))
 	for _, panel := range ip.Panels {
-		if panel != nil && panel.Type == types.PanelTypeTicket && !isSystemPanel(panel.ID) { // system panels are never published
+		if panel != nil && panel.Type == types.PanelTypeTicket && !isCommandPanel(panel) { // a panel assigned to a command is never published
 			panels = append(panels, panel)
 		}
 	}

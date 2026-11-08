@@ -44,8 +44,8 @@ func OpenTicketWith(s *discordgo.Session, guildID, panelID, categoryID string, o
 	if category == nil {
 		return nil, ErrTicketCategoryNotFound
 	}
-	// The support blacklist keeps people from asking for help; a system ticket (screenshare) is opened on them, not by them.
-	if entry := TicketBlacklistEntryFor(ip, owner.ID); entry != nil && !isSystemPanel(panelID) {
+	// The support blacklist keeps people from asking for help; a command's ticket (screenshare) is opened on them, not by them.
+	if entry := TicketBlacklistEntryFor(ip, owner.ID); entry != nil && !isCommandPanel(panel) {
 		if entry.Reason != "" {
 			return nil, fmt.Errorf("you cannot open tickets: %s", entry.Reason)
 		}
@@ -386,7 +386,7 @@ func setTicketClaim(s *discordgo.Session, guildID, threadID, staffID string, cla
 
 	RefreshTicketWelcome(s, guildID, ticket, panel)
 	if claim {
-		runClaimed(s, guildID, ticket)
+		runClaimed(s, guildID, ticket, panel)
 	}
 
 	title, color := "Ticket Claimed", helpers.ColorDefault
@@ -471,7 +471,7 @@ func closeTicket(s *discordgo.Session, guildID, threadID, closerID string, close
 		return nil, err
 	}
 	removeTicketActivityChannel(guildID, threadID)
-	runClosed(s, guildID, ticket)
+	runClosed(s, guildID, ticket, panel)
 
 	settings := types.TicketSettings{}
 	if panel != nil && panel.Ticket != nil {
@@ -560,12 +560,13 @@ func isUnknownChannel(err error) bool {
 // and stops being tracked. There is no conversation left to build a transcript from or to tell anybody in, so that is all it does.
 func closeMissingTicket(guildID, threadID string) {
 	var closed *types.Ticket
+	var panel *types.InteractivePanel
 	err := Tickets.Update(sdk.SystemActor, guildID, func(ip *types.InteractivePanels) error {
 		found := ip.Tickets.Open[threadID]
 		if found == nil {
 			return nil
 		}
-		closed = found
+		closed, panel = found, ip.Panels[found.PanelID]
 		found.Status = types.TicketStatusClosed
 		found.ClosedAt = time.Now().Unix()
 		found.ClosedBy = "system"
@@ -581,7 +582,7 @@ func closeMissingTicket(guildID, threadID string) {
 	}
 	log.Printf("[Tickets] closed ticket %s in guild %s: its channel no longer exists", threadID, guildID)
 	if closed != nil {
-		runClosed(nil, guildID, copyTicket(closed))
+		runClosed(nil, guildID, copyTicket(closed), panel)
 	}
 }
 

@@ -221,6 +221,9 @@ func staffRoleIDs(panel *types.InteractivePanel, category *types.TicketCategory)
 	}
 	if panel != nil && panel.Ticket != nil {
 		add(panel.Ticket.Settings.StaffRoleIDs)
+		if panel.Ticket.Screenshare != nil {
+			add(panel.Ticket.Screenshare.ManagerRoleIDs) // managers work the tickets and use the commands too
+		}
 	}
 	if category != nil {
 		add(category.StaffRoleIDs)

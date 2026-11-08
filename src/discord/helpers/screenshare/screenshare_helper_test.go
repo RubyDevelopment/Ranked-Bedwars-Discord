@@ -11,11 +11,12 @@ import (
 // The ticket's welcome fields come from {ss_*} placeholders: empty ones must be present (so no raw {…} shows) and image evidence
 // must go to the image, not to a link field.
 func TestTicketPlaceholders(t *testing.T) {
-	if placeholderVars(&types.Ticket{PanelID: "other"}) != nil {
+	if placeholderVars(&types.Ticket{}, &types.InteractivePanel{Ticket: &types.TicketPanelConfig{}}) != nil {
 		t.Error("other tickets must not get screenshare placeholders")
 	}
-	ticket := &types.Ticket{PanelID: PanelID, ThreadID: "chan-1", OwnerID: "u1", Status: types.TicketStatusOpen}
-	if v := placeholderVars(ticket); v["ss_reason"] != "" || v["ss_player"] != "<@u1>" {
+	panel := &types.InteractivePanel{Ticket: &types.TicketPanelConfig{Command: Command}}
+	ticket := &types.Ticket{ThreadID: "chan-1", OwnerID: "u1", Status: types.TicketStatusOpen}
+	if v := placeholderVars(ticket, panel); v["ss_reason"] != "" || v["ss_player"] != "<@u1>" {
 		t.Errorf("without a request got %v", v)
 	}
 	Requests.guilds["g"] = &guildState{reqs: map[int]*types.ScreenshareRequest{1: {
@@ -23,12 +24,12 @@ func TestTicketPlaceholders(t *testing.T) {
 		Reason: "aim", EvidenceURL: "https://cdn/x.png", EvidenceImage: true, ExpiresAt: 99,
 	}}}
 	defer delete(Requests.guilds, "g")
-	v := placeholderVars(ticket)
+	v := placeholderVars(ticket, panel)
 	if v["ss_image"] != "https://cdn/x.png" || v["ss_evidence"] != "" || v["ss_reporter"] != "<@u2>" || v["ss_player"] != "<@u1> (`Steve`)" {
 		t.Errorf("with a request got %v", v)
 	}
 	ticket.Status, ticket.ClaimedBy = types.TicketStatusClaimed, "u3"
-	if v := placeholderVars(ticket); v["ss_claimed"] != "<@u3>" {
+	if v := placeholderVars(ticket, panel); v["ss_claimed"] != "<@u3>" {
 		t.Errorf("claimed ticket got %v", v)
 	}
 }
