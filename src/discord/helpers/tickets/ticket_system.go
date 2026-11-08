@@ -19,6 +19,9 @@ import (
 type CommandHooks struct {
 	Claimed func(s *discordgo.Session, guildID string, ticket *types.Ticket)
 	Closed  func(s *discordgo.Session, guildID string, ticket *types.Ticket) // s is nil when no session is at hand
+	// Buttons are extra action rows under the ticket's welcome message (below Close and Claim); nil for none. They are asked for
+	// again whenever the welcome message is rendered, so they can depend on the ticket's state.
+	Buttons func(ticket *types.Ticket, panel *types.InteractivePanel) []discordgo.MessageComponent
 }
 
 var commandHooks = map[string]CommandHooks{}
@@ -73,6 +76,14 @@ func hooksFor(panel *types.InteractivePanel) []CommandHooks {
 		all = append(all, hooks)
 	}
 	return all
+}
+
+// commandButtons are the extra rows a command's panel adds under a ticket's welcome message.
+func commandButtons(ticket *types.Ticket, panel *types.InteractivePanel) []discordgo.MessageComponent {
+	if !isCommandPanel(panel) || commandHooks[panel.Ticket.Command].Buttons == nil {
+		return nil
+	}
+	return commandHooks[panel.Ticket.Command].Buttons(ticket, panel)
 }
 
 func runClaimed(s *discordgo.Session, guildID string, ticket *types.Ticket, panel *types.InteractivePanel) {

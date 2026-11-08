@@ -295,6 +295,21 @@ type dueTicket struct {
 	req     types.ScreenshareRequest
 }
 
+// dueClose lists the open tickets a screensharer scheduled to close whose time has come.
+func (st *store) dueClose(now int64) []dueTicket {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	var out []dueTicket
+	for guildID, g := range st.guilds {
+		for _, r := range g.reqs {
+			if r.Kind == types.ScreenshareKindTicket && r.CloseAt > 0 && now > r.CloseAt && (r.Status == types.ScreenshareActive || r.Status == types.ScreenshareClaimed) {
+				out = append(out, dueTicket{guildID, *r})
+			}
+		}
+	}
+	return out
+}
+
 // due lists the loaded tickets nobody claimed in time.
 func (st *store) due(now int64) []dueTicket {
 	st.mu.Lock()
@@ -392,7 +407,7 @@ func CanHandle(s *discordgo.Session, i *discordgo.InteractionCreate) bool {
 
 func init() {
 	helpers.RegisterComponentHandler(handleComponent)
-	tickets.RegisterCommandHooks(Command, tickets.CommandHooks{Claimed: onTicketClaimed, Closed: onTicketClosed})
+	tickets.RegisterCommandHooks(Command, tickets.CommandHooks{Claimed: onTicketClaimed, Closed: onTicketClosed, Buttons: ticketButtons})
 	tickets.PlaceholderVars = placeholderVars
 	helpers.ScreenshareFrozenRole = RestrictedRole
 }
@@ -444,6 +459,9 @@ func placeholderVars(ticket *types.Ticket, panel *types.InteractivePanel) map[st
 		vars["ss_note"] = fmt.Sprintf("<@%s> is handling this screenshare. Close the ticket with the button below or `/ssclose` when it is finished.", ticket.ClaimedBy)
 	case ticket.Status == types.TicketStatusOpen && req.ExpiresAt > 0:
 		vars["ss_note"] = fmt.Sprintf("A screenshare was requested. A screensharer will claim this ticket shortly, and the request expires <t:%d:R>.", req.ExpiresAt)
+	}
+	if req.CloseAt > 0 && ticket.Status != types.TicketStatusClosed {
+		vars["ss_note"] += fmt.Sprintf("\nThis ticket is scheduled to close <t:%d:R>.", req.CloseAt)
 	}
 	return vars
 }
@@ -668,8 +686,24 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, custo
 		return false
 	}
 	parts := strings.Split(customID, ":")
-	id, err := strconv.Atoi(parts[len(parts)-1])
-	if len(parts) != 3 || err != nil {
+	if len(parts) != 3 {
+		return false
+	}
+	// The ticket's own buttons carry the ticket's channel id; the review buttons carry a request id.
+	switch parts[1] {
+	case "delay", "undelay":
+		_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		go onSchedule(s, i, parts[2], parts[1] == "delay")
+		return true
+	case "roles":
+		onRolePicker(s, i, parts[2])
+		return true
+	case "pick":
+		onRolePick(s, i, parts[2])
+		return true
+	}
+	id, err := strconv.Atoi(parts[2])
+	if err != nil {
 		return false
 	}
 	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
@@ -682,6 +716,162 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, custo
 		}
 	}()
 	return true
+}
+
+// ============================================================================
+// Claimed-ticket tools
+// ============================================================================
+
+const defaultCloseDelay = 10 * time.Minute
+
+func closeDelay(opts types.ScreensharePanelOptions) time.Duration {
+	if opts.CloseDelayMinutes > 0 {
+		return time.Duration(opts.CloseDelayMinutes) * time.Minute
+	}
+	return defaultCloseDelay
+}
+
+// ticketButtons are the extra row under a claimed ticket's welcome message: close it after a delay (or cancel that), and pick a role
+// to give the player or take off. Before it is claimed there are none: the ticket's own Claim and Close are enough.
+func ticketButtons(ticket *types.Ticket, panel *types.InteractivePanel) []discordgo.MessageComponent {
+	if ticket.Status != types.TicketStatusClaimed || panel == nil || panel.Ticket == nil {
+		return nil
+	}
+	var opts types.ScreensharePanelOptions
+	if panel.Ticket.Screenshare != nil {
+		opts = *panel.Ticket.Screenshare
+	}
+	req, _ := Requests.byChannelAny(ticket.ThreadID)
+	var row []discordgo.MessageComponent
+	if req.CloseAt > 0 {
+		row = append(row, discordgo.Button{Label: "Cancel Scheduled Close", Style: discordgo.SecondaryButton, Emoji: &discordgo.ComponentEmoji{Name: "⏹️"}, CustomID: idPrefix + "undelay:" + ticket.ThreadID})
+	} else {
+		label := fmt.Sprintf("Close in %d min", int(closeDelay(opts).Minutes()))
+		row = append(row, discordgo.Button{Label: label, Style: discordgo.SecondaryButton, Emoji: &discordgo.ComponentEmoji{Name: "⏱️"}, CustomID: idPrefix + "delay:" + ticket.ThreadID})
+	}
+	if len(opts.ActionRoleIDs) > 0 {
+		row = append(row, discordgo.Button{Label: "Add / Remove Role", Style: discordgo.PrimaryButton, Emoji: &discordgo.ComponentEmoji{Name: "🏷️"}, CustomID: idPrefix + "roles:" + ticket.ThreadID})
+	}
+	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: row}}
+}
+
+// onSchedule schedules the ticket to close after the panel's delay, or cancels that.
+func onSchedule(s *discordgo.Session, i *discordgo.InteractionCreate, channelID string, schedule bool) {
+	guildID := i.GuildID
+	if !CanHandle(s, i) {
+		refuse(s, i, "Not Eligible", "Only screensharers can do this.")
+		return
+	}
+	req, ok := Requests.ByChannel(guildID, channelID)
+	st, err := load(guildID)
+	if !ok || err != nil || (req.Status != types.ScreenshareActive && req.Status != types.ScreenshareClaimed) {
+		refuse(s, i, "Request Inactive", "This screenshare ticket is no longer open.")
+		return
+	}
+	var closeAt int64
+	if schedule {
+		closeAt = time.Now().Add(closeDelay(st.opts)).Unix()
+	}
+	if _, _, err := Requests.Change(guildID, req.ID, func(r *types.ScreenshareRequest) bool { r.CloseAt = closeAt; return true }); err != nil {
+		refuse(s, i, "Not Saved", "The change could not be saved. Try again.")
+		return
+	}
+	text := fmt.Sprintf("<@%s> cancelled the scheduled close.", helpers.InteractionUserID(i))
+	if schedule {
+		text = fmt.Sprintf("<@%s> scheduled this ticket to close <t:%d:R>. Use **Cancel Scheduled Close** to keep it open.", helpers.InteractionUserID(i), closeAt)
+	}
+	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Content: text, AllowedMentions: &discordgo.MessageAllowedMentions{}})
+	if ctx, err := tickets.LoadTicketContext(guildID, channelID); err == nil {
+		tickets.RefreshWelcome(s, guildID, ctx.Ticket)
+	}
+}
+
+// respondEphemeral answers a click with a message only the clicker sees.
+func respondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, kind discordgo.InteractionResponseType, text string, components []discordgo.MessageComponent) {
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+		Type: kind,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral, Content: text, Components: components, AllowedMentions: &discordgo.MessageAllowedMentions{}},
+	})
+}
+
+// onRolePicker shows the screensharer the roles the panel lets them give or take off the player.
+func onRolePicker(s *discordgo.Session, i *discordgo.InteractionCreate, channelID string) {
+	st, err := load(i.GuildID)
+	if err != nil || !CanHandle(s, i) {
+		respondEphemeral(s, i, discordgo.InteractionResponseChannelMessageWithSource, "Only screensharers can do this.", nil)
+		return
+	}
+	var options []discordgo.SelectMenuOption
+	for _, id := range st.opts.ActionRoleIDs[:min(len(st.opts.ActionRoleIDs), 25)] {
+		name := id
+		if role, err := s.State.Role(i.GuildID, id); err == nil {
+			name = role.Name
+		}
+		options = append(options, discordgo.SelectMenuOption{Label: name, Value: id})
+	}
+	if len(options) == 0 {
+		respondEphemeral(s, i, discordgo.InteractionResponseChannelMessageWithSource, "No roles are set up for this. An administrator can add them on the screenshare panel.", nil)
+		return
+	}
+	menu := discordgo.SelectMenu{MenuType: discordgo.StringSelectMenu, CustomID: idPrefix + "pick:" + channelID, Placeholder: "Choose a role", Options: options}
+	respondEphemeral(s, i, discordgo.InteractionResponseChannelMessageWithSource,
+		"Choose a role for the player. If they already have it, it is taken off.", []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{menu}}})
+}
+
+// onRolePick gives the chosen role to the player, or takes it off when they have it.
+func onRolePick(s *discordgo.Session, i *discordgo.InteractionCreate, channelID string) {
+	update := func(text string) {
+		respondEphemeral(s, i, discordgo.InteractionResponseUpdateMessage, text, []discordgo.MessageComponent{})
+	}
+	values := i.MessageComponentData().Values
+	st, err := load(i.GuildID)
+	req, ok := Requests.ByChannel(i.GuildID, channelID)
+	if err != nil || !ok || len(values) != 1 || !CanHandle(s, i) {
+		update("That did not work: only screensharers can do this, and the ticket must still exist.")
+		return
+	}
+	role := values[0]
+	if !slices.Contains(st.opts.ActionRoleIDs, role) { // never trust the menu's value alone
+		update("That role is not one this ticket can give.")
+		return
+	}
+	member, _ := helpers.FetchGuildMember(s, i.GuildID, req.TargetID)
+	if member == nil {
+		update("The player is no longer in the server.")
+		return
+	}
+	has := slices.Contains(member.Roles, role)
+	if has {
+		err = s.GuildMemberRoleRemove(i.GuildID, req.TargetID, role)
+	} else {
+		err = s.GuildMemberRoleAdd(i.GuildID, req.TargetID, role)
+	}
+	if err != nil {
+		update("Discord refused: " + err.Error() + ". The bot's role has to be above that role.")
+		return
+	}
+	verb := map[bool]string{true: "took <@&%s> off", false: "gave <@&%s> to"}[has]
+	line := fmt.Sprintf("<@%s> "+verb+" <@%s>.", helpers.InteractionUserID(i), role, req.TargetID)
+	update(strings.NewReplacer("<@&"+role+">", "the role").Replace(line))
+	_, _ = s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Content: line, AllowedMentions: &discordgo.MessageAllowedMentions{}})
+}
+
+// closeScheduled closes a ticket whose scheduled time has come.
+func closeScheduled(s *discordgo.Session, guildID string, id int) {
+	req, changed, err := Requests.Change(guildID, id, func(r *types.ScreenshareRequest) bool {
+		if r.CloseAt == 0 || (r.Status != types.ScreenshareActive && r.Status != types.ScreenshareClaimed) {
+			return false
+		}
+		r.CloseAt = 0 // once
+		return true
+	})
+	if err != nil || !changed {
+		return
+	}
+	bot := s.State.User.ID
+	_ = tickets.SetPendingCloseReason(bot, guildID, req.ChannelID, "Closed after the scheduled delay.")
+	_, _ = s.ChannelMessageSend(req.ChannelID, "The scheduled time has come, so this ticket is being closed.")
+	_ = Close(s, guildID, req.ChannelID, bot)
 }
 
 func refuse(s *discordgo.Session, i *discordgo.InteractionCreate, title, text string) {
@@ -767,8 +957,12 @@ func StartSweeper(s *discordgo.Session) {
 			Requests.mu.Unlock()
 		}
 		for range time.Tick(30 * time.Second) {
-			for _, d := range Requests.due(time.Now().Unix()) {
+			now := time.Now().Unix()
+			for _, d := range Requests.due(now) {
 				expire(s, d.guildID, d.req.ID)
+			}
+			for _, d := range Requests.dueClose(now) {
+				closeScheduled(s, d.guildID, d.req.ID)
 			}
 		}
 	}()

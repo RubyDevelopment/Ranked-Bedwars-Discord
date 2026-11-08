@@ -533,7 +533,7 @@ func ticketWelcomeButtons(ticket *types.Ticket, panel *types.InteractivePanel) [
 		}
 		buttons = append(buttons, claim)
 	}
-	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}
+	return append([]discordgo.MessageComponent{discordgo.ActionsRow{Components: buttons}}, commandButtons(ticket, panel)...)
 }
 
 // TicketCloseConfirmMessage asks the clicker to confirm closing the ticket.

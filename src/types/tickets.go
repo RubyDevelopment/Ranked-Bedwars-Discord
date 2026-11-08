@@ -30,6 +30,8 @@ type ScreensharePanelOptions struct {
 	ReviewsChannelID    string   `json:"reviews_channel_id"`    // where investigation requests on SS Restricted players are posted
 	ManagerRoleIDs      []string `json:"manager_role_ids"`      // work the tickets and use the screenshare commands, like the staff roles, without being pinged
 	ClaimTimeoutMinutes int      `json:"claim_timeout_minutes"` // an unclaimed ticket is closed after this long (0: ten minutes)
+	ActionRoleIDs       []string `json:"action_role_ids"`       // roles a screensharer can add to or take off the player from a claimed ticket
+	CloseDelayMinutes   int      `json:"close_delay_minutes"`   // what the "close in N minutes" button waits (0: ten minutes)
 }
 
 // TicketCategory is one button on a ticket panel.

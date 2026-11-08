@@ -36,6 +36,7 @@ type ScreenshareRequest struct {
 	TicketChannelID     string `json:"ticket_channel_id,omitempty"` // review: the ticket its approval opened
 	CreatedAt           int64  `json:"created_at"`
 	ExpiresAt           int64  `json:"expires_at,omitempty"`
+	CloseAt             int64  `json:"close_at,omitempty"` // a screensharer scheduled the ticket to close then; 0: not scheduled
 	ClosedAt            int64  `json:"closed_at,omitempty"`
 	ClosedBy            string `json:"closed_by,omitempty"`
 	RestrictionRoleID   string `json:"restriction_role_id,omitempty"`   // which role that was, so it is the same one taken off later
