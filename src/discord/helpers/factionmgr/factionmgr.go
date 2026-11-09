@@ -98,7 +98,10 @@ func roleName(p *database.FactionProfile) string {
 	if p.DisplayTag != "" {
 		name = p.DisplayTag + " " + name
 	}
-	if r := []rune(name); len(r) > 100 {
+	if p.Legendary {
+		name = "👑 " + name
+	}
+	if r :=[]rune(name); len(r) > 100 {
 		name = string(r[:100])
 	}
 	return name
@@ -202,12 +205,15 @@ func LevelUpEmbed(f database.FactionGameTrophies) *discordgo.MessageEmbed {
 // BannerVars are the {faction.*} variables of a player's stats banner: empty for a player with no faction, so a banner that shows the tag
 // simply shows nothing for them. faction.tag is the tag as written beside the player (empty until the tag reward is unlocked).
 func BannerVars(guildID, userID string) map[string]string {
-	vars := map[string]string{"faction.name": "", "faction.tag": "", "faction.color": "", "faction.icon": "", "faction.level": "", "faction.role": "", "faction.prestige": ""}
+	vars := map[string]string{"faction.name": "", "faction.tag": "", "faction.color": "", "faction.icon": "", "faction.level": "", "faction.role": "", "faction.prestige": "", "faction.legendary": ""}
 	b, err := database.FactionBriefFor(guildID, userID)
 	if err != nil || b == nil {
 		return vars
 	}
 	vars["faction.name"], vars["faction.tag"], vars["faction.color"], vars["faction.icon"] = b.Name, b.DisplayTag, b.Color, b.Icon
 	vars["faction.level"], vars["faction.role"], vars["faction.prestige"] = strconv.Itoa(b.Level), b.Role, b.Prestige
+	if b.Legendary {
+		vars["faction.legendary"] = "Legendary"
+	}
 	return vars
 }

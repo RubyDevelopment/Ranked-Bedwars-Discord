@@ -42,7 +42,7 @@ func levelRewards(cfg *database.FactionConfig, n int) []string {
 		at   int
 		name string
 	}{{cfg.Unlocks.Tag, "Faction Tag"}, {cfg.Unlocks.Color, "Faction Colour"}, {cfg.Unlocks.Role, "Discord Faction Role"}, {cfg.Unlocks.Icon, "Faction Icon"},
-		{cfg.Unlocks.Advanced, "Advanced Customization (tag symbols, image icons)"}, {cfg.Unlocks.Prestige, "Prestige Badge"}, {cfg.Unlocks.Legendary, "Legendary Status"}} {
+		{cfg.Unlocks.Advanced, "Advanced Customization (tag symbols)"}, {cfg.Unlocks.Prestige, "Prestige Badge"}, {cfg.Unlocks.Legendary, "Legendary Status"}} {
 		if r.at == n || (n == 1 && r.at < 1) {
 			out = append(out, r.name)
 		}

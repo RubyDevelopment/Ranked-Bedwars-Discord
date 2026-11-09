@@ -94,7 +94,7 @@ var FactionCommand = &types.Command{
 			{Name: "customize", Description: "Change your faction's name, tag, colour, icon or tag symbol", Type: discordgo.ApplicationCommandOptionSubCommand, Options: []*discordgo.ApplicationCommandOption{
 				{Name: "name", Description: "A new name", Type: discordgo.ApplicationCommandOptionString},
 				{Name: "tag", Description: "A new tag", Type: discordgo.ApplicationCommandOptionString},
-				{Name: "color", Description: "A colour, like #FF5555 (unlocked by level)", Type: discordgo.ApplicationCommandOptionString},
+				{Name: "color", Description: "A faction colour by name, like Red or Blue (unlocked by level)", Type: discordgo.ApplicationCommandOptionString},
 				{Name: "icon", Description: "An emoji or image link (unlocked by level)", Type: discordgo.ApplicationCommandOptionString},
 				{Name: "symbol", Description: "A symbol around the tag, like ✦ (unlocked by level)", Type: discordgo.ApplicationCommandOptionString},
 			}},
@@ -812,6 +812,9 @@ func FactionInfoEmbed(p *database.FactionProfile, cfg *database.FactionConfig) *
 	if p.Faction.Icon != "" && !strings.HasPrefix(p.Faction.Icon, "http") {
 		heading = p.Faction.Icon + " " + heading
 	}
+	if p.Legendary {
+		heading = "👑 " + heading + " · LEGENDARY"
+	}
 	level := fmt.Sprintf("%d", p.Level)
 	if p.Level >= p.MaxLevel {
 		level += " (max)"
@@ -911,6 +914,9 @@ func FactionLeaderboardEmbed(rows []database.FactionRow, board string, page, tot
 		trophies := r.LifetimeTrophies
 		if board == "seasonal" {
 			trophies = r.SeasonTrophies
+		}
+		if r.Legendary {
+			b.WriteString("👑 ")
 		}
 		fmt.Fprintf(&b, "**#%d** %s · Lv **%d** · %s · %d members", r.Rank, factionHeading(r.Name, r.DisplayTag), r.Level, factionmgr.Trophies(trophies), r.MemberCount)
 		if r.Prestige != "" {

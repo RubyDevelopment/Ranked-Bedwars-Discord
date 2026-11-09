@@ -128,6 +128,7 @@ type FactionBrief struct {
 	Level      int    `json:"level"`
 	Role       string `json:"role"`
 	Prestige   string `json:"prestige"`
+	Legendary  bool   `json:"legendary"`
 }
 
 // FactionRow is one line of a faction leaderboard.
@@ -138,6 +139,7 @@ type FactionRow struct {
 	MemberCount    int    `json:"member_count"`
 	DisplayTag     string `json:"display_tag"`
 	Prestige       string `json:"prestige"`
+	Legendary      bool   `json:"legendary"`
 }
 
 // FactionInvite is an invitation a player holds.
