@@ -325,11 +325,21 @@ func (d *gameDiscord) postReminderWithInvitation(s *discordgo.Session, g Game, s
 func (d *gameDiscord) resendPartyInvitation(s *discordgo.Session, g Game, st *embedState) {
 	d.mu.Lock()
 	data, ok, old := st.invite, st.hasInvite, st.msgs["partyInvitation"]
-	delete(st.msgs, "partyInvitation")
 	d.mu.Unlock()
 	if !ok {
 		return
 	}
+	// Already the newest message: nothing to move, so edit it in place with the latest lists instead of posting another.
+	if old != "" {
+		if latest, err := s.ChannelMessages(g.Channels.Text, 1, "", "", ""); err == nil && len(latest) == 1 && latest[0].ID == old {
+			if d.post(s, g, "partyInvitation", data) {
+				return
+			}
+		}
+	}
+	d.mu.Lock()
+	delete(st.msgs, "partyInvitation")
+	d.mu.Unlock()
 	if old != "" {
 		if err := s.ChannelMessageDelete(g.Channels.Text, old); err != nil {
 			log.Printf("delete party invitation for game %d: %v", g.ID, err)

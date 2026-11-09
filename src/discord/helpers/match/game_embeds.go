@@ -801,7 +801,7 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 	var blocks []string
 	size := 0
 	for _, p := range g.TeamPlayers(team) {
-		head := fmt.Sprintf("<@%s> (`%s`)", p.UserID, p.Username)
+		head := fmt.Sprintf("<@%s> (`%s`)", p.UserID, MCName(g.GuildID, p))
 		if p.Captain {
 			head = "👑 " + head
 		}
@@ -812,7 +812,7 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 				break
 			}
 		}
-		stats := fmt.Sprintf(" · K/D: `%d/%d` · FK: `%d` · Beds: `%d`", p.Kills, p.Deaths, p.FinalKills, p.BedsDestroyed)
+		stats := fmt.Sprintf("K/D: `%d/%d` · FK: `%d` · Beds: `%d`", p.Kills, p.Deaths, p.FinalKills, p.BedsDestroyed)
 		ids := make([]string, 0, len(p.Custom))
 		for id := range p.Custom {
 			ids = append(ids, id)
@@ -821,7 +821,7 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 		for _, id := range ids {
 			stats += fmt.Sprintf(" · %s: `%g`", f.label(id), p.Custom[id])
 		}
-		block := head + "\n> " + elo + stats // the player's name, then ELO, K/D, FK and beds on one line
+		block := head + "\n> " + elo + "\n> " + stats // the player's name, then the ELO change, then K/D, FK and beds
 		if size+len(block)+1 > 1000 {
 			break
 		}
@@ -832,6 +832,14 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 		return "No players"
 	}
 	return strings.Join(blocks, "\n") // the next player right below
+}
+
+// MCName is the Minecraft name the player registered (the Discord display name carries their ELO prefix); without one, the display name.
+func MCName(guildID string, p GamePlayer) string {
+	if view, err := database.Must().Player.Get(guildID, p.UserID); err == nil && view.Config != nil && strings.TrimSpace(view.Config.Username) != "" {
+		return view.Config.Username
+	}
+	return p.Username
 }
 
 // TeamStats is TeamStatLines with the guild's own stat labels, for commands outside this package.

@@ -95,6 +95,11 @@ func (d *gameDiscord) handleDraftPick(s *discordgo.Session, i *discordgo.Interac
 
 // afterPick is what follows a pick, however it was made: the line in the game chat, then the draft message and its timer for the next turn.
 func (d *gameDiscord) afterPick(s *discordgo.Session, gameID uint, ui *draftUI, captainID, pickedID, teamName string) {
+	// Kill the previous turn's timer now: until refreshDraft re-arms, it could still fire, auto-pick for the next captain and
+	// post a second picking message alongside this one.
+	d.mu.Lock()
+	ui.turnKey = ""
+	d.mu.Unlock()
 	d.say(s, ui.channelID, "<@"+captainID+"> has picked <@"+pickedID+"> for **"+teamName+"**")
 	d.refreshDraft(s, gameID, ui)
 }

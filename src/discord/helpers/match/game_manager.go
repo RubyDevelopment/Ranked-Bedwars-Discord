@@ -3,6 +3,7 @@ package match
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
@@ -62,6 +63,7 @@ func init() {
 	queue.Queues.Wire(func(d *queue.QueueDeps) {
 		d.InGame = Games.InGame
 		d.VoidVoting = Games.VoidVoting
+		d.ReturnToGame = Games.ReturnToGame
 		d.FlowMaxParty = func(guildID string, mode types.Mode) *int {
 			flows := Games.deps.Flows(guildID)
 			if flows.IsCaptain(mode) {
@@ -627,4 +629,28 @@ func init() {
 		}
 		return 0, false
 	}
+}
+
+// ReturnToGame puts a player who wandered into a queue channel back into their team's voice channel. It returns the game's id and
+// whether the player was moved (false: no game, no team channel yet, or the move failed).
+func (m *GameManager) ReturnToGame(s *discordgo.Session, guildID, userID string) (uint, bool) {
+	m.mu.RLock()
+	id, ok := m.byPlayer[playerKey(guildID, userID)]
+	m.mu.RUnlock()
+	if !ok {
+		return 0, false
+	}
+	g, ok := m.Get(id)
+	if !ok {
+		return id, false
+	}
+	p, ok := g.Player(userID)
+	if !ok {
+		return id, false
+	}
+	vc := g.Channels.Voice[p.Team]
+	if vc == "" {
+		return id, false
+	}
+	return id, s.GuildMemberMove(guildID, userID, &vc) == nil
 }

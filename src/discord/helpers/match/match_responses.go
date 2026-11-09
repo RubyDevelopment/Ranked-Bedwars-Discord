@@ -99,7 +99,7 @@ var statusFields = []embedField{
 	{Name: helpers.DotGreen + " Joined ({joinedCount}/{playerCount})", Value: "{joined}", Inline: true},
 }
 
-var teamStatusField = embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}
+var teamStatusField = embedField{Name: "{team}", Value: "{teamPlayers}", Inline: true, Each: "team"}
 
 // mapScoreField is one field per map of the vote, best first: the map and its score, the winner marked.
 var mapScoreField = embedField{Name: "{mapIcon} {mapName}{winnerTag}", Value: "`Score: {mapScore}`", Inline: true, Each: "map"}
@@ -144,7 +144,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	"mapSetup": thumb(tpl("pending", "Map Setup", "**{mapCount}** map(s) are in rotation for **{mode}**.\n\n**Agree on one map**, create a private game on it, then use its max height and team colours below to set up your match.",
 		embedField{Name: "{mapName}", Value: "**Max height:** {mapHeight}\n**Teams:** {mapTeams}", Inline: true, Each: "map"}), helpers.ThumbSprout),
 	"teamSetup": thumb(tpl("pending", "Team Setup", "Open the **Team Selector** item in the lobby and join your team's colour. **Stay with your team mates**, and do not start the countdown until every player is on their team.",
-		embedField{Name: "Team {team}", Value: "{teamPlayers}", Inline: true, Each: "team"}), helpers.ThumbPlayers),
+		embedField{Name: "{team}", Value: "{teamPlayers}", Inline: true, Each: "team"}), helpers.ThumbPlayers),
 	"partyReminder": func() embedTemplate {
 		t := tpl("default", "Party reminder", "Said again each time the players who have not joined are invited.")
 		t.Content = str("{waitingMentions}\nMake sure you're **/online**, party invites are **on**, you are in the **hub or Bedwars lobby**, and you are on the right **account**!")

@@ -45,6 +45,9 @@ var (
 	// denied holds "channelID:userID" for members the join checks refused while they sit in a queue channel (the channel's status counts them
 	// as ineligible); it is under admittedMu too.
 	denied = map[string]bool{}
+	// returned holds "guildID:userID" -> the game they were sent back to their team channel for. The first time a player in a game joins
+	// a queue channel they are moved back quietly; joining again for the same game is taken as on purpose, and they get the alert.
+	returned = map[string]uint{}
 
 	// lastLaunch is when each queue channel last launched a game.
 	launchMu   sync.Mutex
@@ -214,6 +217,18 @@ func checkAdmission(s *discordgo.Session, guildID, userID, channelID string, sna
 	if Queues.deps.InGame(guildID, userID) {
 		// While their game's void vote is open, players usually sit in a queue channel to talk: that is no attempt to queue, so no alert.
 		if Queues.deps.VoidVoting == nil || !Queues.deps.VoidVoting(guildID, userID) {
+			if fn := Queues.deps.ReturnToGame; fn != nil {
+				key := guildID + ":" + userID
+				admittedMu.Lock()
+				seen := returned[key]
+				admittedMu.Unlock()
+				if game, moved := fn(s, guildID, userID); moved && game != seen {
+					admittedMu.Lock()
+					returned[key] = game
+					admittedMu.Unlock()
+					return false // first time: back to their team channel, no alert
+				}
+			}
 			sendQueueAlert(s, guildID, userID, helpers.QueueDeniedEmbed("You cannot queue while you are inside an active game. Finish your current game first."))
 		}
 		return false
@@ -619,6 +634,7 @@ type QueueDeps struct {
 	Parties         *partymgr.PartyManager
 	InGame          func(guildID, userID string) bool // nil = nobody is in a game
 	VoidVoting      func(guildID, userID string) bool // whether the member's game has a void vote open; nil = none do (players drift into queue channels meanwhile)
+	ReturnToGame    func(s *discordgo.Session, guildID, userID string) (game uint, moved bool) // moves a member who is in a game back to their team voice channel; nil = never
 	HasActiveSeason func(guildID string) bool
 	Paused          func(guildID string) bool
 	FlowMaxParty    func(guildID string, mode types.Mode) *int // the game flow's cap on a party's size; nil = none

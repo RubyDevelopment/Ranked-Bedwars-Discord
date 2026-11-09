@@ -108,10 +108,9 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game) *dis
 	var description strings.Builder
 
 	// Basic info
-	description.WriteString(fmt.Sprintf("**Game Number:** %s\n", helpers.MatchLink(game.GuildID, game.SeasonID, game.Number, game.Total, fmt.Sprintf("#%d", game.Number))))
 	description.WriteString(fmt.Sprintf("**Mode:** %s\n", game.Mode.Name))
 	description.WriteString(fmt.Sprintf("**State:** %s\n", game.State))
-	description.WriteString(fmt.Sprintf("**Map:** %s\n", game.Map))
+	description.WriteString(fmt.Sprintf("**Map:** %s\n\n", game.Map))
 
 	// Timing
 	if !game.CreatedAt.IsZero() {
@@ -124,7 +123,11 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game) *dis
 	// Teams, side by side
 	var fields []*discordgo.MessageEmbedField
 	for _, teamName := range game.Teams {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: teamName, Value: match.TeamStats(game, teamName), Inline: true})
+		title := teamName
+		if game.Winner == teamName {
+			title = "🏆 " + teamName
+		}
+		fields = append(fields, &discordgo.MessageEmbedField{Name: title,Value: match.TeamStats(game, teamName), Inline: true})
 	}
 
 	// Custom game info
@@ -154,12 +157,14 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game) *dis
 		description.WriteString(fmt.Sprintf("**MVP:** <@%s>\n", game.MVP))
 	}
 
-	return helpers.Preset("info", types.PresetOptions{
+	emb := helpers.Preset("info", types.PresetOptions{
 		Title:       fmt.Sprintf("Game Information · #%d", game.Number),
 		Description: description.String(),
 		Fields:      fields,
 		Thumbnail:   helpers.ThumbDoubleSwords,
 	})
+	emb.URL = helpers.MatchURL(game.GuildID, game.SeasonID, game.Number, game.Total)
+	return emb
 }
 
 func OnOff(v bool) string {

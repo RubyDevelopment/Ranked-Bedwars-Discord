@@ -12,6 +12,7 @@ import (
 
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/discord/helpers/partymgr"
 	"ranked-bedwars/src/discord/helpers/punish"
@@ -90,7 +91,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 			for _, p := range teamPlayers {
 				assignedPlayerIDs[p.UserID] = true
 			}
-			fields = append(fields, queueRosterField(guildID, seasonID, helpers.LayoutQueuesTeamTitle, teamName, teamPlayers))
+			fields = append(fields, queueRosterField(guildID, seasonID, helpers.LayoutQueuesTeamTitle, teamName, teamPlayers)...)
 		}
 	}
 
@@ -103,7 +104,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 	}
 
 	if len(unassigned) > 0 {
-		fields = append(fields, queueRosterField(guildID, seasonID, helpers.LayoutQueuesPoolTitle, "", unassigned))
+		fields = append(fields, queueRosterField(guildID, seasonID, helpers.LayoutQueuesPoolTitle, "", unassigned)...)
 	}
 
 	// Check for active draft
@@ -125,40 +126,42 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 	return helpers.EditInteractionEmbed(s, i, QueueStatusGameStatsEmbed(i, game, seasonKey, fields))
 }
 
-// queueRosterField is a team's (or the draft pool's) field: its heading and a row for each player, from the layouts.
-func queueRosterField(guildID string, seasonID uint, titleLayout, team string, players []match.GamePlayer) *discordgo.MessageEmbedField {
-	// Each player's wins/losses and kills/deaths for the season as they are (5/2, not 2.50), looked up side by side (a player with no stats yet reads 0/0).
-	wlr, kdr := make([]string, len(players)), make([]string, len(players))
+// queueRosterField is a team's (or the draft pool's) heading followed by one inline field per player, from the layouts.
+func queueRosterField(guildID string, seasonID uint, titleLayout, team string, players []match.GamePlayer) []*discordgo.MessageEmbedField {
+	// Each player's season stats as they are (5/2, not 2.50) plus the ratios, looked up side by side (a player with no stats yet reads 0).
+	type line struct{ wl, kd, mvp, wlr, kdr, mc string }
+	stats := make([]line, len(players))
 	var wg sync.WaitGroup
 	for n, p := range players {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			wlr[n], kdr[n] = "0/0", "0/0"
+			stats[n] = line{"0/0", "0/0", "0", "0.00", "0.00", match.MCName(guildID, p)}
 			if st, err := database.Must().Stats.Get(guildID, p.UserID, seasonID); err == nil {
-				wlr[n], kdr[n] = fmt.Sprintf("%d/%d", st.Wins, st.Losses), fmt.Sprintf("%d/%d", st.Kills, st.Deaths)
+				stats[n] = line{fmt.Sprintf("%d/%d", st.Wins, st.Losses), fmt.Sprintf("%d/%d", st.Kills, st.Deaths), strconv.Itoa(st.MvpCount), banner.Ratio(st.Wins, st.Losses), banner.Ratio(st.Kills, st.Deaths), stats[n].mc}
 			}
 		}()
 	}
 	wg.Wait()
 
-	rows := make([]string, 0, len(players))
 	total := 0
+	rows := make([]*discordgo.MessageEmbedField, 0, len(players))
 	for n, p := range players {
 		total += p.EloBefore
-		rows = append(rows, helpers.FillLayout(guildID, helpers.LayoutQueuesPlayer, map[string]string{
-			"mention": "<@" + p.UserID + ">", "id": p.UserID, "name": p.Username, "elo": strconv.Itoa(p.EloBefore), "team": team,
-			"wlr": wlr[n], "kdr": kdr[n],
-		}))
+		rows = append(rows, &discordgo.MessageEmbedField{Name: "​", Inline: true, Value: helpers.FillLayout(guildID, helpers.LayoutQueuesPlayer, map[string]string{
+			"mention": "<@" + p.UserID + ">", "id": p.UserID, "name": stats[n].mc, "elo": strconv.Itoa(p.EloBefore), "team": team,
+			"wlr": stats[n].wl, "kdr": stats[n].kd, "mvp": stats[n].mvp, "wlr_ratio": stats[n].wlr, "kdr_ratio": stats[n].kdr,
+		})})
 	}
 	avg := 0
 	if len(players) > 0 {
 		avg = total / len(players)
 	}
-	return &discordgo.MessageEmbedField{
+	head := &discordgo.MessageEmbedField{
 		Name:  helpers.FillLayout(guildID, titleLayout, map[string]string{"team": team, "avg_elo": strconv.Itoa(avg), "players": strconv.Itoa(len(players))}),
-		Value: strings.Join(rows, "\n"),
+		Value: "​",
 	}
+	return append([]*discordgo.MessageEmbedField{head}, rows...)
 }
 
 // showQueueStatus displays the queue status for a voice channel
@@ -345,12 +348,14 @@ func QueueStatusClosedEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEm
 }
 
 func QueueStatusGameStatsEmbed(i *discordgo.InteractionCreate, game match.Game, season string, fields []*discordgo.MessageEmbedField) *discordgo.MessageEmbed {
-	return helpers.Preset("info", types.PresetOptions{
+	emb := helpers.Preset("info", types.PresetOptions{
 		Title:       fmt.Sprintf("Game Stats · #%d", game.Number),
 		Description: fmt.Sprintf("> **Mode:** `%s`\n> **Season:** `%s`", game.Mode.Name, season),
 		Fields:      fields,
 		Thumbnail:   helpers.ThumbPlayers,
 	})
+	emb.URL = helpers.MatchURL(game.GuildID, game.SeasonID, game.Number, game.Total)
+	return emb
 }
 
 func QueueStatusQueueEmbed(i *discordgo.InteractionCreate, modeName, description string, fields []*discordgo.MessageEmbedField) *discordgo.MessageEmbed {
