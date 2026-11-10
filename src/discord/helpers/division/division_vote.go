@@ -386,7 +386,7 @@ func myVotesEmbed(guildID, userID string, d Div) *discordgo.MessageEmbed {
 			default:
 				head += " · you denied"
 			}
-			lines = append(lines, fmt.Sprintf("%s\n> 🟢 %d 🔴 %d\n> %s", head, yes, no, v.link()))
+			lines = append(lines, fmt.Sprintf("%s\n> %s %d %s %d", head, helpers.DotGreen, yes, helpers.DotRed, no))
 		}
 		v.mu.Unlock()
 	}
