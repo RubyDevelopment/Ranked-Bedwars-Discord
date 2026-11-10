@@ -8,7 +8,6 @@ import (
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
-	"ranked-bedwars/src/discord/helpers/queue"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,9 +36,6 @@ type GameDiscordEffects struct {
 	Notify         func(g Game, ev GameEvent)
 	ApplyTeams     func(g Game) error
 	SelectMap      func(g Game, available []MapOption, mapMenuRead bool) (*MapSelection, error)
-	WaitingPlayers func(g Game) []string
-	HasSpoken      func(g Game, userID string) bool
-	SwapMembers    func(g Game, out, in GamePlayer) error
 }
 
 // NewGameDiscordEffects returns the effects for GameManager.SetEffects and
@@ -49,7 +45,7 @@ func NewGameDiscordEffects(session func() *discordgo.Session) GameDiscordEffects
 	d := &gameDiscord{session: session, votes: map[uint]*mapVote{}, closedVotes: map[uint]*closedVote{}, drafts: map[uint]*draftUI{}, live: map[uint]*embedState{}, introductions: map[uint]bool{}}
 	helpers.RegisterComponentHandler(d.handleComponent)
 	gameUI.Store(d)
-	return GameDiscordEffects{Notify: d.notify, ApplyTeams: d.applyTeams, SelectMap: d.selectMap, WaitingPlayers: d.waitingPlayers, HasSpoken: d.hasSpoken, SwapMembers: d.swapMembers}
+	return GameDiscordEffects{Notify: d.notify, ApplyTeams: d.applyTeams, SelectMap: d.selectMap}
 }
 
 // closedVote is a map vote that is over: its message and the per-map scores it ended with.
@@ -94,7 +90,6 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		}
 	case EventStarted:
 		if g.Bot != "" {
-			d.post(s, g, "matchStarted", embedData{})
 			d.startTracker(s, g)
 			d.scheduleTeamStatuses(s, g, false)
 		} else {
@@ -175,6 +170,14 @@ func (d *gameDiscord) notify(g Game, ev GameEvent) {
 		d.forget(g.ID)
 	case EventScored:
 		d.scheduleTeamStatuses(s, g, true)
+		// The Match Over message, posted before the result existed, now shows each player's ELO before → after. Done before forget, which drops its message id.
+		st := d.state(g.ID)
+		d.mu.Lock()
+		over := st.posted["matchEnded"]
+		d.mu.Unlock()
+		if over {
+			d.post(s, g, "matchEnded", embedData{})
+		}
 		for _, hook := range ScoredHooks {
 			go hook(s, g)
 		}
@@ -702,72 +705,6 @@ func (d *gameDiscord) gatherForDraft(s *discordgo.Session, g Game) {
 		}
 		_ = s.GuildMemberMove(g.GuildID, p.UserID, &vcID)
 	}
-}
-
-// waitingPlayers lists who is sitting in the game's queue channel and could still be put into a game.
-func (d *gameDiscord) waitingPlayers(g Game) []string {
-	s := d.session()
-	if s == nil || g.QueueChannelID == "" {
-		return nil
-	}
-	return queue.Waiting(s, g.GuildID, g.QueueChannelID)
-}
-
-// hasSpoken reports whether the member wrote in the game's chat. A chat that cannot be read counts as spoken: nobody is put to a
-// vote on a guess.
-func (d *gameDiscord) hasSpoken(g Game, userID string) bool {
-	s := d.session()
-	if s == nil || g.Channels.Text == "" {
-		return true
-	}
-	msgs, err := s.ChannelMessages(g.Channels.Text, 100, "", "", "")
-	if err != nil {
-		return true
-	}
-	for _, m := range msgs {
-		if m.Author != nil && m.Author.ID == userID {
-			return true
-		}
-	}
-	return false
-}
-
-// swapMembers gives the substitute the leaver's place in the game's channels: the same access to the chat and the voice channels, and
-// out of the leaver's seat into the team's voice channel, while the leaver goes back to the waiting voice channel.
-func (d *gameDiscord) swapMembers(g Game, out, in GamePlayer) error {
-	s := d.session()
-	if s == nil {
-		return nil
-	}
-	inVoice := func(userID string) bool {
-		vs, err := s.State.VoiceState(g.GuildID, userID)
-		return err == nil && vs != nil && vs.ChannelID != ""
-	}
-	// Out of the team's channel first, while they can still be moved.
-	if waiting := base.FirstNonEmpty(g.Channels.Waiting, g.QueueChannelID); waiting != "" && inVoice(out.UserID) {
-		_ = s.GuildMemberMove(g.GuildID, out.UserID, &waiting)
-	}
-	if text := g.Channels.Text; text != "" {
-		ch, err := s.State.Channel(text)
-		if err != nil {
-			ch, err = s.Channel(text)
-		}
-		if err == nil && ch != nil && ch.IsThread() {
-			_ = s.ThreadMemberRemove(text, out.UserID)
-			_ = s.ThreadMemberAdd(text, in.UserID)
-		} else {
-			_ = s.ChannelPermissionDelete(text, out.UserID)
-			_ = s.ChannelPermissionSet(text, in.UserID, discordgo.PermissionOverwriteTypeMember, gameChannelAllow, 0)
-		}
-	}
-	for _, vc := range g.Channels.Voice {
-		_ = s.ChannelPermissionDelete(vc, out.UserID)
-		_ = s.ChannelPermissionSet(vc, in.UserID, discordgo.PermissionOverwriteTypeMember, gameChannelAllow, 0)
-	}
-	if vc := g.Channels.Voice[in.Team]; vc != "" && inVoice(in.UserID) {
-		_ = s.GuildMemberMove(g.GuildID, in.UserID, &vc)
-	}
-	return nil
 }
 
 // applyTeams moves players already in voice into their team's voice channel.
