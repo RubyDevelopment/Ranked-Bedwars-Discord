@@ -370,24 +370,30 @@ func myVotesEmbed(guildID, userID string, d Div) *discordgo.MessageEmbed {
 		}
 	}
 	open.mu.Unlock()
-	if len(mine) == 0 {
-		return helpers.Preset("info", types.PresetOptions{Title: d.Label + " Votes", Description: "There are no open " + d.Label + " votes right now.", Thumbnail: helpers.ThumbPlayers})
-	}
 	sort.Slice(mine, func(a, b int) bool { return mine[a].messageID < mine[b].messageID })
 	var lines []string
 	for _, v := range mine {
 		v.mu.Lock()
 		yes, no := v.counts()
-		choice := "can't vote"
-		if approves, voted := v.votes[userID]; voted {
-			choice = map[bool]string{true: "you **approved**", false: "you **denied**"}[approves]
-		} else if v.eligible[userID] != "" {
-			choice = "not voted yet"
+		approves, voted := v.votes[userID]
+		if voted || v.targetID == userID { // votes you cast, plus the vote on you
+			head := fmt.Sprintf("<@%s> (`%s`)", v.targetID, v.name)
+			switch {
+			case v.targetID == userID:
+				head += " · your vote"
+			case approves:
+				head += " · you approved"
+			default:
+				head += " · you denied"
+			}
+			lines = append(lines, fmt.Sprintf("%s\n> 🟢 %d 🔴 %d\n> %s", head, yes, no, v.link()))
 		}
-		lines = append(lines, fmt.Sprintf("> <@%s> · %s · ✅ %d · ❌ %d · %s", v.targetID, choice, yes, no, v.link()))
 		v.mu.Unlock()
 	}
-	return helpers.Preset("info", types.PresetOptions{Title: "Your " + d.Label + " Votes", Description: strings.Join(lines, "\n"), Thumbnail: helpers.ThumbPlayers})
+	if len(lines) == 0 {
+		return helpers.Preset("info", types.PresetOptions{Title: "Your " + d.Label + " Votes", Description: "You have not voted on any open " + d.Label + " votes.", Thumbnail: helpers.ThumbPlayers})
+	}
+	return helpers.Preset("info", types.PresetOptions{Title: "Your " + d.Label + " Votes", Description: strings.Join(lines, "\n\n"), Thumbnail: helpers.ThumbPlayers})
 }
 
 // votesEmbed is the answer to /<division> votes, for managers: each open vote of the division (only the one on target when given)

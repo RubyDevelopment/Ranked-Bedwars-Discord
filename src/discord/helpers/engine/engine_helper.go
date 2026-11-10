@@ -215,7 +215,8 @@ type EngineBridge struct {
 	conn         *websocket.Conn
 	writeMu      sync.Mutex
 	replies      map[uint]chan hostReply // games waiting for host.accepted
-	hosted       map[uint]string         // games the engine runs -> guild
+	prepared     map[uint]*preparedHost  // games whose bot joins while the teams are picked: what the engine said so far (see Prepare)
+	hosted      map[uint]string         // games the engine runs -> guild
 	resuming     map[uint]string         // matches found open after a restart that the engine has not yet said it still runs -> guild
 	mapSelectors map[uint]func([]match.MapOption, bool) (*match.MapSelection, error)
 	verifies     map[string]chan verifyReply            // registration code deliveries waiting for verify.result
@@ -226,7 +227,8 @@ type EngineBridge struct {
 // Engine is the process-wide bridge.
 var Engine = &EngineBridge{
 	replies:      map[uint]chan hostReply{},
-	hosted:       map[uint]string{},
+	prepared:     map[uint]*preparedHost{},
+	hosted:      map[uint]string{},
 	resuming:     map[uint]string{},
 	mapSelectors: map[uint]func([]match.MapOption, bool) (*match.MapSelection, error){},
 	verifies:     map[string]chan verifyReply{},
@@ -396,6 +398,7 @@ func (b *EngineBridge) engineLost() {
 	b.mu.Lock()
 	games := b.hosted
 	b.hosted = map[uint]string{}
+	b.prepared = map[uint]*preparedHost{}
 	b.mapSelectors = map[uint]func([]match.MapOption, bool) (*match.MapSelection, error){}
 	for id, ch := range b.replies {
 		ch <- hostReply{err: errors.New("the engine disconnected")}

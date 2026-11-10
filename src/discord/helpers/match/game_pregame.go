@@ -371,6 +371,9 @@ func (m *GameManager) beginDraft(lg *liveGame, cfg CaptainFlow) error {
 	lg.mu.Lock()
 	lg.draft = d
 	lg.mu.Unlock()
+	if fn := m.fx().Prepare; fn != nil {
+		fn(g) // the bot joins the server while the captains pick
+	}
 	m.notify(g, GameEvent{Kind: EventDraftNeeded})
 	return m.finishDraftIfDone(lg)
 }

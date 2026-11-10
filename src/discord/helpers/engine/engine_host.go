@@ -36,6 +36,8 @@ func (b *EngineBridge) Host(g match.Game, selectMap func([]match.MapOption, bool
 
 	reply := make(chan hostReply, 1)
 	b.mu.Lock()
+	prep := b.prepared[g.ID] // the bot may already be on the server (see Prepare)
+	delete(b.prepared, g.ID)
 	b.replies[g.ID] = reply
 	if selectMap != nil {
 		b.mapSelectors[g.ID] = selectMap
@@ -51,8 +53,16 @@ func (b *EngineBridge) Host(g match.Game, selectMap func([]match.MapOption, bool
 		b.mu.Unlock()
 	}()
 
-	if err := b.Write(job); err != nil {
-		return false, nil // lost the engine between the check and the send: host by hand
+	switch {
+	case prep != nil && prep.failed != nil: // it already failed while the teams were picked: answer now, nothing to send
+		b.hostFailed(*prep.failed)
+	default:
+		if err := b.Write(job); err != nil {
+			return false, nil // lost the engine between the check and the send: host by hand
+		}
+		if prep != nil && prep.accepted { // already on the server: the final teams are all it was waiting for
+			reply <- hostReply{handled: true, bot: prep.bot}
+		}
 	}
 	select {
 	case r := <-reply:
@@ -73,6 +83,34 @@ func (b *EngineBridge) Host(g match.Game, selectMap func([]match.MapOption, bool
 	case <-time.After(engineAcceptTimeout):
 		_ = b.Write(map[string]any{"type": "host.cancel", "game_id": g.ID, "reason": "The engine did not answer in time."})
 		return false, nil
+	}
+}
+
+// preparedHost is what the engine reported about a game it was told to prepare: its bot joins the server while the teams are picked.
+type preparedHost struct {
+	accepted bool
+	bot      string
+	failed   *engineInbound // host.failed, kept until Host asks
+}
+
+// Prepare tells the engine a game is on its way (the captains are still picking), so its bot logs in and reaches the Bedwars lobby in
+// parallel with the draft. Nothing that needs the roster happens until Host sends the final teams. Hosting by hand, or no engine: no-op.
+func (b *EngineBridge) Prepare(g match.Game) {
+	if (g.Custom != nil && !g.Custom.UseBot) || !b.Connected() || !helpers.GuildHasFeature(g.GuildID, "automated-hosting") {
+		return
+	}
+	job, err := buildHostJob(g) // no teams yet: only the mode
+	if err != nil {
+		return
+	}
+	job.Type = "host.prepare"
+	b.mu.Lock()
+	b.prepared[g.ID] = &preparedHost{}
+	b.mu.Unlock()
+	if err := b.Write(job); err != nil {
+		b.mu.Lock()
+		delete(b.prepared, g.ID)
+		b.mu.Unlock()
 	}
 }
 
@@ -121,6 +159,7 @@ func (b *EngineBridge) Verify(ctx context.Context, guildID, mcName, code, messag
 func (b *EngineBridge) Cancel(gameID uint, reason string) {
 	b.mu.Lock()
 	delete(b.hosted, gameID)
+	delete(b.prepared, gameID)
 	delete(b.mapSelectors, gameID)
 	b.mu.Unlock()
 	// Sent even when this process doesn't remember hosting it (it may have restarted since): the engine ignores unknown games.

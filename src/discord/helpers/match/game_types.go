@@ -478,6 +478,9 @@ type GameEffects struct {
 	// opens the selected mode and reads that mode's map menu. handled=true means the engine now runs the match; false keeps hosting
 	// manual. A non-nil error voids the game, its text is the reason.
 	Host func(g Game, selectMap func([]MapOption, bool) (*MapSelection, error)) (handled bool, err error)
+	// Prepare tells the engine a game is coming while its teams are still being picked (the captain draft), so the bot can join the
+	// server in parallel. Host still hands over the final teams.
+	Prepare func(g Game)
 }
 
 // StandardFlow is defined in package types (games.go).
@@ -613,6 +616,7 @@ type EngineLink interface {
 	Cancel(gameID uint, reason string)
 	Write(v any) error
 	Host(g Game, selectMap func([]MapOption, bool) (*MapSelection, error)) (bool, error)
+	Prepare(g Game)
 	HostAction(ctx context.Context, gameID uint, action, mcName, target string) (HostActionResult, error)
 	Control(guild, bot, action string, params json.RawMessage) ControlResult
 	RefreshNames(guildID, userID string)

@@ -96,6 +96,7 @@ func init() {
 		Host: func(g Game, selectMap func([]MapOption, bool) (*MapSelection, error)) (bool, error) {
 			return HostEngine.Host(g, selectMap) // the engine package sets HostEngine after this package loads
 		},
+		Prepare:  func(g Game) { HostEngine.Prepare(g) },
 		Released: queue.Released,
 	})
 

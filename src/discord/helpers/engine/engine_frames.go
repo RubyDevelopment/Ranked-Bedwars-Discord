@@ -36,6 +36,11 @@ func (b *EngineBridge) handle(msg engineInbound) {
 		b.gone(msg.GameID)
 
 	case "host.accepted":
+		b.mu.Lock()
+		if p := b.prepared[msg.GameID]; p != nil {
+			p.accepted, p.bot = true, msg.Bot
+		}
+		b.mu.Unlock()
 		b.reply(msg.GameID, hostReply{handled: true, bot: msg.Bot})
 		if g, ok := match.Games.Get(msg.GameID); ok {
 			_ = match.Games.SetBot(g.ID, msg.Bot)
@@ -274,6 +279,14 @@ func (b *EngineBridge) reply(gameID uint, r hostReply) {
 func (b *EngineBridge) hostFailed(msg engineInbound) {
 	b.mu.Lock()
 	_, waiting := b.replies[msg.GameID]
+	if p := b.prepared[msg.GameID]; p != nil && !waiting {
+		// The bot failed while the teams are still being picked: keep it until Host asks, which then answers as if it had just failed.
+		if msg.Code != "cancelled" {
+			p.failed = &msg
+		}
+		b.mu.Unlock()
+		return
+	}
 	delete(b.hosted, msg.GameID)
 	delete(b.mapSelectors, msg.GameID)
 	b.mu.Unlock()
