@@ -90,9 +90,6 @@ func init() {
 		Notify:         discord.Notify,
 		ApplyTeams:     discord.ApplyTeams,
 		SelectMap:      discord.SelectMap,
-		WaitingPlayers: discord.WaitingPlayers,
-		HasSpoken:      discord.HasSpoken,
-		SwapMembers:    discord.SwapMembers,
 		Host: func(g Game, selectMap func([]MapOption, bool) (*MapSelection, error)) (bool, error) {
 			return HostEngine.Host(g, selectMap) // the engine package sets HostEngine after this package loads
 		},

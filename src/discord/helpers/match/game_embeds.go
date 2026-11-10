@@ -82,8 +82,8 @@ var embedKinds = map[string]embedKind{
 	"matchJoined":    {Live: true, TeamLines: "tbd"},
 	"teamSelection":  {Live: true, Message: "matchJoined", TeamLines: "status"},
 	"teamsVerified":  {Live: true, Message: "matchJoined", TeamLines: "status"},
-	"matchStarted":   {TeamLines: "locked"},
 	"liveTracker":    {Live: true, TeamLines: "alive"},
+	"matchEnded":     {Live: true}, // posted when the match ends, then edited with each player's ELO change once it is scored
 	"captainPicking": {Live: true, TeamLines: "draft"},
 	"partySetup":     {TeamLines: "plain"},
 	"teamSetup":      {TeamLines: "plain"},
@@ -796,7 +796,7 @@ func pingsOf(g Game) string {
 // Embed Builders
 
 // TeamStatLines is a team's players one block each: the mention with their username beside it, then their ELO change (once the
-// game is scored) and their stats. It stops before Discord's field limit.
+// game is scored, as before → after) and their stats. It stops before Discord's field limit.
 func TeamStatLines(g Game, team string, f guildFlow) string {
 	var blocks []string
 	size := 0
@@ -808,7 +808,7 @@ func TeamStatLines(g Game, team string, f guildFlow) string {
 		elo := fmt.Sprintf("ELO: `%d`", p.EloBefore)
 		for _, r := range g.Results {
 			if r.UserID == p.UserID {
-				elo = fmt.Sprintf("ELO: `%+d`", r.Change) // gained or lost, like +25 or -18
+				elo = fmt.Sprintf("ELO: `%d` → `%d` (`%+d`)", r.Before, r.After, r.Change) // before → after, with the gain or loss
 				break
 			}
 		}

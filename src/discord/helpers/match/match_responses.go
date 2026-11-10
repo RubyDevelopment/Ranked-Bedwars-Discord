@@ -172,9 +172,8 @@ var defaultEmbeds = map[string]embedTemplate{
 	"teamTimeout":   thumb(tpl("error", "Team Selection Timeout", "Not every player was on their assigned team in time. Check that each player is on the correct team before starting."), helpers.ThumbFlag),
 
 	// In-game
-	"matchStarted":       thumb(tpl("success", "Match Started", "The game has started and the Team Selector is closed. The rosters below are the teams for this match.", teamStatusField), helpers.ThumbTada),
 	"matchStartedManual": submitYourWin,
-	"liveTracker": tpl("info", "Game #{game} Live Match Tracker",
+	"liveTracker": tpl("info", "Game #{game} Match Tracker",
 		"Here is a real-time team rosters and elimination status for the `{mode}` match!\n\n**Time Elapsed:** <t:{startedAt}:R>",
 		embedField{Name: "{team} {bed}", Value: "{teamPlayers}", Inline: true, Each: "team"}),
 	"kill":           off(tpl("info", "Kill", "{killer} killed {victim}.")),
@@ -186,7 +185,7 @@ var defaultEmbeds = map[string]embedTemplate{
 	"statTracked":    off(tpl("info", "{stat}", "{player} +{amount} ({total} total)")),
 
 	// Post-game
-	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match. The result is being scored.",
+	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match.",
 		embedField{Name: "{team}", Value: "{teamStats}", Inline: false, Each: "team"})),
 	"scored":     plainText(tpl("default", "Match Finished", ""), "**{gameLink}**\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), // a plain message with the results card attached, not a box
 	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied · no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), helpers.ThumbTada),
