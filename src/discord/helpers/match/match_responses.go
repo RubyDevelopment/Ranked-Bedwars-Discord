@@ -126,7 +126,7 @@ var defaultEmbeds = map[string]embedTemplate{
 			{Name: "​", Value: "​", Inline: true},
 		}, statusFields...)...), helpers.ThumbTimer),
 	// The map vote and the captain draft: interactive, so they are always posted, but their wording is the guild's.
-	"mapVoting":    thumb(tpl("pending", "Map Voting", "Game {gameLink} ({mode}) needs a map. Pick the one you want to play with the buttons below. There are **{mapCount} maps** to choose from and you can change your vote until the timer runs out.\n\n**Voting ends:** <t:{endsAt}:R>\n**Votes cast:** {voted} of {playerCount} players\n**Result:** the map with the most votes is played.", mapScoreField), helpers.ThumbTimer),
+	"mapVoting":    thumb(tpl("pending", "Map Voting", "Game {gameNumberLink} ({mode}) needs a map. Pick the one you want to play with the buttons below. There are **{mapCount} maps** to choose from and you can change your vote until the timer runs out.\n\n**Voting ends:** <t:{endsAt}:R>\n**Votes cast:** {voted} of {playerCount} players\n**Result:** the map with the most votes is played.", mapScoreField), helpers.ThumbTimer),
 	"mapVoteEnded": thumb(tpl("success", "Map Voting Ended", "The majority of votes went to **{map}**! Please wait while the map is being selected...", mapScoreField), helpers.ThumbTada),
 	"noMaps":       thumb(tpl("caution", "Map Setup", "No maps are enabled for this server right now. Contact staff if you think this is a mistake."), helpers.ThumbFlag),
 	"captainPicking": func() embedTemplate {

@@ -187,6 +187,16 @@ func (b *EngineBridge) handle(msg engineInbound) {
 	case "game.chat":
 		match.Games.StashChat(msg.GameID, msg.Lines)
 
+	case "game.won":
+		// The winner is known: everyone is out of the match, so they may queue again before the end banner, the stats and the scoring.
+		if g, ok := match.Games.Get(msg.GameID); ok {
+			ids := make([]string, len(g.Players))
+			for n, p := range g.Players {
+				ids[n] = p.UserID
+			}
+			match.Games.ReleasePlayers(g.ID, ids...)
+		}
+
 	case "game.ended":
 		b.gameEnded(msg)
 
