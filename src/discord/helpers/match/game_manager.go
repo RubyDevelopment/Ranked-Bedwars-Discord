@@ -76,7 +76,7 @@ func init() {
 		d.AlertPosts = StaffAlertPosts
 	})
 	partymgr.Parties.Wire(func(d *partymgr.PartyDeps) { d.InGame = Games.InGame })
-	ratings.Elo.Wire(func(d *ratings.EloDeps) { d.InGame = Games.InGame })
+	ratings.Elo.Wire(func(d *ratings.EloDeps) { d.InGame = Games.HasUnscoredGame })
 	Games.deps.Parties = partymgr.Parties
 	// The Discord side of a game: its channels (see the queue group's game_channels
 	// config), the notices, map vote and captain draft, handing the match to the
@@ -310,6 +310,33 @@ func (m *GameManager) InGame(guildID, userID string) bool {
 		return !submitted
 	}
 	return true
+}
+
+// HasUnscoredGame reports whether the player is in a game that is being played or is over but still waits for staff to score it.
+// Their ELO and last-played time only change when the game is scored, so inactivity decay must treat them as playing: with only
+// InGame a player whose game was submitted (they may queue again) was decayed for inactivity while their result was pending.
+func (m *GameManager) HasUnscoredGame(guildID, userID string) bool {
+	if m.InGame(guildID, userID) {
+		return true
+	}
+	m.mu.RLock()
+	live := make([]*liveGame, 0, len(m.games))
+	for _, lg := range m.games {
+		live = append(live, lg)
+	}
+	m.mu.RUnlock()
+	for _, lg := range live {
+		lg.mu.Lock()
+		pending := lg.g.GuildID == guildID && lg.g.State == GamePostGame
+		if pending {
+			_, pending = lg.g.Player(userID)
+		}
+		lg.mu.Unlock()
+		if pending {
+			return true
+		}
+	}
+	return false
 }
 
 // GuildGames lists the live games of a guild (including ones awaiting scoring).

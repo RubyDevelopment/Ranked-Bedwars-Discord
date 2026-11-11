@@ -89,7 +89,7 @@ type EloDeps struct {
 	Party      func(guildID string) types.PartiesConfig
 	PartyGames func(guildID, userID string) int
 	Decay      func(guildID string) DecayConfig  // the guild's decay rules (elo_engine.elo_decay), the same for every queue and mode
-	InGame     func(guildID, userID string) bool // in-game players never decay
+	InGame     func(guildID, userID string) bool // players in a game, or with one still awaiting staff scoring, never decay
 	Now        func() time.Time
 }
 

@@ -126,7 +126,7 @@ func showGameStats(s *discordgo.Session, i *discordgo.InteractionCreate, guildID
 	return helpers.EditInteractionEmbed(s, i, QueueStatusGameStatsEmbed(i, game, seasonKey, fields))
 }
 
-// queueRosterField is a team's (or the draft pool's) heading followed by one inline field per player, from the layouts.
+// queueRosterField is one field for a team (or the draft pool): its heading, with every player listed below each other in the value.
 func queueRosterField(guildID string, seasonID uint, titleLayout, team string, players []match.GamePlayer) []*discordgo.MessageEmbedField {
 	// Each player's season stats as they are (5/2, not 2.50) plus the ratios, looked up side by side (a player with no stats yet reads 0).
 	type line struct{ wl, kd, mvp, wlr, kdr, mc string }
@@ -145,23 +145,35 @@ func queueRosterField(guildID string, seasonID uint, titleLayout, team string, p
 	wg.Wait()
 
 	total := 0
-	rows := make([]*discordgo.MessageEmbedField, 0, len(players))
+	// One field per team: the heading is its name and every player sits in its value, one right below the other. A field value holds
+	// 1024 characters, so a very large team continues in a further untitled field instead of being cut.
+	const fieldMax = 1024
+	var chunks []string
 	for n, p := range players {
 		total += p.EloBefore
-		rows = append(rows, &discordgo.MessageEmbedField{Name: "​", Inline: true, Value: helpers.FillLayout(guildID, helpers.LayoutQueuesPlayer, map[string]string{
+		row := helpers.FillLayout(guildID, helpers.LayoutQueuesPlayer, map[string]string{
 			"mention": "<@" + p.UserID + ">", "id": p.UserID, "name": stats[n].mc, "elo": strconv.Itoa(p.EloBefore), "team": team,
 			"wlr": stats[n].wl, "kdr": stats[n].kd, "mvp": stats[n].mvp, "wlr_ratio": stats[n].wlr, "kdr_ratio": stats[n].kdr,
-		})})
+		})
+		if last := len(chunks) - 1; last >= 0 && len(chunks[last])+1+len(row) <= fieldMax {
+			chunks[last] += "\n" + row
+		} else {
+			chunks = append(chunks, row)
+		}
 	}
 	avg := 0
 	if len(players) > 0 {
 		avg = total / len(players)
 	}
-	head := &discordgo.MessageEmbedField{
-		Name:  helpers.FillLayout(guildID, titleLayout, map[string]string{"team": team, "avg_elo": strconv.Itoa(avg), "players": strconv.Itoa(len(players))}),
-		Value: "​",
+	name := helpers.FillLayout(guildID, titleLayout, map[string]string{"team": team, "avg_elo": strconv.Itoa(avg), "players": strconv.Itoa(len(players))})
+	fields := make([]*discordgo.MessageEmbedField, 0, len(chunks))
+	for n, value := range chunks {
+		if n > 0 {
+			name = "​"
+		}
+		fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: value})
 	}
-	return append([]*discordgo.MessageEmbedField{head}, rows...)
+	return fields
 }
 
 // showQueueStatus displays the queue status for a voice channel

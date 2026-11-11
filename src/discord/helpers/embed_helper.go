@@ -560,10 +560,16 @@ func WithProofImage(emb *discordgo.MessageEmbed, proofURL string) *discordgo.Mes
 
 func withProofImage(emb *discordgo.MessageEmbed, proofURL string) *discordgo.MessageEmbed {
 	link := strings.TrimSpace(proofURL)
+	if !strings.HasPrefix(link, "https://") && !strings.HasPrefix(link, "http://") {
+		return emb
+	}
 	path, _, _ := strings.Cut(link, "?")
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-		if strings.HasPrefix(link, "https://") || strings.HasPrefix(link, "http://") {
+		emb.Image = &discordgo.MessageEmbedImage{URL: link}
+	default:
+		// A file attached in Discord was already checked to be a picture; its link may carry an unusual extension.
+		if strings.Contains(path, "discordapp.com/attachments/") || strings.Contains(path, "discordapp.net/attachments/") {
 			emb.Image = &discordgo.MessageEmbedImage{URL: link}
 		}
 	}

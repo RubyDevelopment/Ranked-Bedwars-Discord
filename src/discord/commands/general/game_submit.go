@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/match"
 	"ranked-bedwars/src/discord/helpers/proofread"
 	"ranked-bedwars/src/types"
+
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -148,7 +149,7 @@ func executeGameSubmitCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		}
 		e.Fields = append(e.Fields, reviewFields(game, *review)...)
 		if staffReview {
-			return helpers.EditInteractionComponents(s, i, e, reviewButtons(game, *review, sub.seq))
+			return helpers.EditInteractionComponents(s, i, helpers.WithProofImage(e, proofURL), reviewButtons(game, *review, sub.seq))
 		}
 		return fail(e)
 	}

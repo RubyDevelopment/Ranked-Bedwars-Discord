@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -21,7 +22,8 @@ import (
 var engModel []byte
 
 // maxReaders is how many reads run at once. Each holds the model in memory (tens of MB) and keeps a core busy.
-const maxReaders = 3
+// Half the cores (at least one, at most three) so the bot's own work always has a core left while screenshots are read.
+var maxReaders = max(1, min(3, runtime.NumCPU()/2))
 
 var wasm struct {
 	mu    sync.Mutex
@@ -109,18 +111,36 @@ func recogniseWASM(ctx context.Context, img image.Image, psm string) ([]string, 
 	if err != nil {
 		return nil, err
 	}
-	text, err := func() (string, error) {
-		if err := t.LoadImage(ctx, &buf, gogosseract.LoadImageOptions{}); err != nil {
-			return "", err
-		}
-		return t.GetText(ctx, nil)
+	// The WebAssembly cannot be interrupted: gogosseract builds its runtime without wazero's close-on-context-done, so a read ignores its
+	// deadline and runs to the end. Waiting for it here froze the submission (and every read queued behind it) for as long as it took.
+	// So the read runs on its own and is walked away from when the context ends; it keeps its slot until it finishes, which is what
+	// stops a pile of slow reads from being started on top of it. ponytail: an abandoned read still burns its core until it ends.
+	type result struct {
+		text string
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		text, err := func() (string, error) {
+			if err := t.LoadImage(ctx, &buf, gogosseract.LoadImageOptions{}); err != nil {
+				return "", err
+			}
+			return t.GetText(ctx, nil)
+		}()
+		putReader(psm, t, err == nil)
+		done <- result{text, err}
 	}()
-	putReader(psm, t, err == nil)
-	if err != nil {
-		return nil, fmt.Errorf("built-in tesseract: %w", err)
+	var res result
+	select {
+	case res = <-done:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("built-in tesseract: %w", ctx.Err())
+	}
+	if res.err != nil {
+		return nil, fmt.Errorf("built-in tesseract: %w", res.err)
 	}
 	var lines []string
-	for _, l := range strings.Split(text, "\n") {
+	for _, l := range strings.Split(res.text, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			lines = append(lines, l)
 		}

@@ -223,8 +223,8 @@ func guildMembers(s *discordgo.Session, guildID string) ([]*discordgo.Member, er
 	// this answers instantly. Only a cache that is still filling up (or was never filled) falls back to paging through Discord.
 	if g, err := s.State.Guild(guildID); err == nil {
 		s.State.RLock() // State.Guild locks on its own, so this is taken after it returns, never inside it
-		complete := g.MemberCount > 0 && len(g.Members) >= g.MemberCount
-		cached := append([]*discordgo.Member(nil), g.Members...)
+		cached := uniqueMembers(g.Members)
+		complete := g.MemberCount > 0 && len(cached) >= g.MemberCount
 		s.State.RUnlock()
 		if complete {
 			return cached, nil
@@ -240,10 +240,25 @@ func guildMembers(s *discordgo.Session, guildID string) ([]*discordgo.Member, er
 		}
 		all = append(all, page...)
 		if len(page) < 1000 {
-			return all, nil
+			return uniqueMembers(all), nil
 		}
 		after = page[len(page)-1].User.ID
 	}
+}
+
+// uniqueMembers drops repeats of the same user: the gateway cache can hold a member twice (a join event seen again after a reconnect),
+// which listed that person twice and counted them twice.
+func uniqueMembers(in []*discordgo.Member) []*discordgo.Member {
+	seen := make(map[string]bool, len(in))
+	out := make([]*discordgo.Member, 0, len(in))
+	for _, m := range in {
+		if m == nil || m.User == nil || seen[m.User.ID] {
+			continue
+		}
+		seen[m.User.ID] = true
+		out = append(out, m)
+	}
+	return out
 }
 
 // holders lists the members (not bots) that hold the role.

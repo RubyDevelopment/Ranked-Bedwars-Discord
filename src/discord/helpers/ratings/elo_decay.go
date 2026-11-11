@@ -258,6 +258,9 @@ func (m *EloManager) warnDecay(guildID, userID string, row models.PlayerStatsMod
 // that finished since the candidate list was fetched cancels the tick.
 func (m *EloManager) autoDecay(guildID, userID string, cfg DecayConfig, ranks []types.Rank) bool {
 	defer m.lock(guildID, userID)()
+	if m.deps.InGame(guildID, userID) { // a game started or ended since the sweep looked: its result is not in the stats yet
+		return false
+	}
 	st, err := m.API().Stats(guildID, userID)
 	if err != nil || st.LastPlayedAt == nil || st.Elo <= cfg.DecayFloor {
 		return false
