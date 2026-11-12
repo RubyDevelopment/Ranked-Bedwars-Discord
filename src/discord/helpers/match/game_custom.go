@@ -3,6 +3,7 @@ package match
 import (
 	"errors"
 	"fmt"
+	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/discord/helpers/queue"
 	"ranked-bedwars/src/types"
@@ -237,7 +238,7 @@ func (m *GameManager) ReplacePlayer(guildID string, id uint, out, in, inName str
 	}
 	old := lg.g.Players[idx]
 	rating := m.deps.Elo.Ratings(guildID, []string{in})[in]
-	lg.g.Players[idx] = GamePlayer{UserID: in, Username: inName, PlayerID: newID, Team: old.Team, Captain: old.Captain, EloBefore: rating}
+	lg.g.Players[idx] = GamePlayer{UserID: in, Username: helpers.MinecraftName(guildID, in, inName), PlayerID: newID, Team: old.Team, Captain: old.Captain, EloBefore: rating}
 	for i := range lg.g.Custom.Teams {
 		for j, u := range lg.g.Custom.Teams[i] {
 			if u == out {

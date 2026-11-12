@@ -453,7 +453,7 @@ func admittedVoiceMembers(s *discordgo.Session, guildID, channelID string, snap 
 		if name == "" {
 			name = m.User.Username
 		}
-		out = append(out, QueueMember{UserID: id, Username: name})
+		out = append(out, QueueMember{UserID: id, Username: helpers.MinecraftName(guildID, id, name)})
 	}
 	return out
 }

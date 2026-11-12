@@ -1664,3 +1664,14 @@ func LadderReason(guildID, field, levelKey, reason string) string {
 	}
 	return reason
 }
+
+// MinecraftName is the player's linked Minecraft username, the name shown wherever a game lists its players. Only someone who
+// is not registered yet gets `fallback` (their Discord name) instead.
+func MinecraftName(guildID, userID, fallback string) string {
+	if svc := database.Get(); svc != nil {
+		if view, err := svc.Player.Get(guildID, userID); err == nil && view.Config != nil && view.Config.Username != "" {
+			return view.Config.Username
+		}
+	}
+	return fallback
+}

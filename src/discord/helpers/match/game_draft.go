@@ -698,7 +698,7 @@ func (h *HostSession) start(s *discordgo.Session, i *discordgo.InteractionCreate
 					name = m.User.Username
 				}
 			}
-			teams[t] = append(teams[t], queue.QueueMember{UserID: id, Username: name})
+			teams[t] = append(teams[t], queue.QueueMember{UserID: id, Username: helpers.MinecraftName(h.GuildID, id, name)})
 		}
 	}
 
