@@ -11,6 +11,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/discord/helpers/queue"
 	"ranked-bedwars/src/types"
 )
@@ -25,8 +26,8 @@ var voidVotes = struct {
 	at map[uint]time.Time       // game id -> when its vote was opened
 }{by: map[uint]map[string]bool{}, at: map[uint]time.Time{}}
 
-// voidVoteLife is how long an unfinished vote counts as open: a forgotten one must not silence the queue alerts for ever.
-const voidVoteLife = 15 * time.Minute
+// voidVoteLife is how long a vote stays open without a ballot: it then fails by itself, and every ballot restarts the countdown.
+const voidVoteLife = 5 * time.Minute
 
 // voidVoteOpen reports whether the game has a void vote going.
 func voidVoteOpen(gameID uint) bool {
@@ -57,8 +58,11 @@ func castVoidBallot(gameID uint, userID string, agrees bool, players int) (yes, 
 	defer voidVotes.mu.Unlock()
 	if voidVotes.by[gameID] == nil {
 		voidVotes.by[gameID] = map[string]bool{}
-		voidVotes.at[gameID] = time.Now()
 	}
+	// Every ballot restarts the countdown; the timers of earlier ballots see a newer stamp and do nothing.
+	touched := time.Now()
+	voidVotes.at[gameID] = touched
+	time.AfterFunc(voidVoteLife+time.Second, func() { expireVoidVote(gameID, touched) })
 	previous, voted := voidVotes.by[gameID][userID]
 	already = voted && previous == agrees
 	voidVotes.by[gameID][userID] = agrees
@@ -195,6 +199,24 @@ func handleVoidVoteClick(s *discordgo.Session, i *discordgo.InteractionCreate, c
 		update(VoidVotePanel(game), VoidVoteButtons(gameID))
 	}
 	return true
+}
+
+// expireVoidVote treats a vote nobody settled in voidVoteLife as failed: the game goes on, and anyone waiting in a queue channel
+// is sent back to their team voice channel. A vote that ended meanwhile (or was reopened later) is left alone.
+func expireVoidVote(gameID uint, opened time.Time) {
+	voidVotes.mu.Lock()
+	still := voidVotes.at[gameID].Equal(opened)
+	voidVotes.mu.Unlock()
+	if !still {
+		return
+	}
+	ClearVoidVotes(gameID)
+	if s, game := base.Session.Load(), (Game{}); s != nil {
+		var ok bool
+		if game, ok = Games.Get(gameID); ok {
+			returnToTeamVoice(s, game)
+		}
+	}
 }
 
 // returnToTeamVoice moves the players who are sitting in a queue channel back to their team's voice channel (after a failed void vote).

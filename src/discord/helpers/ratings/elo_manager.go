@@ -281,6 +281,9 @@ func (m *EloManager) ScoreGame(in ScoreInput) ([]EloResult, error) {
 	for _, id := range in.Losers {
 		present[id] = true
 	}
+	for id := range present {
+		markRankPending(in.GuildID, id)
+	}
 	partyOf := map[string][]string{}
 	for _, g := range in.Parties {
 		for _, id := range g.Members {
@@ -381,7 +384,7 @@ func (m *EloManager) ApplyRanks(actor, guildID string, results []EloResult) {
 		wg.Add(1)
 		slots <- struct{}{}
 		go func() {
-			defer func() { <-slots; wg.Done() }()
+			defer func() { <-slots; wg.Done(); clearRankPending(guildID, r.UserID) }()
 			if _, err := m.SyncRank(actor, guildID, r.UserID); err != nil {
 				m.logf("rank sync %s/%s: %v", guildID, r.UserID, err)
 			}

@@ -17,6 +17,7 @@ import (
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/discord/helpers/partymgr"
 	"ranked-bedwars/src/discord/helpers/punish"
+	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
 	baseutility "ranked-bedwars/src/utility"
 )
@@ -233,6 +234,9 @@ func checkAdmission(s *discordgo.Session, guildID, userID, channelID string, sna
 		}
 		return false
 	}
+
+	// Their last game's rank and role update may still be running: checking now would use the old rank and roles.
+	ratings.WaitRankSync(guildID, userID, 30*time.Second)
 
 	if user := memberUser(s, guildID, userID); user != nil {
 		if msg := helpers.EnforceAccountAge(s, guildID, user); msg != "" {
