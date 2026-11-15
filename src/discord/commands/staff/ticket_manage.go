@@ -37,7 +37,12 @@ var TicketManageCommand = &types.Command{
 	Data: &discordgo.ApplicationCommand{
 		Options: []*discordgo.ApplicationCommandOption{
 			{Name: "panel", Description: "Publish a ticket panel created in the dashboard", Type: discordgo.ApplicationCommandOptionSubCommand},
-			{Name: "leaderboard", Description: "View the staff members who claimed the most tickets", Type: discordgo.ApplicationCommandOptionSubCommand},
+			{
+				Name: "leaderboard", Description: "View the staff members who claimed the most tickets", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Options: []*discordgo.ApplicationCommandOption{
+					{Name: "type", Description: "Only count tickets of this type", Type: discordgo.ApplicationCommandOptionString, Required: false, Autocomplete: true},
+				},
+			},
 			{
 				Name: "stats", Description: "View a staff member's ticket statistics", Type: discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
@@ -143,11 +148,96 @@ func executeTicketPanel(s *discordgo.Session, i *discordgo.InteractionCreate) er
 
 // executeTicketLeaderboard ranks staff by claimed tickets.
 func executeTicketLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	ip, err := tickets.Tickets.LoadOpen(i.GuildID)
+	_, options := types.SelectedSubcommand(i)
+	typed := ""
+	for _, o := range options {
+		if o.Name == "type" {
+			typed = strings.TrimSpace(o.StringValue())
+		}
+	}
+	if typed == "" {
+		ip, err := tickets.Tickets.LoadOpen(i.GuildID)
+		if err != nil {
+			return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
+		}
+		return helpers.EditInteractionEmbed(s, i, TicketLeaderboardMessage(TicketLeaderboard(ip), helpers.InteractionUserID(i), ""))
+	}
+	// A type needs the tickets themselves: the stored totals are not split by type.
+	ip, err := tickets.Tickets.Load(i.GuildID)
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, tickets.UnexpectedErrorTicketEmbed())
 	}
-	return helpers.EditInteractionEmbed(s, i, TicketLeaderboardMessage(TicketLeaderboard(ip), helpers.InteractionUserID(i)))
+	label := typed
+	for _, c := range ticketCategories(ip) {
+		if ticketTypeMatches(c.ID, c.Label, typed) {
+			label = c.Label
+			break
+		}
+	}
+	return helpers.EditInteractionEmbed(s, i, TicketLeaderboardMessage(TicketLeaderboardByType(ip, typed), helpers.InteractionUserID(i), label))
+}
+
+// ticketCategories are every category of every ticket panel, one per ID: published panels first, then the ones
+// assigned to a command (screenshare), which SortedTicketPanels leaves out.
+func ticketCategories(ip *types.InteractivePanels) []*types.TicketCategory {
+	seen := map[string]bool{}
+	var out []*types.TicketCategory
+	panels := tickets.SortedTicketPanels(ip)
+	var assigned []*types.InteractivePanel
+	for _, p := range ip.Panels {
+		if p != nil && p.Type == types.PanelTypeTicket && p.Ticket != nil && p.Ticket.Command != "" {
+			assigned = append(assigned, p)
+		}
+	}
+	sort.Slice(assigned, func(a, b int) bool { return assigned[a].ID < assigned[b].ID })
+	for _, panel := range append(panels, assigned...) {
+		if panel.Ticket == nil {
+			continue
+		}
+		for _, c := range panel.Ticket.Categories {
+			if c != nil && !seen[c.ID] {
+				seen[c.ID] = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+// ticketTypeMatches reports whether a ticket category is what the user typed: its id, or part of its label.
+func ticketTypeMatches(id, label, typed string) bool {
+	typed = strings.ToLower(strings.TrimSpace(typed))
+	return typed != "" && (strings.EqualFold(id, typed) || strings.Contains(strings.ToLower(label), typed))
+}
+
+// TicketLeaderboardByType ranks staff by the tickets of one type they claimed or closed.
+// ponytail: counts open tickets plus the last MaxTicketHistory closed ones, so a very busy guild's old tickets drop out; store per-category totals if exact all-time numbers matter.
+func TicketLeaderboardByType(ip *types.InteractivePanels, typed string) []tickets.TicketLeaderboardRow {
+	stats := map[string]*types.TicketStaffStats{}
+	of := func(id string) *types.TicketStaffStats {
+		if stats[id] == nil {
+			stats[id] = &types.TicketStaffStats{}
+		}
+		return stats[id]
+	}
+	count := func(t *types.Ticket) {
+		if t == nil || !ticketTypeMatches(t.CategoryID, t.CategoryLabel, typed) {
+			return
+		}
+		if t.ClaimedBy != "" {
+			of(t.ClaimedBy).Claimed++
+		}
+		if t.ClosedBy != "" && t.ClosedBy != t.OwnerID {
+			of(t.ClosedBy).Closed++
+		}
+	}
+	for _, t := range ip.Tickets.Open {
+		count(t)
+	}
+	for _, t := range ip.Tickets.History {
+		count(t)
+	}
+	return TicketLeaderboard(&types.InteractivePanels{Tickets: types.TicketState{Stats: stats}})
 }
 
 // executeTicketStats shows one staff member's numbers.
@@ -291,14 +381,22 @@ func executeTicketTransfer(s *discordgo.Session, i *discordgo.InteractionCreate)
 // autocompleteTicketCategory suggests the panel categories the ticket of the channel can be forwarded to.
 func autocompleteTicketCategory(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_, opts := types.SelectedSubcommand(i)
-	typed := ""
+	typed, focused := "", ""
 	for _, o := range opts {
-		if o.Focused && o.Name == "category" {
-			typed = strings.ToLower(o.StringValue())
+		if o.Focused {
+			focused, typed = o.Name, strings.ToLower(o.StringValue())
 		}
 	}
 	var choices []*discordgo.ApplicationCommandOptionChoice
-	if ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID); err == nil && tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
+	if focused == "type" { // /ticket leaderboard type: any category of any panel
+		if ip, err := tickets.Tickets.LoadOpen(i.GuildID); err == nil {
+			for _, c := range ticketCategories(ip) {
+				if strings.Contains(strings.ToLower(c.Label), typed) && len(choices) < 25 {
+					choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: c.Label, Value: c.ID})
+				}
+			}
+		}
+	} else if ctx, err := tickets.LoadOrAdoptTicketContext(s, i.GuildID, i.ChannelID); err == nil && tickets.IsTicketStaff(i.Member, ctx.Panel, ctx.Category) {
 		for _, c := range TicketTransferTargets(ctx.Panel, ctx.Ticket.CategoryID) {
 			if strings.Contains(strings.ToLower(c.Label), typed) && len(choices) < 25 {
 				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: c.Label, Value: c.ID})
@@ -494,12 +592,17 @@ func TicketManageInvalidSubcommandEmbed(i *discordgo.InteractionCreate) *discord
 }
 
 // TicketLeaderboardMessage ranks the staff who have claimed the most tickets.
-func TicketLeaderboardMessage(rows []tickets.TicketLeaderboardRow, viewerID string) *discordgo.MessageEmbed {
+// typeLabel names the ticket type the board is limited to ("" for all tickets).
+func TicketLeaderboardMessage(rows []tickets.TicketLeaderboardRow, viewerID, typeLabel string) *discordgo.MessageEmbed {
+	title, scope := "Ticket Leaderboard", "tickets"
+	if typeLabel != "" {
+		title, scope = "Ticket Leaderboard — "+typeLabel, "**"+typeLabel+"** tickets"
+	}
 	if len(rows) == 0 {
 		return &discordgo.MessageEmbed{
 			Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: helpers.ThumbGuild},
-			Title:       "Ticket Leaderboard",
-			Description: "No tickets have been claimed yet. Claim a ticket to get on the board.",
+			Title:       title,
+			Description: "No " + scope + " have been claimed yet. Claim a ticket to get on the board.",
 			Color:       helpers.ColorInfo,
 		}
 	}
@@ -520,8 +623,8 @@ func TicketLeaderboardMessage(rows []tickets.TicketLeaderboardRow, viewerID stri
 
 	embed := &discordgo.MessageEmbed{
 		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: helpers.ThumbGuild},
-		Title:       "Ticket Leaderboard",
-		Description: "The staff members who have claimed the most tickets.\n\n" + board.String(),
+		Title:       title,
+		Description: "The staff members who have claimed the most " + scope + ".\n\n" + board.String(),
 		Color:       helpers.ColorDefault,
 	}
 	for idx, row := range rows {
