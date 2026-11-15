@@ -8,6 +8,7 @@ import (
 	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
+	apputil "ranked-bedwars/src/utility"
 	"regexp"
 	"sort"
 	"strconv"
@@ -198,9 +199,10 @@ func responseLook(color int) string {
 	}
 }
 
-// Resolve finds the rule that answers a response of `command` whose title slug is `slug` and look is `look`.
+// Resolve finds the rule that answers a response of `command` whose title slug is `slug` and look is `look`. A reply
+// that nothing more specific covers inherits its look's default style, and failing that the "default" style.
 func (c ResponseConfig) Resolve(command, slug, look string) (ResponseRule, bool) {
-	for _, r := range []ResponseRule{c.Overrides[command+"."+slug], c.Overrides[command+".*"], c.Defaults[look]} {
+	for _, r := range []ResponseRule{c.Overrides[command+"."+slug], c.Overrides[command+".*"], c.Defaults[look], c.Defaults["default"]} {
 		if r.Usable() {
 			return r, true
 		}
@@ -237,7 +239,12 @@ var loadResponseState = func(guildID string) *responseState {
 		Responses *ResponseConfig `json:"responses"`
 		Messages  []MessageDoc    `json:"messages"`
 	}
-	if cfg.Panels.Unmarshal(&panels) != nil || panels.Responses == nil {
+	if err := cfg.Panels.Unmarshal(&panels); err != nil {
+		// A rule saved in a shape the bot can't read would otherwise silently show the built-in embeds.
+		apputil.DiscordLogger.Warn(fmt.Sprintf("could not read the saved response styles of guild %s: %v", guildID, err))
+		return st
+	}
+	if panels.Responses == nil {
 		return st
 	}
 	st.cfg = *panels.Responses
