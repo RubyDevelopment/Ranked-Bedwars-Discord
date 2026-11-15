@@ -277,6 +277,9 @@ func responseVars(vars map[string]string, command, sub, slug, look string, emb *
 	v["response.key"], v["response.type"] = command+"."+slug, look
 	v["response.title"], v["response.description"] = emb.Title, emb.Description
 	v["response.color"] = HexColorString(emb.Color)
+	for _, k := range []string{"footer", "footer_icon", "author", "image", "thumbnail"} {
+		v["response."+k] = ""
+	}
 	if emb.Footer != nil {
 		v["response.footer"], v["response.footer_icon"] = emb.Footer.Text, emb.Footer.IconURL
 	}
