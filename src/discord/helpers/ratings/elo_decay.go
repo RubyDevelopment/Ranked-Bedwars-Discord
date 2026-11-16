@@ -204,7 +204,9 @@ func (m *EloManager) SweepDecay(guildID string) int {
 	}
 	rows, err := m.API().DecayCandidates(guildID, candidateDays)
 	if err != nil {
-		m.logf("decay candidates for %s: %v", guildID, err)
+		if !sdk.IsNotFound(err) { // 404 = no active season (it ended): nothing decays
+			m.logf("decay candidates for %s: %v", guildID, err)
+		}
 		return 0
 	}
 	now := m.deps.Now()
@@ -291,7 +293,7 @@ func (m *EloManager) autoDecay(guildID, userID string, cfg DecayConfig, ranks []
 }
 
 // DecayPending reports whether any player of the guild could still decay: decay is on and a player who has played sits
-// above the floor. An error counts as yes, so a hiccup never drops a guild.
+// above the floor. An error counts as yes, so a hiccup never drops a guild; a 404 (no active season) counts as no.
 func (m *EloManager) DecayPending(guildID string) bool {
 	cfg := m.deps.Decay(guildID)
 	if !cfg.Enabled || cfg.InactivityDays <= 0 {
@@ -299,7 +301,7 @@ func (m *EloManager) DecayPending(guildID string) bool {
 	}
 	rows, err := m.API().DecayCandidates(guildID, 0)
 	if err != nil {
-		return true
+		return !sdk.IsNotFound(err) // no active season: drop the guild; a finished game in the next season re-adds it
 	}
 	for _, row := range rows {
 		if row.Elo > cfg.DecayFloor {
