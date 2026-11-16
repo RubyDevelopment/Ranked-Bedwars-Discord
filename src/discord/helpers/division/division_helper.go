@@ -304,13 +304,6 @@ func mentions(ids []string, limit int) string {
 	return b.String()
 }
 
-func roleMention(id string) string {
-	if id == "" {
-		return "`Not configured`"
-	}
-	return "<@&" + id + ">"
-}
-
 // ============================================================================
 // Embeds
 // ============================================================================
@@ -388,7 +381,7 @@ func subcommands(d Div, managers bool) []*discordgo.ApplicationCommandOption {
 		return o
 	}
 	if managers {
-		subs = append(subs, sub("managers", "Show the managers of every division"))
+		subs = append(subs, sub("managers", "Show the "+d.Label+" managers"))
 	}
 	subs = append(subs,
 		sub("settings", "Show the "+d.Label+" roles and channels"),

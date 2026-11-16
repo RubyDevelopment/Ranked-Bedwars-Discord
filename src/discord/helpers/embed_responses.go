@@ -373,6 +373,11 @@ func withSavedFooterIcon(s *discordgo.Session, guildID, look string, payload map
 	}
 }
 
+// WithSavedFooterIcon is withSavedFooterIcon for messages the bot sends on its own (an event's message), which have no reply look.
+func WithSavedFooterIcon(s *discordgo.Session, guildID string, payload map[string]any) {
+	withSavedFooterIcon(s, guildID, "default", payload)
+}
+
 // WithGuildFooterIconForGuild brands embeds the way the guild chose: every embed gets a footer carrying the server's
 // icon, a timestamp and a thumbnail unless it already has them, all on by default (the server can switch each off). Plain
 // "blend" embeds (no colour bar, made that way on purpose) get no new footer or thumbnail.

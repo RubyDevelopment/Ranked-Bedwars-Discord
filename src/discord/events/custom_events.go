@@ -185,7 +185,9 @@ func runEventAction(s *discordgo.Session, guildID string, c types.EventCtx, a Cu
 		if a.Message == nil || channel == "" {
 			return nil
 		}
-		_, err := helpers.SendPayload(s, channel, a.Message.Payload(fill))
+		payload := a.Message.Payload(fill)
+		helpers.WithSavedFooterIcon(s, guildID, payload)
+		_, err := helpers.SendPayload(s, channel, payload)
 		return err
 	case "dm":
 		if a.Message == nil || c.User == nil {

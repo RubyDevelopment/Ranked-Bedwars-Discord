@@ -24,8 +24,8 @@ func init() { helpers.RegisterComponentHandler(handlePage) }
 
 type rosterLine struct{ user, text string }
 
-// rosterLines lists the holders of the role of kind: the division's members ("list") or specs ("specs"), or the managers of
-// every division ("managers", each line saying which). notSet is true when the role is not configured.
+// rosterLines lists the holders of the role of kind: the division's members ("list"), specs ("specs") or managers ("managers").
+// notSet is true when the role is not configured.
 func rosterLines(s *discordgo.Session, guildID string, d Div, cfg Config, kind string) (title string, lines []string, notSet bool, err error) {
 	members, err := guildMembers(s, guildID)
 	if err != nil {
@@ -34,24 +34,12 @@ func rosterLines(s *discordgo.Session, guildID string, d Div, cfg Config, kind s
 	var rows []rosterLine
 	switch kind {
 	case "managers":
-		title = "Division Managers"
-		divs := map[string][]string{}
-		who := map[string]*discordgo.Member{}
-		for _, other := range All {
-			oc, err := Load(guildID, other)
-			if err != nil {
-				return "", nil, false, err
-			}
-			if oc.Manager == "" {
-				continue
-			}
-			for _, m := range holders(members, oc.Manager) {
-				divs[m.User.ID] = append(divs[m.User.ID], other.Label)
-				who[m.User.ID] = m
-			}
+		title = d.Label + " Managers"
+		if cfg.Manager == "" {
+			return title, nil, true, nil
 		}
-		for id, m := range who {
-			rows = append(rows, rosterLine{m.User.Username, fmt.Sprintf("<@%s> (`%s`) · %s", id, m.User.Username, strings.Join(divs[id], ", "))})
+		for _, m := range holders(members, cfg.Manager) {
+			rows = append(rows, rosterLine{m.User.Username, fmt.Sprintf("<@%s> (`%s`)", m.User.ID, m.User.Username)})
 		}
 	default:
 		name, roleID := "Members", cfg.Member
