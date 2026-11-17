@@ -939,6 +939,11 @@ func ApplyStartingRank(guildID, actorID string, playerID uint) error {
 	if rankName == "" {
 		return nil // no ranks configured yet
 	}
+	if _, seasonID, err := ActiveSeasonKey(guildID); err != nil {
+		return err
+	} else if seasonID == 0 {
+		return nil // between seasons: there are no stats to rank yet
+	}
 	pid := sdk.UintToString(playerID)
 	// A player registered in an earlier season (or before stats were kept) has no row for the active one, and patching a missing row
 	// is a 404. Make sure it exists first; for a brand new registration it already does, so this is a plain read.

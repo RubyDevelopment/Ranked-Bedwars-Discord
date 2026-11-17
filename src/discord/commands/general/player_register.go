@@ -71,13 +71,6 @@ func executePlayerRegisterCommand(s *discordgo.Session, i *discordgo.Interaction
 		return helpers.EditInteractionEmbed(s, i, PlayerRegisterNoRanksEmbed(i))
 	}
 
-	// Registration creates the player's stats in the active season, so one has to exist
-	if _, err := database.Must().Season.Active(i.GuildID); sdk.IsNotFound(err) {
-		return helpers.EditInteractionEmbed(s, i, PlayerRegisterNoSeasonEmbed(i))
-	} else if err != nil {
-		return helpers.EditInteractionEmbed(s, i, helpers.UnexpectedErrorPlayerRegisterEmbed(i))
-	}
-
 	verification, _ := helpers.LoadRegistrationVerification(i.GuildID)
 
 	// Party-code mode: the user proves they own the account first; the code modal finishes the registration
@@ -136,14 +129,6 @@ func PlayerRegisterNoRanksEmbed(i *discordgo.InteractionCreate) *discordgo.Messa
 	return helpers.Preset("error", types.PresetOptions{
 		Title:       "Registration Unavailable",
 		Description: "No ranks have been configured for this guild yet, so you cannot be registered. Please ask an administrator to set up at least one rank.",
-		Thumbnail:   helpers.ThumbFlag,
-	})
-}
-
-func PlayerRegisterNoSeasonEmbed(i *discordgo.InteractionCreate) *discordgo.MessageEmbed {
-	return helpers.Preset("error", types.PresetOptions{
-		Title:       "Registration Unavailable",
-		Description: "This guild has no active season yet, so you cannot be registered. Please ask an administrator to start one on the dashboard's Season Periods page.",
 		Thumbnail:   helpers.ThumbFlag,
 	})
 }
