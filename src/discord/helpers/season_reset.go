@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/models"
 	"github.com/RubyDevelopment/Ranked-Bedwars-Database/src/sdk"
 	"github.com/bwmarrin/discordgo"
 
@@ -90,7 +91,8 @@ type ResetStatus struct {
 	StartedAt  int64         `json:"startedAt,omitempty"`
 	FinishedAt int64         `json:"finishedAt,omitempty"`
 	Actor      string        `json:"actor,omitempty"`
-	Season     string        `json:"season,omitempty"`
+	Scope      string        `json:"scope,omitempty"`  // prior | all
+	Season     string        `json:"season,omitempty"` // the prior season's name, when the scope is "prior"
 	Rank       string        `json:"rank,omitempty"`
 	Total      int           `json:"total"`
 	Processed  int           `json:"processed"`
@@ -163,6 +165,7 @@ func ServeReset(w http.ResponseWriter, r *http.Request) {
 		Guild  string `json:"guild"`
 		Action string `json:"action"`
 		Actor  string `json:"actor"`
+		Scope  string `json:"scope"` // "prior" (default): players of the previous season; "all": every registered player
 	}
 	if json.Unmarshal(raw, &req) != nil || !base.GuildIDPattern.MatchString(req.Guild) {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -176,7 +179,7 @@ func ServeReset(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "start":
 		var err error
-		if status, err = startReset(req.Guild, req.Actor); err != nil {
+		if status, err = startReset(req.Guild, req.Actor, req.Scope); err != nil {
 			code := http.StatusConflict
 			var re *resetError
 			if errors.As(err, &re) {
@@ -220,7 +223,10 @@ func ServeReset(w http.ResponseWriter, r *http.Request) {
 // OpenGamesInGuild counts the games being set up, played or awaiting scoring; the game code sets it when it loads.
 var OpenGamesInGuild = func(guildID string) int { return 0 }
 
-func startReset(guildID, actor string) (ResetStatus, error) {
+func startReset(guildID, actor, scope string) (ResetStatus, error) {
+	if scope != "all" {
+		scope = "prior"
+	}
 	s := appearanceSession.Load()
 	if s == nil {
 		return ResetStatus{}, errors.New("the bot is not ready yet")
@@ -241,9 +247,9 @@ func startReset(guildID, actor string) (ResetStatus, error) {
 		return ResetStatus{}, &resetError{http.StatusConflict, fmt.Sprintf("%d game(s) are still open (waiting, being played or awaiting scoring): finish or void them first", n)}
 	}
 	resetStarts[guildID] = append(resetStarts[guildID], now)
-	j := &resetJob{cancel: make(chan struct{}), st: ResetStatus{State: "running", Stage: "loading", StartedAt: now.UnixMilli(), Actor: actor, Recent: []ResetEvent{}}}
+	j := &resetJob{cancel: make(chan struct{}), st: ResetStatus{State: "running", Stage: "loading", StartedAt: now.UnixMilli(), Actor: actor, Scope: scope, Recent: []ResetEvent{}}}
 	resetJobs.Store(guildID, j)
-	go runReset(j, guildID)
+	go runReset(j, guildID, scope)
 	return j.snapshot(), nil
 }
 
@@ -271,7 +277,7 @@ func (j *resetJob) finish(state, errMsg string) {
 	})
 }
 
-func runReset(j *resetJob, guildID string) {
+func runReset(j *resetJob, guildID, scope string) {
 	s := appearanceSession.Load()
 	if j.cancelled() {
 		j.finish("cancelled", "")
@@ -298,9 +304,45 @@ func runReset(j *resetJob, guildID string) {
 	if rankName == "" {
 		rankName = "Unranked"
 	}
-	_, total, err := database.GuildPlayers(guildID, 1, 0)
+	// Who is reset: everyone registered, or only the players who took part in the previous season.
+	var total int
+	var page func(offset int) ([]sdk.PlayerView, error)
+	if scope == "all" {
+		_, total, err = database.GuildPlayers(guildID, 1, 0)
+		page = func(offset int) ([]sdk.PlayerView, error) {
+			rows, _, err := database.GuildPlayers(guildID, resetPageSize, offset)
+			return rows, err
+		}
+	} else {
+		priorID, priorName, perr := database.PriorSeason(guildID)
+		if perr != nil {
+			j.finish("failed", "Could not load the server's seasons: "+perr.Error())
+			return
+		}
+		if priorID == 0 {
+			j.finish("failed", "There is no previous season to take players from. Choose \"All players\" instead.")
+			return
+		}
+		j.update(func(st *ResetStatus) { st.Season = priorName })
+		_, total, err = database.SeasonPlayers(guildID, priorID, 1, 0)
+		page = func(offset int) ([]sdk.PlayerView, error) {
+			ids, _, err := database.SeasonPlayers(guildID, priorID, resetPageSize, offset)
+			if err != nil {
+				return nil, err
+			}
+			views := make([]sdk.PlayerView, 0, len(ids))
+			for _, id := range ids {
+				if v, gerr := database.Must().Player.Get(guildID, sdk.UintToString(id)); gerr == nil && v != nil {
+					views = append(views, *v)
+				} else {
+					views = append(views, sdk.PlayerView{Config: &models.PlayerConfigsModel{Username: fmt.Sprintf("player #%d", id)}}) // skipped below: no Discord account
+				}
+			}
+			return views, nil
+		}
+	}
 	if err != nil {
-		j.finish("failed", "Could not load the registered players: "+err.Error())
+		j.finish("failed", "Could not load the players: "+err.Error())
 		return
 	}
 	j.update(func(st *ResetStatus) { st.Stage, st.Rank, st.Total = "resetting", rankName, total })
@@ -310,12 +352,12 @@ func runReset(j *resetJob, guildID string) {
 			j.finish("cancelled", "")
 			return
 		}
-		page, _, err := database.GuildPlayers(guildID, resetPageSize, offset)
+		rows, err := page(offset)
 		if err != nil {
-			j.finish("failed", "Could not load the registered players: "+err.Error())
+			j.finish("failed", "Could not load the players: "+err.Error())
 			return
 		}
-		for _, row := range page {
+		for _, row := range rows {
 			if j.cancelled() {
 				j.finish("cancelled", "")
 				return
