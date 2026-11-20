@@ -648,7 +648,17 @@ func (g Game) inParty(userID string) bool {
 // Pre-game
 
 func init() {
-	helpers.GameNumberInChannel = func(channelID string) (int, bool) {
+	// A server reset must not run while games are being played or waiting to be scored: their results would land on wiped stats.
+	helpers.OpenGamesInGuild = func(guildID string) int {
+		n := 0
+		for _, g := range Games.GuildGames(guildID) {
+			if g.State == GameWaiting || g.State == GamePreGame || g.State == GameInGame || g.State == GamePostGame {
+				n++
+			}
+		}
+		return n
+	}
+	helpers.GameNumberInChannel =func(channelID string) (int, bool) {
 		if game, ok := Games.ByChannel(channelID); ok {
 			return game.Number, true
 		}
