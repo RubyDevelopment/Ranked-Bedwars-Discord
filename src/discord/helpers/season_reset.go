@@ -105,7 +105,7 @@ type ResetStatus struct {
 	Limit      int           `json:"limit"`
 	WindowMin  int           `json:"windowMinutes"`
 	NextSlotAt int64         `json:"nextSlotAt,omitempty"` // when the oldest start in the window expires and frees a slot
-	Current   *ResetCurrent `json:"current,omitempty"`
+	Current    *ResetCurrent `json:"current,omitempty"`
 	Recent     []ResetEvent  `json:"recent"` // newest first
 }
 
@@ -162,10 +162,11 @@ func ServeReset(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, _ := io.ReadAll(io.LimitReader(r.Body, 2048))
 	var req struct {
-		Guild  string `json:"guild"`
-		Action string `json:"action"`
-		Actor  string `json:"actor"`
-		Scope  string `json:"scope"` // "prior" (default): players of the previous season; "all": every registered player
+		Guild    string `json:"guild"`
+		Action   string `json:"action"`
+		Actor    string `json:"actor"`
+		SeasonID uint   `json:"season_id"` // with scope "prior": reset this season's players instead of the newest one
+		Scope    string `json:"scope"`     // "prior" (default): players of the previous season; "all": every registered player
 	}
 	if json.Unmarshal(raw, &req) != nil || !base.GuildIDPattern.MatchString(req.Guild) {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -179,7 +180,7 @@ func ServeReset(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "start":
 		var err error
-		if status, err = startReset(req.Guild, req.Actor, req.Scope); err != nil {
+		if status, err = startReset(req.Guild, req.Actor, req.Scope, req.SeasonID); err != nil {
 			code := http.StatusConflict
 			var re *resetError
 			if errors.As(err, &re) {
@@ -223,7 +224,7 @@ func ServeReset(w http.ResponseWriter, r *http.Request) {
 // OpenGamesInGuild counts the games being set up, played or awaiting scoring; the game code sets it when it loads.
 var OpenGamesInGuild = func(guildID string) int { return 0 }
 
-func startReset(guildID, actor, scope string) (ResetStatus, error) {
+func startReset(guildID, actor, scope string, seasonID uint) (ResetStatus, error) {
 	if scope != "all" {
 		scope = "prior"
 	}
@@ -249,7 +250,7 @@ func startReset(guildID, actor, scope string) (ResetStatus, error) {
 	resetStarts[guildID] = append(resetStarts[guildID], now)
 	j := &resetJob{cancel: make(chan struct{}), st: ResetStatus{State: "running", Stage: "loading", StartedAt: now.UnixMilli(), Actor: actor, Scope: scope, Recent: []ResetEvent{}}}
 	resetJobs.Store(guildID, j)
-	go runReset(j, guildID, scope)
+	go runReset(j, guildID, scope, seasonID)
 	return j.snapshot(), nil
 }
 
@@ -277,7 +278,7 @@ func (j *resetJob) finish(state, errMsg string) {
 	})
 }
 
-func runReset(j *resetJob, guildID, scope string) {
+func runReset(j *resetJob, guildID, scope string, wantSeason uint) {
 	s := appearanceSession.Load()
 	if j.cancelled() {
 		j.finish("cancelled", "")
@@ -314,13 +315,13 @@ func runReset(j *resetJob, guildID, scope string) {
 			return rows, err
 		}
 	} else {
-		priorID, priorName, perr := database.PriorSeason(guildID)
+		priorID, priorName, perr := database.PriorSeason(guildID, wantSeason)
 		if perr != nil {
 			j.finish("failed", "Could not load the server's seasons: "+perr.Error())
 			return
 		}
 		if priorID == 0 {
-			j.finish("failed", "There is no previous season to take players from. Choose \"All players\" instead.")
+			j.finish("failed", "No such past season was found to take players from. Pick another season or choose \"All players\".")
 			return
 		}
 		j.update(func(st *ResetStatus) { st.Season = priorName })
@@ -379,7 +380,9 @@ func resetOnePlayer(j *resetJob, s *discordgo.Session, guildID string, row sdk.P
 		return
 	}
 	step := func(k, msg string) {
-		j.update(func(st *ResetStatus) { st.Current = &ResetCurrent{Player: name, Discord: discordID, Step: k, Message: msg} })
+		j.update(func(st *ResetStatus) {
+			st.Current = &ResetCurrent{Player: name, Discord: discordID, Step: k, Message: msg}
+		})
 	}
 	var steps []string
 
