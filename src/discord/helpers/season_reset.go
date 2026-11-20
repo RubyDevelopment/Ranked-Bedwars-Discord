@@ -125,7 +125,7 @@ func (j *resetJob) snapshot() ResetStatus {
 		c := *j.st.Current
 		out.Current = &c
 	}
-	out.Recent = append([]ResetEvent(nil), j.st.Recent...)
+	out.Recent = append([]ResetEvent{}, j.st.Recent...) // never nil: it is a JSON list the page reads the length of
 	return out
 }
 
