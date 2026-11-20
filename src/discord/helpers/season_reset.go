@@ -24,12 +24,11 @@ import (
 // ============================================================================
 //
 // POST /live/reset (same LIVE_CHAT_SECRET as the live console) with {"guild", "action": "start"|"status"|"cancel", "actor"}.
-// "start" wipes every registered player's stats for the active season back to the starting rating (each wipe is recorded by the
-// database, so /unwipe can undo one) and then re-syncs their rank role and server nickname, which comes out as "[0] username | nickname".
+// "start" re-syncs every registered player's rank role and server nickname while no season is active (everyone counts as 0 ELO, the first rank),
+// which comes out as "[0] username | nickname". It changes no stats and records no wipe.
 // The dashboard polls "status" to draw the live progress. Jobs are kept in memory, one per server; a restart forgets them.
 
 const (
-	resetStartElo   = 0 // keep in step with ratings.SeasonStartElo (that package imports this one)
 	resetPageSize   = 200
 	resetRecentKeep = 60
 
@@ -79,7 +78,7 @@ type ResetEvent struct {
 type ResetCurrent struct {
 	Player  string `json:"player"`
 	Discord string `json:"discord"`
-	Step    string `json:"step"` // wipe | sync | ""
+	Step    string `json:"step"` // sync | ""
 	Message string `json:"message"`
 }
 
@@ -95,7 +94,6 @@ type ResetStatus struct {
 	Rank       string        `json:"rank,omitempty"`
 	Total      int           `json:"total"`
 	Processed  int           `json:"processed"`
-	Wiped      int           `json:"wiped"`
 	Renamed    int           `json:"renamed"`
 	RolesFixed int           `json:"rolesFixed"`
 	Skipped    int           `json:"skipped"`
@@ -245,7 +243,7 @@ func startReset(guildID, actor string) (ResetStatus, error) {
 	resetStarts[guildID] = append(resetStarts[guildID], now)
 	j := &resetJob{cancel: make(chan struct{}), st: ResetStatus{State: "running", Stage: "loading", StartedAt: now.UnixMilli(), Actor: actor, Recent: []ResetEvent{}}}
 	resetJobs.Store(guildID, j)
-	go runReset(j, guildID, actor)
+	go runReset(j, guildID)
 	return j.snapshot(), nil
 }
 
@@ -273,15 +271,22 @@ func (j *resetJob) finish(state, errMsg string) {
 	})
 }
 
-func runReset(j *resetJob, guildID, actor string) {
+func runReset(j *resetJob, guildID string) {
 	s := appearanceSession.Load()
 	if j.cancelled() {
 		j.finish("cancelled", "")
 		return
 	}
+	// This resets roles, rank and nicknames only; it never touches stats or records a wipe. With no season active every player counts
+	// as 0 ELO (the first rank), which is exactly what the sync below applies. With a season active their real ELO would win, so
+	// refuse instead of quietly doing something else.
 	seasonKey, seasonID, err := ActiveSeasonKey(guildID)
-	if err != nil || seasonID == 0 {
-		j.finish("failed", "This server has no active season to reset.")
+	if err != nil {
+		j.finish("failed", "Could not check the server's seasons.")
+		return
+	}
+	if seasonID != 0 {
+		j.finish("failed", fmt.Sprintf("Season %s is still active. End it (Season Periods) before resetting: this reset only clears roles and nicknames, it does not wipe stats.", seasonKey))
 		return
 	}
 	ranks, err := GuildMetaRanks(guildID)
@@ -289,16 +294,16 @@ func runReset(j *resetJob, guildID, actor string) {
 		j.finish("failed", "Could not load the server's ranks.")
 		return
 	}
-	rankName := "Unranked"
-	if r := RankForElo(ranks, resetStartElo); r != nil && r.RankName != "" {
-		rankName = r.RankName
+	rankName, _ := LowestRankDefaults(ranks)
+	if rankName == "" {
+		rankName = "Unranked"
 	}
 	_, total, err := database.GuildPlayers(guildID, 1, 0)
 	if err != nil {
 		j.finish("failed", "Could not load the registered players: "+err.Error())
 		return
 	}
-	j.update(func(st *ResetStatus) { st.Stage, st.Season, st.Rank, st.Total = "resetting", seasonKey, rankName, total })
+	j.update(func(st *ResetStatus) { st.Stage, st.Rank, st.Total = "resetting", rankName, total })
 
 	for offset := 0; offset < total; offset += resetPageSize {
 		if j.cancelled() {
@@ -315,14 +320,14 @@ func runReset(j *resetJob, guildID, actor string) {
 				j.finish("cancelled", "")
 				return
 			}
-			resetOnePlayer(j, s, guildID, actor, seasonID, rankName, row)
+			resetOnePlayer(j, s, guildID, row)
 		}
 	}
 	j.finish("done", "")
 }
 
-// resetOnePlayer wipes one player's season stats, then re-syncs their rank role and nickname.
-func resetOnePlayer(j *resetJob, s *discordgo.Session, guildID, actor string, seasonID uint, rankName string, row sdk.PlayerView) {
+// resetOnePlayer re-syncs one player's registered role, rank role and nickname. No stats are changed and nothing is recorded as a wipe.
+func resetOnePlayer(j *resetJob, s *discordgo.Session, guildID string, row sdk.PlayerView) {
 	name, discordID := row.Config.Username, ""
 	if row.Player != nil {
 		discordID = row.Player.SnowflakeID
@@ -335,25 +340,8 @@ func resetOnePlayer(j *resetJob, s *discordgo.Session, guildID, actor string, se
 		j.update(func(st *ResetStatus) { st.Current = &ResetCurrent{Player: name, Discord: discordID, Step: k, Message: msg} })
 	}
 	var steps []string
-	pid := sdk.UintToString(row.Player.ID)
 
-	// 1. Wipe the season stats back to the starting rating and the first rank.
-	step("wipe", "Resetting stats to the first rank")
-	_, err := database.Must().Wipes.Wipe(actor, guildID, pid, seasonID, sdk.WipePlayerStatsRequest{
-		StartElo: resetStartElo, Rank: rankName, Reason: "Server reset from the dashboard",
-	})
-	switch {
-	case err == nil:
-		steps = append(steps, "Stats wiped to "+rankName)
-		j.update(func(st *ResetStatus) { st.Wiped++ })
-	case sdk.IsNotFound(err):
-		steps = append(steps, "No season stats yet") // a full wipe always resets; only a missing stats row is not found
-	default:
-		j.event(ResetEvent{Player: name, Outcome: "failed", Detail: "Wipe failed: " + err.Error()})
-		return
-	}
-
-	// 2. Re-sync the registered role, rank role and "[0] username | nickname".
+	// Re-sync the registered role, rank role and "[0] username | nickname".
 	step("sync", "Updating rank role and nickname")
 	if _, err := FetchGuildMember(s, guildID, discordID); err != nil {
 		j.event(ResetEvent{Player: name, Outcome: "skipped", Detail: "Not in the server any more", Steps: steps})
