@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -171,7 +170,7 @@ func alertPingUsers(guildID string, ids []string) []string {
 	return out
 }
 
-// voidAlert is the staff alert of a voided game: what the game was, who voided it, why, who was in it and what it means for ratings.
+// voidAlert is the staff alert of a voided game: what the game was, who voided it and why.
 func voidAlert(g Game, reason string) (string, []*discordgo.MessageEmbedField) {
 	who := "the system"
 	if by := strings.TrimSpace(g.VoidedBy); by != "" {
@@ -186,40 +185,8 @@ func voidAlert(g Game, reason string) (string, []*discordgo.MessageEmbedField) {
 	}
 	desc := fmt.Sprintf("%s was voided by %s.", title, who)
 
-	progress := "Voided before the match started."
-	if !g.StartedAt.IsZero() {
-		progress = fmt.Sprintf("Voided %s into the match.", time.Since(g.StartedAt).Round(time.Second))
-	}
-	effect := "No wins, losses or stats were recorded for this game."
-	if g.Mode.IsEloGainEnabled {
-		effect = "No ELO, wins, losses or stats were recorded, and any already scored are reversed."
-	}
-
-	lines := func(players []GamePlayer) string {
-		out := make([]string, 0, len(players))
-		for _, p := range players {
-			out = append(out, "<@"+p.UserID+"> (`"+p.Username+"`)")
-		}
-		return strings.Join(out, "\n")
-	}
-	fields := []*discordgo.MessageEmbedField{
-		{Name: "Reason", Value: base.FirstNonEmpty(reason, "No reason given")},
-		{Name: "Mode", Value: base.FirstNonEmpty(g.Mode.Name, "Unknown"), Inline: true},
-		{Name: "Map", Value: base.FirstNonEmpty(g.Map, "Not picked"), Inline: true},
-		{Name: "Host", Value: base.FirstNonEmpty(g.Host, "Automatic"), Inline: true},
-		{Name: "Progress", Value: progress},
-		{Name: "Effect", Value: effect},
-	}
-	teamed := false
-	for _, name := range g.Teams {
-		if players := g.TeamPlayers(name); len(players) > 0 {
-			fields = append(fields, &discordgo.MessageEmbedField{Name: name, Value: lines(players), Inline: true})
-			teamed = true
-		}
-	}
-	if !teamed && len(g.Players) > 0 {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: fmt.Sprintf("Players (%d)", len(g.Players)), Value: lines(g.Players)})
-	}
+	// The players were already pinged by the alert itself, so only who voided it and why is kept.
+	fields := []*discordgo.MessageEmbedField{{Name: "Reason", Value: base.FirstNonEmpty(reason, "No reason given")}}
 	return desc, fields
 }
 
