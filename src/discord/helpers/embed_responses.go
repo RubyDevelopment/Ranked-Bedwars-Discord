@@ -497,6 +497,29 @@ func sendCustomResponse(s *discordgo.Session, i *discordgo.InteractionCreate, em
 	return err == nil, err
 }
 
+// ChannelPayload is sendCustomResponse for a message the bot posts on its own (a staff alert, no interaction): the guild's saved
+// look for emb (its Commands > Responses default style), or false to send emb as built. Without it those messages ignore the
+// server's configured colours and layout.
+func ChannelPayload(s *discordgo.Session, guildID, command string, emb *discordgo.MessageEmbed) (map[string]any, bool) {
+	if s == nil || s.State == nil || guildID == "" || emb == nil {
+		return nil, false
+	}
+	st := responseStateOf(guildID)
+	if len(st.cfg.Defaults) == 0 && len(st.cfg.Overrides) == 0 {
+		return nil, false
+	}
+	vars := map[string]string{}
+	for k, val := range banner.GuildVars(s, guildID, nil) {
+		vars[k] = val
+	}
+	payload, ok := buildResponsePayload(st, command, "", emb, vars)
+	if !ok {
+		return nil, false
+	}
+	withSavedFooterIcon(s, guildID, responseLook(emb.Color), payload)
+	return payload, true
+}
+
 // componentList is a payload's components as a slice that more can be appended to.
 func componentList(v any) []any {
 	switch c := v.(type) {

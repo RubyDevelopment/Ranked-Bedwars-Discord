@@ -125,6 +125,22 @@ func staffAlertPingingTo(s *discordgo.Session, guildID, key, channel string, pin
 	if len(content) > 0 {
 		send.Content, send.AllowedMentions = strings.Join(content, " "), mentions
 	}
+	// The server's own look (Commands > Responses > Default) wins over the colour built into the alert.
+	if payload, ok := helpers.ChannelPayload(s, guildID, "alerts", embed); ok {
+		if len(content) > 0 {
+			if flags, _ := payload["flags"].(int); flags&(1<<15) != 0 { // Components V2 carries no content: ping in its own message
+				_, _ = s.ChannelMessageSendComplex(flow.Delivery.AlertsChannel, &discordgo.MessageSend{Content: send.Content, AllowedMentions: mentions})
+			} else {
+				payload["content"] = strings.Join(content, " ")
+				payload["allowed_mentions"] = map[string]any{"users": mentions.Users, "roles": mentions.Roles, "parse": []string{}}
+			}
+		}
+		if _, err := helpers.SendPayload(s, flow.Delivery.AlertsChannel, payload); err == nil {
+			return
+		} else {
+			log.Printf("staff alert %s for guild %s (styled): %v", key, guildID, err)
+		}
+	}
 	if _, err := s.ChannelMessageSendComplex(flow.Delivery.AlertsChannel, send); err != nil {
 		log.Printf("staff alert %s for guild %s: %v", key, guildID, err)
 	}
@@ -229,6 +245,11 @@ func NotifyTeamCall(s *discordgo.Session, guildID, actorID, targetID, voiceID st
 	embed := &discordgo.MessageEmbed{Title: "Team Call Added", Description: text, Color: AlertKinds["team_call"].Color}
 	helpers.WithGuildFooterIconForGuild(s, guildID, embed)
 	if dm, err := s.UserChannelCreate(targetID); err == nil {
+		if payload, ok := helpers.ChannelPayload(s, guildID, "alerts", embed); ok {
+			if _, err := helpers.SendPayload(s, dm.ID, payload); err == nil {
+				return
+			}
+		}
 		_, _ = s.ChannelMessageSendEmbed(dm.ID, embed)
 	}
 }
