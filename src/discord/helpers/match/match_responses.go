@@ -186,7 +186,7 @@ var defaultEmbeds = map[string]embedTemplate{
 
 	// Post-game
 	"matchEnded": off(tpl("info", "Game #{game} • Match Over", "**{winner}** won the match.",
-		embedField{Name: "{team}", Value: "{teamStats}", Inline: false, Each: "team"})),
+		embedField{Name: "{trophy}{team}", Value: "{teamStats}", Inline: false, Each: "team"})),
 	"scored":     plainText(tpl("default", "Match Finished", ""), "**{gameLink}**\n**Winners:** {winnerMentions}\n**Losers:** {loserMentions}"), // a plain message with the results card attached, not a box
 	"casualDone": thumb(colored(tpl("success", "Casual Match Logged • Game #{game}", "**Result:** Tied · no team won.\n\nThe match is complete and this game room is closing."), "#57f287"), helpers.ThumbTada),
 	"staffPending": thumb(colored(tpl("pending", "Win Submitted • Game #{game}",

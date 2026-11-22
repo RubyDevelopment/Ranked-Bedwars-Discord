@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"ranked-bedwars/src/database"
 	"ranked-bedwars/src/discord/helpers"
+	"ranked-bedwars/src/discord/helpers/banner"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/types"
 	"slices"
@@ -691,11 +692,15 @@ func (d embedData) teamVars(lines string, t embedTemplate) []map[string]string {
 		if len(rows) == 0 {
 			rows = []string{empty}
 		}
+		trophy := ""
+		if d.Game.Winner != "" && d.Game.Winner == team {
+			trophy = "🏆 " // the winning team, in the Match Over embed
+		}
 		bed := "🛏️"
 		if d.BedLost[team] {
 			bed = "❌"
 		}
-		teams = append(teams, map[string]string{"team": team, "teamPlayers": strings.Join(rows, sep), "teamStats": TeamStatLines(d.Game, team, d.Flow), "bed": bed})
+		teams = append(teams, map[string]string{"team": team, "teamPlayers": strings.Join(rows, sep), "teamStats": TeamStatLines(d.Game, team, d.Flow), "bed": bed, "trophy": trophy})
 	}
 	return teams
 }
@@ -800,17 +805,29 @@ func pingsOf(g Game) string {
 func TeamStatLines(g Game, team string, f guildFlow) string {
 	var blocks []string
 	size := 0
+	_, seasonID, _ := helpers.ActiveSeasonKey(g.GuildID)
 	for _, p := range g.TeamPlayers(team) {
 		head := fmt.Sprintf("<@%s> (`%s`)", p.UserID, MCName(g.GuildID, p))
 		if p.Captain {
 			head = "👑 " + head
 		}
 		elo := fmt.Sprintf("ELO: `%d`", p.EloBefore)
+		scored := false
 		for _, r := range g.Results {
 			if r.UserID == p.UserID {
 				elo = fmt.Sprintf("ELO: `%d` → `%d` (`%+d`)", r.Before, r.After, r.Change) // before → after, with the gain or loss
+				scored = true
 				break
 			}
+		}
+		if !scored { // before the result: the player's season ratios stand in for the ELO change
+			wlr, kdr := "0.00", "0.00" // a player with no stats yet (or no season) reads 0.00
+			if seasonID != 0 {
+				if st, err := database.Must().Stats.Get(g.GuildID, p.UserID, seasonID); err == nil {
+					wlr, kdr = banner.Ratio(st.Wins, st.Losses), banner.Ratio(st.Kills, st.Deaths)
+				}
+			}
+			elo += fmt.Sprintf(" · WLR: `%s` · KDR: `%s`", wlr, kdr)
 		}
 		stats := fmt.Sprintf("K/D: `%d/%d` · FK: `%d` · Beds: `%d`", p.Kills, p.Deaths, p.FinalKills, p.BedsDestroyed)
 		ids := make([]string, 0, len(p.Custom))

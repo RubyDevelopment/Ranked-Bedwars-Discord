@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"slices"
 	"sort"
@@ -605,6 +606,7 @@ func ApplyPunishment(s *discordgo.Session, i *discordgo.InteractionCreate, spec 
 	// 5. Resolve Target Profile
 	playerID, profile, err := helpers.EnsureModerationTarget(actor, i.GuildID, target)
 	if err != nil {
+		log.Printf("punish %s: resolving target %s failed: %v", spec.Command, target.ID, err)
 		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorPunishmentEmbed(spec.Action))
 	}
 
@@ -688,6 +690,7 @@ func ApplyPunishmentTo(s *discordgo.Session, guildID, actor string, target *disc
 	if spec.Duplicates {
 		active, err := database.Must().Punishments.ByPlayer(guildID, pid, true, "", sdk.Page{})
 		if err != nil {
+			log.Printf("punish %s: listing active punishments of player %s failed: %v", spec.Command, pid, err)
 			return UnexpectedErrorPunishmentEmbed(spec.Action), false
 		}
 		for _, entry := range active.Data {
@@ -704,6 +707,7 @@ func ApplyPunishmentTo(s *discordgo.Session, guildID, actor string, target *disc
 	if _, err := database.Must().Punishments.Create(actor, guildID, pid, sdk.NewPunishment{
 		StaffID: actor, Reason: reason, Type: spec.Type, ExpiresAt: expiresAt, LadderLevel: level,
 	}); err != nil {
+		log.Printf("punish %s: recording punishment for player %s failed: %v", spec.Command, pid, err)
 		return UnexpectedErrorPunishmentEmbed(spec.Action), false
 	}
 	helpers.TrackPunishmentExpiry(guildID, expiresAt)

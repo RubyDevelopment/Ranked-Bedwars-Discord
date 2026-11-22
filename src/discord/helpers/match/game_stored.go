@@ -63,7 +63,7 @@ func (m *GameManager) loadStored(guildID string, rec *models.GamesModel) (Game, 
 			name = uid
 		}
 		g.Players = append(g.Players, GamePlayer{
-			UserID: uid, Username: name, PlayerID: r.PlayerID, Team: r.Team, Captain: r.IsCaptain,
+			UserID: uid, Username: name, PlayerID: r.PlayerID, Team: r.Team, Captain: r.IsCaptain, EloBefore: r.EloBefore,
 			Kills: r.Kills, Deaths: r.Deaths, Assists: r.Assists, FinalKills: r.FinalKills,
 			BedsDestroyed: r.BedsDestroyed, BedsLost: r.BedsLost, FirstBloods: r.FirstBloods,
 		})

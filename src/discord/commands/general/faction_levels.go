@@ -2,6 +2,9 @@ package general
 
 import (
 	"fmt"
+	"log"
+	"ranked-bedwars/src/discord/helpers/pagination"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,7 +15,12 @@ import (
 	"ranked-bedwars/src/types"
 )
 
-const factionLevelsPerPage = 15
+func init() { helpers.RegisterComponentHandler(handleFactionLevels) }
+
+const (
+	factionLevelsPerPage = 15
+	factionLevelsPrefix  = "fclv|" // fclv|<page to go to>; an inert button is fclv|off-<slot>
+)
 
 // levelNeeds is the lifetime trophies level n takes.
 func levelNeeds(cfg *database.FactionConfig, n int) int {
@@ -163,43 +171,84 @@ func levelStanding(cfg *database.FactionConfig, p *database.FactionProfile) *dis
 }
 
 // factionLevel answers /faction level: one level of the ruleset when `level` is given, otherwise the faction's own standing.
-func factionLevel(s *discordgo.Session, i *discordgo.InteractionCreate, guildID, userID string, options []*discordgo.ApplicationCommandInteractionDataOption) error {
-	cfg, err := database.FactionConfigGet(guildID)
+func factionLevel(c *factionCtx) error {
+	cfg, err := database.FactionConfigGet(c.guildID)
 	if err != nil {
 		return err
 	}
 	var p *database.FactionProfile
-	if name := helpers.SubOptionString(options, "faction"); strings.TrimSpace(name) != "" {
-		if p, err = database.FactionNamed(guildID, name); err != nil {
+	if name := c.str("faction"); strings.TrimSpace(name) != "" {
+		if p, err = c.named(name); err != nil {
 			return err
 		}
-		if p == nil {
-			return helpers.EditInteractionEmbed(s, i, FactionNotFoundEmbed(name))
-		}
-	} else if p, err = database.FactionFor(guildID, userID); err != nil {
+	} else if p, err = database.FactionFor(c.guildID, c.userID); err != nil {
 		return err
 	}
-	if n := helpers.SubOptionInt(options, "level"); n > 0 {
+	if n := c.integer("level"); n > 0 {
 		if n > cfg.MaxLevel {
-			return helpers.EditInteractionEmbed(s, i, FactionRefusedEmbed(fmt.Sprintf("The top faction level is **%d**.", cfg.MaxLevel)))
+			return FactionReply(FactionRefusedEmbed(fmt.Sprintf("The top faction level is **%d**.", cfg.MaxLevel)))
 		}
-		return helpers.EditInteractionEmbed(s, i, levelDetail(cfg, n, p))
+		return c.send(levelDetail(cfg, n, p))
 	}
 	if p == nil { // not in a faction: show the ladder instead
-		return helpers.EditInteractionEmbed(s, i, levelsOverview(cfg, 1, 0))
+		embed, components := levelsPage(cfg, 1, 0)
+		return c.send(embed, components...)
 	}
-	return helpers.EditInteractionEmbed(s, i, levelStanding(cfg, p))
+	return c.send(levelStanding(cfg, p))
 }
 
-// factionLevels answers /faction levels: a page of every level.
-func factionLevels(s *discordgo.Session, i *discordgo.InteractionCreate, guildID, userID string, options []*discordgo.ApplicationCommandInteractionDataOption) error {
-	cfg, err := database.FactionConfigGet(guildID)
+// factionLevels answers /faction levels: a page of every level, with buttons to turn it.
+func factionLevels(c *factionCtx) error {
+	cfg, err := database.FactionConfigGet(c.guildID)
 	if err != nil {
 		return err
 	}
-	level := 0
+	embed, components := levelsPage(cfg, c.integer("page"), factionLevelOf(c.guildID, c.userID))
+	return c.send(embed, components...)
+}
+
+// factionLevelOf is the level of a player's faction, or 0 when they have none.
+func factionLevelOf(guildID, userID string) int {
 	if p, err := database.FactionFor(guildID, userID); err == nil && p != nil {
-		level = p.Level
+		return p.Level
 	}
-	return helpers.EditInteractionEmbed(s, i, levelsOverview(cfg, helpers.SubOptionInt(options, "page"), level))
+	return 0
+}
+
+// levelsPage is one page of levelsOverview with the buttons that turn pages.
+func levelsPage(cfg *database.FactionConfig, page, level int) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	pages := max(1, (cfg.MaxLevel+factionLevelsPerPage-1)/factionLevelsPerPage)
+	page = min(max(page, 1), pages)
+	return levelsOverview(cfg, page, level), pagination.BuildPageRow(page, pages,
+		func(target int) string { return fmt.Sprintf("%s%d", factionLevelsPrefix, target) },
+		func(slot string) string { return factionLevelsPrefix + "off-" + slot })
+}
+
+// handleFactionLevels turns the page of the levels list. Only the player who ran the command can.
+func handleFactionLevels(s *discordgo.Session, i *discordgo.InteractionCreate, customID string) bool {
+	rest, ok := strings.CutPrefix(customID, factionLevelsPrefix)
+	if !ok {
+		return false
+	}
+	page, err := strconv.Atoi(rest)
+	if err != nil || page < 1 {
+		return true // an inert button: nothing to do
+	}
+	if factionOwnerOnly(s, i, "/faction levels") {
+		return true
+	}
+	embed, components := UnexpectedErrorFactionEmbed(), []discordgo.MessageComponent{}
+	if cfg, err := database.FactionConfigGet(i.GuildID); err != nil {
+		log.Printf("[Faction] levels page in %s: %v", i.GuildID, err)
+	} else {
+		embed, components = levelsPage(cfg, page, factionLevelOf(i.GuildID, helpers.InteractionUserID(i)))
+		if components == nil {
+			components = []discordgo.MessageComponent{}
+		}
+	}
+	_ = helpers.InteractionRespond(s, i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: components},
+	})
+	return true
 }

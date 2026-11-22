@@ -71,6 +71,10 @@ func (m *GameManager) ByNumberOrStored(guildID string, number int) (g Game, ok b
 		if r.IsMvp && g.MVP == "" && i < len(g.Players) {
 			g.MVP = g.Players[i].UserID
 		}
+		if g.State == GameCleanup && i < len(g.Players) && (r.EloBefore != 0 || r.EloAfter != 0) { // a finished game shows each player's stored ELO change
+			g.Results = append(g.Results, types.EloResult{UserID: g.Players[i].UserID, Win: r.IsWinner, MVP: r.IsMvp,
+				EloOutcome: types.EloOutcome{Before: r.EloBefore, After: r.EloAfter, Change: r.EloChange}})
+		}
 	}
 	g.CreatedAt = rec.CreatedAt
 	if rec.StartedAt != nil {
