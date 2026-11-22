@@ -124,8 +124,14 @@ type factionCtx struct {
 func (c *factionCtx) str(name string) string  { return helpers.SubOptionString(c.options, name) }
 func (c *factionCtx) integer(name string) int { return helpers.SubOptionInt(c.options, name) }
 
-// send answers with an embed, and its buttons when it has any.
+// send answers with an embed, and its buttons when it has any. An embed with buttons is sent as built, without the server's saved
+// response style: pressing a button replaces the message as built too, so the style would show on the first view only.
 func (c *factionCtx) send(embed *discordgo.MessageEmbed, components ...discordgo.MessageComponent) error {
+	if len(components) > 0 && !helpers.IsPrefixInteraction(c.i) {
+		helpers.WithGuildFooterIcon(c.s, c.i, embed)
+		_, err := c.s.InteractionResponseEdit(c.i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &components})
+		return err
+	}
 	if len(components) > 0 {
 		return helpers.EditInteractionComponents(c.s, c.i, embed, components)
 	}
