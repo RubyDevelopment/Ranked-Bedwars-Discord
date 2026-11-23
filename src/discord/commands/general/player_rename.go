@@ -122,7 +122,7 @@ func restoreRegistration(s *discordgo.Session, i *discordgo.InteractionCreate, v
 	restored = append(restored, actions...)
 	text := "Everything on your profile was already in place, so nothing needed to be restored."
 	if len(restored) > 0 {
-		text = "Your profile was checked and what was missing has been restored.\n\n" + strings.Join(restored, "\n")
+		text = "Your profile was checked and what was missing has been restored.\n\n> " + strings.Join(restored, "\n> ")
 	}
 	return helpers.Preset("success", types.PresetOptions{
 		Title:       "Registration Restored",
