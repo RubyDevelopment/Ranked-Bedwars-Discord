@@ -1251,6 +1251,21 @@ func (q *QueueManager) AddGroup(g *QueueGroup, stillPresent func(userID string) 
 	return true
 }
 
+// InQueue reports whether the player is waiting in a queue channel or already allocated to a pending lobby.
+func (q *QueueManager) InQueue(guildID, userID string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if _, ok := q.playerGroup[groupKey(guildID, userID)]; ok {
+		return true
+	}
+	for _, ids := range q.joinOrder { // channel ids are unique across guilds
+		if slices.Contains(ids, userID) {
+			return true
+		}
+	}
+	return false
+}
+
 // GroupOf returns the pending lobby userID is allocated to, if any.
 func (q *QueueManager) GroupOf(guildID, userID string) *QueueGroup {
 	q.mu.Lock()

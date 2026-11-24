@@ -257,6 +257,7 @@ func (d *gameDiscord) manualVars(g Game) map[string]string {
 	maps, _ := helpers.GuildMetaMaps(g.GuildID)
 	count := 0
 	for _, m := range maps {
+		m = m.For(g.Mode.Name)
 		if m.IsEnabled && m.IsMapAvailable {
 			count++
 		}
@@ -435,6 +436,7 @@ func (d *gameDiscord) manualMapRows(g Game) []map[string]string {
 	maps, _ := helpers.GuildMetaMaps(g.GuildID)
 	rows := make([]map[string]string, 0, len(maps))
 	for _, m := range maps {
+		m = m.For(g.Mode.Name)
 		if !m.IsEnabled || !m.IsMapAvailable || strings.TrimSpace(m.Name) == "" {
 			continue
 		}

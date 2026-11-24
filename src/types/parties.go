@@ -63,7 +63,8 @@ type PartyDeps struct {
 	Elo            func(guildID, userID string) (elo int, ok bool) // ok=false → unknown, ELO checks fail open
 	BoostersExempt func(guildID string, userIDs []string) bool
 	InGame         func(guildID, userID string) bool
-	Notify         func(guildID, userID string, n PartyNotice)
+	InQueue        func(guildID, userID string) bool // waiting in a queue: an idle party is not disbanded while any member is
+	Notify        func(guildID, userID string, n PartyNotice)
 	Now            func() time.Time
 }
 

@@ -26,6 +26,36 @@ type Map struct {
 // MapModeSettings is what a map is configured with for one game mode.
 type MapModeSettings struct {
 	Teams []string `json:"teams"` // the in-game team colours, in team order (Team A gets the first)
+	// Optional per-queue overrides of the map's own values; nil means "same as the map".
+	IsEnabled      *bool `json:"is_enabled,omitempty"`
+	IsMapAvailable *bool `json:"is_map_available,omitempty"`
+	MapHeight      *int  `json:"map_height,omitempty"`
+	GUISlot        *int  `json:"gui_slot,omitempty"`
+}
+
+// For is the map as it plays in the named mode: the mode's own enabled/rotation/height/slot overrides applied over the
+// map's values. Teams are still read with TeamsFor.
+func (m Map) For(mode string) Map {
+	want := strings.ToLower(strings.TrimSpace(mode))
+	for name, ms := range m.ModeSettings {
+		if strings.ToLower(strings.TrimSpace(name)) != want {
+			continue
+		}
+		if ms.IsEnabled != nil {
+			m.IsEnabled = *ms.IsEnabled
+		}
+		if ms.IsMapAvailable != nil {
+			m.IsMapAvailable = *ms.IsMapAvailable
+		}
+		if ms.MapHeight != nil {
+			m.MapHeight = *ms.MapHeight
+		}
+		if ms.GUISlot != nil {
+			m.GUISlot = *ms.GUISlot
+		}
+		break
+	}
+	return m
 }
 
 // TeamsFor is the team colours of the map in the named mode (case-insensitive): the mode's own list, else the

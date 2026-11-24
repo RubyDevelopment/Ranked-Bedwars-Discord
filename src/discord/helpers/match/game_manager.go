@@ -75,7 +75,7 @@ func init() {
 		d.Alert = StaffAlertPinging
 		d.AlertPosts = StaffAlertPosts
 	})
-	partymgr.Parties.Wire(func(d *partymgr.PartyDeps) { d.InGame = Games.InGame })
+	partymgr.Parties.Wire(func(d *partymgr.PartyDeps) { d.InGame, d.InQueue = Games.InGame, queue.Queues.InQueue })
 	ratings.Elo.Wire(func(d *ratings.EloDeps) { d.InGame = Games.HasUnscoredGame })
 	Games.deps.Parties = partymgr.Parties
 	// The Discord side of a game: its channels (see the queue group's game_channels

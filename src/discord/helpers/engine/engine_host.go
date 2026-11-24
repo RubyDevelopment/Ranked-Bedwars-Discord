@@ -190,6 +190,7 @@ func buildHostJob(g match.Game) (*engineHostStart, error) {
 		if maps, err := helpers.GuildMetaMaps(g.GuildID); err == nil {
 			for _, cfg := range maps {
 				if strings.EqualFold(strings.TrimSpace(cfg.Name), name) {
+					cfg = cfg.For(g.Mode.Name)
 					slot := cfg.GUISlot
 					m.GUISlot, m.StableID = &slot, cfg.StableID
 					if cfg.MapHeight > 0 {

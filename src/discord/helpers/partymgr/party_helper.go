@@ -976,7 +976,7 @@ func (m *PartyManager) Sweep(guildID string) {
 	}
 	for i := range parties {
 		p := partyFromView(&parties[i])
-		if reason == models.DisbandInactivity && m.anyInGame(guildID, p.Members) {
+		if reason == models.DisbandInactivity && m.anyBusy(guildID, p.Members) {
 			if err := m.api().Touch(sdk.SystemActor, guildID, p.ID); err != nil {
 				appLog.EngineLogger.Error(fmt.Sprintf("[PartyManager] touch party %d: %v", p.ID, err))
 			}
@@ -992,12 +992,10 @@ func (m *PartyManager) Sweep(guildID string) {
 	m.invalidate(guildID)
 }
 
-func (m *PartyManager) anyInGame(guildID string, members []string) bool {
-	if m.deps.InGame == nil {
-		return false
-	}
+// anyBusy reports whether any member is in a game or waiting in a queue: an idle party is only disbanded once they have all left.
+func (m *PartyManager) anyBusy(guildID string, members []string) bool {
 	for _, id := range members {
-		if m.deps.InGame(guildID, id) {
+		if (m.deps.InGame != nil && m.deps.InGame(guildID, id)) || (m.deps.InQueue != nil && m.deps.InQueue(guildID, id)) {
 			return true
 		}
 	}

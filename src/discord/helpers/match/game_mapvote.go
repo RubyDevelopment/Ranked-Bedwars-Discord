@@ -51,6 +51,7 @@ func (d *gameDiscord) selectMap(g Game, available []MapOption, mapMenuRead bool)
 	}
 	var maps []types.Map
 	for _, m := range all {
+		m = m.For(g.Mode.Name)
 		if m.IsEnabled && m.IsMapAvailable && strings.TrimSpace(m.Name) != "" {
 			if mapMenuRead {
 				slot, found := availableSlots[strings.ToLower(strings.TrimSpace(m.Name))]
