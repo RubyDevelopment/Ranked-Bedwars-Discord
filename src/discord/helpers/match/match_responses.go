@@ -50,6 +50,8 @@ func GameActionErrorEmbed(action string, err error) *discordgo.MessageEmbed {
 		return gameErrorEmbed("Not Your Turn", "It is not your turn to pick.")
 	case errors.Is(err, ErrNotInPool):
 		return gameErrorEmbed("Invalid Selection", "That player is not available to pick.")
+	case errors.Is(err, ErrPartyWouldSplit):
+		return gameErrorEmbed("Party Would Split", "That player is in a party that will not fit on your team. A party always plays together: pick someone else.")
 	case errors.Is(err, ErrDraftOver):
 		return gameErrorEmbed("Draft Complete", "The captain draft is already complete.")
 	case errors.Is(err, ErrNoDraftYet):

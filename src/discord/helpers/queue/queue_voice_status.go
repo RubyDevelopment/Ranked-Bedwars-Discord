@@ -62,7 +62,7 @@ func voiceStatusText(s *discordgo.Session, guildID, channelID string, bind Queue
 		inVC[id] = true
 	}
 	cfg := Queues.PartyConfig(guildID, bind.Mode)
-	holdParties := bind.Mode.IsPartyQueueEnabled && partymgr.PartiesEnabled(cfg) && cfg.RequireAllMembersInQueue
+	holdParties := bind.Mode.IsPartyQueueEnabled && partymgr.PartiesEnabled(cfg)
 	// partyIncomplete: the player's party is effective but not all of it is in the channel, so the queue holds them back.
 	partyIncomplete := func(userID string) bool {
 		party := Queues.deps.Parties.PartyOf(guildID, userID)

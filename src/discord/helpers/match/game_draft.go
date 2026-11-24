@@ -218,7 +218,7 @@ func (d *Draft) Turn() int {
 			filled := false
 			for rank, t := range d.order {
 				for alternatingQuota[rank] == 0 && isOpen(t) && len(d.pool) > 0 {
-					d.take(t, d.pool[d.rng.IntN(len(d.pool))])
+					d.take(t, d.randomFit(t))
 					filled = true
 				}
 			}
@@ -263,6 +263,31 @@ func (d *Draft) Turn() int {
 	}
 }
 
+// fits reports whether team t has room for id together with every party mate still in the pool (a party is never split).
+func (d *Draft) fits(t int, id string) bool {
+	n := 1
+	for _, mate := range d.partyOf[id] {
+		if mate != id && slices.Contains(d.pool, mate) {
+			n++
+		}
+	}
+	return len(d.Teams[t])+n <= d.PerTeam
+}
+
+// randomFit is a random pool player team t can take whole with their party, falling back to any pool player when none can.
+func (d *Draft) randomFit(t int) string {
+	var ok []string
+	for _, id := range d.pool {
+		if d.fits(t, id) {
+			ok = append(ok, id)
+		}
+	}
+	if len(ok) == 0 {
+		ok = d.pool
+	}
+	return ok[d.rng.IntN(len(ok))]
+}
+
 func (d *Draft) take(t int, id string) {
 	if i := slices.Index(d.pool, id); i >= 0 {
 		d.pool = slices.Delete(d.pool, i, i+1)
@@ -289,6 +314,9 @@ func (d *Draft) Pick(captain, player string) (team int, err error) {
 	if !slices.Contains(d.pool, player) {
 		return -1, ErrNotInPool
 	}
+	if !d.fits(t, player) {
+		return -1, ErrPartyWouldSplit
+	}
 	d.take(t, player)
 	d.picks++
 	return t, nil
@@ -303,7 +331,7 @@ func (d *Draft) AutoPick() (captain, player string, err error) {
 	if len(d.pool) == 0 {
 		return "", "", ErrNotInPool
 	}
-	player = d.pool[d.rng.IntN(len(d.pool))]
+	player = d.randomFit(t)
 	d.take(t, player)
 	d.picks++
 	return d.Teams[t][0], player, nil

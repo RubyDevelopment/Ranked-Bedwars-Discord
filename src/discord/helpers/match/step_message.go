@@ -45,10 +45,7 @@ func (r *stepReply) doc() *helpers.MessageDoc {
 // stepVars are the variables a step's message can use: {match.number}, {match.mode}, {match.map}, {match.bot}, {match.host},
 // {match.players}, {match.teams}..., {channel.*} and {time.*}. The {game.*} spellings of the first ones still work.
 func stepVars(g Game, channelName string) map[string]string {
-	m := g.Map
-	if m == "" || m == MapUndecided {
-		m = "Not chosen"
-	}
+	m := MapLabel(g, "Not chosen")
 	mentions := make([]string, 0, len(g.Players))
 	byTeam := map[string][]string{}
 	for _, p := range g.Players {

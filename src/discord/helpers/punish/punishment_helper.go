@@ -929,6 +929,13 @@ func StartPunishmentExpiry(s *discordgo.Session) {
 			ids = append(ids, g.ID)
 		}
 		go PunishmentWatch.Seed(ids, guildHasTimedPunishments)
+		// A new season expires every punishment in the database (see the Database's clearModeration), possibly from the
+		// dashboard, so re-seed regularly: a guild with only permanent punishments was never tracked.
+		go func() {
+			for range time.Tick(5 * time.Minute) {
+				PunishmentWatch.Seed(ids, guildHasTimedPunishments)
+			}
+		}()
 	})
 }
 

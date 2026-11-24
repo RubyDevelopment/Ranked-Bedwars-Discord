@@ -86,7 +86,8 @@ func executeModerationStrikesCommand(s *discordgo.Session, i *discordgo.Interact
 	}
 
 	// 4. Fetch & Filter Strike History
-	entries, err := database.Must().Strikes.AllByPlayer(i.GuildID, sdk.UintToString(view.Player.ID), 0, false)
+	// Strikes are per season: a new season starts clean.
+	entries, err := helpers.SeasonStrikes(i.GuildID, sdk.UintToString(view.Player.ID))
 	if err != nil {
 		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationStrikesEmbed(i))
 	}

@@ -191,7 +191,7 @@ func renderHistoryPage(guildID string, kind HistoryPageKind, snowflake string, p
 	switch kind {
 	case HistoryPageStrikes:
 		duration, _ := helpers.ParseTimeFilter(historyOptionAt(opts, 0))
-		entries, err := svc.Strikes.AllByPlayer(guildID, sdk.UintToString(view.Player.ID), 0, false)
+		entries, err := helpers.SeasonStrikes(guildID, sdk.UintToString(view.Player.ID))
 		if err != nil {
 			return nil, nil, err
 		}

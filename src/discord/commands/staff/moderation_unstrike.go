@@ -138,7 +138,7 @@ func executeModerationUnstrikeCommand(s *discordgo.Session, i *discordgo.Interac
 
 // latestUnvoidedStrikeID returns the most recent non-voided strike for a player, or 0 if none exist.
 func latestUnvoidedStrikeID(guildID, playerID string) (uint, error) {
-	strikes, err := database.Must().Strikes.AllByPlayer(guildID, playerID, 0, false)
+	strikes, err := helpers.SeasonStrikes(guildID, playerID)
 	if err != nil {
 		return 0, err
 	}

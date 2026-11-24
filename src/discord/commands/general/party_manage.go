@@ -75,11 +75,12 @@ var PartyManageCommand = &types.Command{
 				},
 			},
 			{
-				Name: "info", Description: "View current party members and party state", Type: discordgo.ApplicationCommandOptionSubCommand,
+				Name: "list", Description: "View current party members and party state", Type: discordgo.ApplicationCommandOptionSubCommand,
 				Options: []*discordgo.ApplicationCommandOption{
 					{Name: "user", Description: "Show this player's party (default: yours)", Type: discordgo.ApplicationCommandOptionUser, Required: false},
 				},
 			},
+			{Name: "warp", Description: "Move your party members into your current voice channel", Type: discordgo.ApplicationCommandOptionSubCommand},
 		},
 	},
 	Execute: executePartyManageCommand,
@@ -128,8 +129,10 @@ func executePartyManageCommand(s *discordgo.Session, i *discordgo.InteractionCre
 		result = partyDisband(s, i, guildID, userID)
 	case "invites":
 		result = partyInvites(s, i, guildID, userID, options)
-	case "info":
+	case "list":
 		result = partyInfo(s, i, guildID, userID, options)
+	case "warp":
+		result = partyWarp(s, i, guildID, userID)
 	default:
 		return helpers.EditInteractionEmbed(s, i, PartyInvalidSubcommandEmbed())
 	}
@@ -274,6 +277,41 @@ func partyInvites(s *discordgo.Session, i *discordgo.InteractionCreate, guildID,
 		return helpers.EditInteractionEmbed(s, i, PartyInvitesOpenedEmbed())
 	}
 	return helpers.EditInteractionEmbed(s, i, PartyInvitesClosedEmbed())
+}
+
+func partyWarp(s *discordgo.Session, i *discordgo.InteractionCreate, guildID, userID string) error {
+	party := partymgr.Parties.PartyOf(guildID, userID)
+	if party == nil {
+		return helpers.EditInteractionEmbed(s, i, PartyNotInPartyEmbed())
+	}
+	if party.Leader != userID {
+		return partymgr.ErrNotLeader
+	}
+	vs, err := s.State.VoiceState(guildID, userID)
+	if err != nil || vs == nil || vs.ChannelID == "" {
+		return helpers.EditInteractionEmbed(s, i, helpers.Preset("error", types.PresetOptions{
+			Title:       "Not in a Voice Channel",
+			Description: "Join a voice channel first, then run `/party warp` to bring your party to you.",
+			Thumbnail:   helpers.ThumbFlag,
+		}))
+	}
+	moved := 0
+	for _, member := range party.Members {
+		if member == userID {
+			continue
+		}
+		if st, err := s.State.VoiceState(guildID, member); err == nil && st != nil && st.ChannelID != "" && st.ChannelID != vs.ChannelID {
+			ch := vs.ChannelID
+			if s.GuildMemberMove(guildID, member, &ch) == nil {
+				moved++
+			}
+		}
+	}
+	return helpers.EditInteractionEmbed(s, i, helpers.Preset("success", types.PresetOptions{
+		Title:       "Party Warped",
+		Description: fmt.Sprintf("Moved %d party member(s) into <#%s>. Members must already be in a voice channel to be moved.", moved, vs.ChannelID),
+		Thumbnail:   helpers.ThumbPlayers,
+	}))
 }
 
 func partyInfo(s *discordgo.Session, i *discordgo.InteractionCreate, guildID, userID string, options []*discordgo.ApplicationCommandInteractionDataOption) error {

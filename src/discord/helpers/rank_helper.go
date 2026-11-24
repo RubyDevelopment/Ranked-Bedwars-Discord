@@ -39,6 +39,28 @@ func RankForElo(ranks []types.Rank, elo int) *types.Rank {
 	return current
 }
 
+// MapDisplay is a stored game's map for people: the map when one was chosen, "N/A" for a game hosted by hand (no bot name
+// recorded) and "TBD" otherwise.
+func MapDisplay(mapName string, botName *string) string {
+	if m := strings.TrimSpace(mapName); m != "" && !strings.EqualFold(m, "TBD") {
+		return m
+	}
+	if botName == nil || strings.TrimSpace(*botName) == "" {
+		return "N/A"
+	}
+	return "TBD"
+}
+
+// SeasonStrikes lists a player's strikes for the active season only (new season, clean slate). With no active season
+// there is nothing to show; seasonID 0 would mean "every season" to the API, so it is never passed through.
+func SeasonStrikes(guildID, playerID string) ([]models.PlayerStrikesModel, error) {
+	_, seasonID, err := ActiveSeasonKey(guildID)
+	if err != nil || seasonID == 0 {
+		return nil, err
+	}
+	return database.Must().Strikes.AllByPlayer(guildID, playerID, seasonID, false)
+}
+
 // ActiveSeasonKey retrieves the active season key for a guild. An unavailable
 // database or a guild with no active season both return ("", 0, nil).
 //

@@ -282,7 +282,7 @@ func GameHostViewEmbed(i *discordgo.InteractionCreate, g match.Game) *discordgo.
 	return helpers.Preset("info", types.PresetOptions{
 		Title: fmt.Sprintf("Hosted Game #%d", g.Number),
 		Description: fmt.Sprintf("> **Mode:** `%s`\n> **State:** `%s`\n> **Map:** `%s`\n> **Ranks:** %s\n> **Stats:** %s\n> **Hosted:** %s\n> **By:** <@%s>",
-			g.Mode.Name, g.State, g.Map, match.HostOnOff(g.Custom.Ranked), match.HostOnOff(g.Custom.Stats), hosting, g.Custom.HostedBy),
+			g.Mode.Name, g.State, match.MapLabel(g, match.MapUndecided), match.HostOnOff(g.Custom.Ranked), match.HostOnOff(g.Custom.Stats), hosting, g.Custom.HostedBy),
 		Fields:    fields,
 		Thumbnail: helpers.ThumbDoubleSwords,
 	})

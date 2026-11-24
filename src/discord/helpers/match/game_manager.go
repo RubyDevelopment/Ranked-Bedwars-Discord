@@ -625,6 +625,18 @@ const (
 	teamUnassigned = "Unassigned"
 )
 
+// MapLabel is the map as shown to people: the chosen map, else "N/A" for a game hosted by hand (no bot hosted it and it
+// is past the waiting stage, so no map was specified), else notChosen ("TBD"/"Not chosen" while it is still to be picked).
+func MapLabel(g Game, notChosen string) string {
+	if m := strings.TrimSpace(g.Map); m != "" && m != MapUndecided {
+		return m
+	}
+	if g.Bot == "" && g.State != GameWaiting && g.State != "" {
+		return "N/A"
+	}
+	return notChosen
+}
+
 func isCaptainMode(m types.Mode) bool {
 	t := strings.ToLower(strings.TrimSpace(m.Type))
 	return t == "captains" || t == "captain" || t == "elo" // "captain" and "elo" are legacy names of the captain flow

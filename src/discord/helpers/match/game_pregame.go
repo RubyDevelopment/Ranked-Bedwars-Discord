@@ -180,18 +180,16 @@ func (m *GameManager) assignStandardTeams(lg *liveGame, cfg StandardFlow) error 
 	ids := g.userIDs()
 
 	var assigned [][]string
-	if !cfg.IsEnabled { // plain queue order
+	if !cfg.IsEnabled && len(g.Parties) == 0 { // plain queue order
 		for t := 0; t < teams; t++ {
 			assigned = append(assigned, slices.Clone(ids[t*perTeam:(t+1)*perTeam]))
 		}
 	} else {
 		opts := TeamOptions{
 			Teams: teams, PerTeam: perTeam, Randomness: cfg.RandomnessPercent,
-			Ratings: m.deps.Elo.Ratings(g.GuildID, ids), BalanceParties: cfg.BalancePartyGroups, AllowSplit: cfg.AllowSplitParties,
+			Ratings: m.deps.Elo.Ratings(g.GuildID, ids), BalanceParties: cfg.BalancePartyGroups, AllowSplit: false, // party members are always on the same team
+			Parties: g.Parties,
 			Method: m.deps.Elo.PartyConfig(g.GuildID).EloAggregationMethod, Rand: m.deps.Rand,
-		}
-		if cfg.KeepPartyTogether {
-			opts.Parties = g.Parties
 		}
 		var err error
 		if assigned, err = AssignTeams(ids, opts); err != nil {
@@ -362,8 +360,8 @@ func (m *GameManager) beginDraft(lg *liveGame, cfg CaptainFlow) error {
 	g := m.snapshot(lg)
 	teams, perTeam := TeamLayout(g.Mode)
 	d, err := NewDraft(g.userIDs(), teams, perTeam, m.deps.Elo.Ratings(g.GuildID, g.userIDs()), g.Parties, DraftConfig{
-		PickingType: cfg.DefaultPickingType, TopEloChance: cfg.TopEloCaptainChance, OneCaptainPerParty: cfg.OneCaptainPerParty,
-		AlternatingMinPlayers: cfg.AlternatingMinPlayers, AutoAssignParties: cfg.AutoAssignParties,
+		PickingType: cfg.DefaultPickingType, TopEloChance: cfg.TopEloCaptainChance, OneCaptainPerParty: true,
+		AlternatingMinPlayers: cfg.AlternatingMinPlayers, AutoAssignParties: true, // parties always stay on one team
 	}, m.deps.Rand)
 	if err != nil {
 		return err

@@ -16,6 +16,7 @@ import (
 	"ranked-bedwars/src/discord/helpers"
 	"ranked-bedwars/src/discord/helpers/base"
 	"ranked-bedwars/src/discord/helpers/partymgr"
+	"sort"
 	"ranked-bedwars/src/discord/helpers/punish"
 	"ranked-bedwars/src/discord/helpers/ratings"
 	"ranked-bedwars/src/types"
@@ -960,8 +961,9 @@ type queueItem struct{ members []QueueMember }
 // (2+ members, all present in players) stay whole; if taking the next item
 // would leave the lobby unfillable (1 solo + two parties of 4 for 8 slots) it
 // is skipped so a later combination can fill it. Returns nil when no
-// combination fills every slot.
-func SelectPlayers(players []QueueMember, parties []partymgr.PartyGroup, slots int) []QueueMember {
+// combination fills every slot. teams is the number of teams the lobby splits into: a combination whose parties cannot
+// each sit whole on one team (three parties of 3 in a 5v5) is never picked.
+func SelectPlayers(players []QueueMember, parties []partymgr.PartyGroup, slots, teams int) []QueueMember {
 	if slots <= 0 {
 		return nil
 	}
@@ -1016,7 +1018,7 @@ func SelectPlayers(players []QueueMember, parties []partymgr.PartyGroup, slots i
 	var dfs func(i, filled int) bool
 	dfs = func(i, filled int) bool {
 		if filled == slots {
-			return true
+			return partiesFit(picked, partyOf, teams, slots)
 		}
 		if i >= len(items) || filled+suffix[i] < slots {
 			return false
@@ -1035,6 +1037,41 @@ func SelectPlayers(players []QueueMember, parties []partymgr.PartyGroup, slots i
 		return nil
 	}
 	return picked
+}
+
+// partiesFit reports whether the picked players' parties can each be placed whole on one of `teams` teams of slots/teams
+// seats (first-fit decreasing; solos fill the seats left over).
+func partiesFit(picked []QueueMember, partyOf map[string]partymgr.PartyGroup, teams, slots int) bool {
+	if teams < 2 || slots%teams != 0 {
+		return true
+	}
+	seen := map[string]bool{}
+	var sizes []int
+	for _, m := range picked {
+		if pg, ok := partyOf[m.UserID]; ok && !seen[pg.Leader] {
+			seen[pg.Leader] = true
+			sizes = append(sizes, len(pg.Members))
+		}
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(sizes)))
+	room := make([]int, teams)
+	for i := range room {
+		room[i] = slots / teams
+	}
+	for _, n := range sizes {
+		placed := false
+		for i := range room {
+			if room[i] >= n {
+				room[i] -= n
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			return false
+		}
+	}
+	return true
 }
 
 // ============================================================================
@@ -1118,7 +1155,8 @@ func (q *QueueManager) FormGroup(p FormParams) (*QueueGroup, []QueueNotice) {
 				}
 			}
 
-			if len(here) < len(party.Members) && cfg.RequireAllMembersInQueue {
+			// A party always queues together: nobody of it is placed in a game unless every member is here and goes in with them.
+			if len(here) < len(party.Members) {
 				notices = append(notices, QueueNotice{Kind: NoticePartyIncomplete, Leader: party.Leader, Present: len(here), Total: len(party.Members)})
 				hold()
 				continue
@@ -1128,8 +1166,8 @@ func (q *QueueManager) FormGroup(p FormParams) (*QueueGroup, []QueueNotice) {
 				hold()
 				continue
 			}
-			if len(here) < cfg.MinQueueSize {
-				continue // too few present to count as a party: they queue as individuals
+			if len(here) < 2 {
+				continue // a "party" of one is just a solo player
 			}
 			if len(here) > maxParty {
 				notices = append(notices, QueueNotice{Kind: NoticePartyTooLarge, Leader: party.Leader, Present: len(here), Max: maxParty})
@@ -1146,7 +1184,7 @@ func (q *QueueManager) FormGroup(p FormParams) (*QueueGroup, []QueueNotice) {
 			final = append(final, m)
 		}
 	}
-	picked := SelectPlayers(final, parties, slots)
+	picked := SelectPlayers(final, parties, slots, max(2, bind.Mode.TeamCount))
 	if picked == nil {
 		return nil, notices
 	}

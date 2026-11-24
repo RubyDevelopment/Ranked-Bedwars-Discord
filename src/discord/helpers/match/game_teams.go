@@ -24,6 +24,8 @@ var (
 	ErrBadRoster    = errors.New("roster does not fit the team layout")
 	ErrNotYourTurn  = errors.New("it is not that captain's turn")
 	ErrNotInPool    = errors.New("player is not available to pick")
+	// ErrPartyWouldSplit: the pick's party would not fit on the team, and a party always plays on one team.
+	ErrPartyWouldSplit = errors.New("that player's party would not fit on your team")
 	ErrDraftOver    = errors.New("the draft is complete")
 	ErrNoDraftYet   = errors.New("no draft is running")
 	ErrNotACaptain  = errors.New("not a captain")
@@ -156,18 +158,41 @@ func AssignTeams(players []string, o TeamOptions) ([][]string, error) {
 			solos = append(solos, id)
 		}
 	}
-	for _, g := range groups {
-		if t := lowest(len(g)); t >= 0 {
+	// place puts every group whole on a team chosen by pick; false when one fits nowhere.
+	place := func(pick func(n int) int) bool {
+		for _, g := range groups {
+			t := pick(len(g))
+			if t < 0 {
+				return false
+			}
 			teams[t] = append(teams[t], g...)
-			continue
 		}
-		if !o.AllowSplit { // can't stay together: they fill in as solos
-			solos = append(solos, g...)
-			continue
+		return true
+	}
+	if !place(lowest) {
+		// The ELO-balanced placement stranded a party: start over, biggest parties first into the first team with room.
+		for t := range teams {
+			teams[t] = nil
 		}
-		for _, id := range g {
-			if t := lowest(1); t >= 0 {
-				teams[t] = append(teams[t], id)
+		sort.SliceStable(groups, func(i, j int) bool { return len(groups[i]) > len(groups[j]) })
+		if !place(func(n int) int {
+			for t := range teams {
+				if o.PerTeam-len(teams[t]) >= n {
+					return t
+				}
+			}
+			return -1
+		}) {
+			// No whole-party layout exists. The queue never forms such a lobby; as a last resort only, split what is left.
+			for t := range teams {
+				teams[t] = nil
+			}
+			for _, g := range groups {
+				if t := lowest(len(g)); t >= 0 {
+					teams[t] = append(teams[t], g...)
+				} else {
+					solos = append(solos, g...)
+				}
 			}
 		}
 	}

@@ -452,10 +452,7 @@ func isWord(s string) bool {
 
 func (d embedData) common() map[string]string {
 	g := d.Game
-	m := g.Map
-	if m == "" || m == MapUndecided {
-		m = "Not chosen"
-	}
+	m := MapLabel(g, "Not chosen")
 	vars := map[string]string{
 		"game": strconv.Itoa(g.Number), "gameUrl": helpers.MatchURL(g.GuildID, g.SeasonID, g.Number, g.Total), "gameLink": helpers.MatchLink(g.GuildID, g.SeasonID, g.Number, g.Total, "Game #"+strconv.Itoa(g.Number)), "gameNumberLink": helpers.MatchLink(g.GuildID, g.SeasonID, g.Number, g.Total, "#"+strconv.Itoa(g.Number)), "mode": g.Mode.Name, "map": m, "bot": g.Bot, "host": "", "hostMention": "—",
 		"winner": g.Winner, "mvp": g.MVP, "mvpMention": "—", "playerCount": strconv.Itoa(len(g.Players)),

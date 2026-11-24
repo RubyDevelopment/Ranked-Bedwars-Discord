@@ -233,7 +233,7 @@ func showQueueStatus(s *discordgo.Session, i *discordgo.InteractionCreate, guild
 	wg.Wait()
 
 	// Party members whose party isn't fully in the channel are held back by the queue, so flag them too.
-	if cfg := queue.Queues.PartyConfig(guildID, binding.Mode); binding.Mode.IsPartyQueueEnabled && partymgr.PartiesEnabled(cfg) && cfg.RequireAllMembersInQueue {
+	if cfg := queue.Queues.PartyConfig(guildID, binding.Mode); binding.Mode.IsPartyQueueEnabled && partymgr.PartiesEnabled(cfg) {
 		inVC := make(map[string]bool, len(vcMembers))
 		for _, id := range vcMembers {
 			inVC[id] = true

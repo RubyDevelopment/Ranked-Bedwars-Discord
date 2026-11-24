@@ -942,7 +942,7 @@ func (r *runner) exec(st step) (string, bool) {
 				result = "Win"
 			}
 			k := fmt.Sprintf("recent.%d.", n+1)
-			r.vars[k+"number"], r.vars[k+"result"], r.vars[k+"map"] = itoa(h.Game.GameNumber), result, h.Game.MapName
+			r.vars[k+"number"], r.vars[k+"result"], r.vars[k+"map"] = itoa(h.Game.GameNumber), result, helpers.MapDisplay(h.Game.MapName, h.Game.BotName)
 		}
 
 	case "load_commands":

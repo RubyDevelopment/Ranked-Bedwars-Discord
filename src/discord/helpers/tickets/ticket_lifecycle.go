@@ -187,6 +187,15 @@ func OpenTicketWith(s *discordgo.Session, guildID, panelID, categoryID string, o
 		}
 	}
 
+	// Staff roles must be able to see a channel ticket before the welcome message pings them, or the ping notifies nobody.
+	if mode == types.TicketModeChannel {
+		for _, roleID := range staffRoleIDs(panel, category) {
+			_ = s.ChannelPermissionSet(channelID, roleID, discordgo.PermissionOverwriteTypeRole,
+				int64(discordgo.PermissionViewChannel|discordgo.PermissionSendMessages|discordgo.PermissionReadMessageHistory|discordgo.PermissionAttachFiles|discordgo.PermissionEmbedLinks|discordgo.PermissionManageMessages),
+				0)
+		}
+	}
+
 	embed := TicketWelcomeMessage(ticket, panel, category, guildName)
 	ping := "<@" + ticket.OwnerID + ">"
 	if category.PingStaff && ticket.Status != types.TicketStatusClosed {
@@ -207,15 +216,6 @@ func OpenTicketWith(s *discordgo.Session, guildID, panelID, categoryID string, o
 		return nil, err
 	}
 	ticket.WelcomeMessageID = message.ID
-
-	// For channel-based tickets, add staff role permissions after welcome message is sent
-	if mode == types.TicketModeChannel {
-		for _, roleID := range staffRoleIDs(panel, category) {
-			_ = s.ChannelPermissionSet(channelID, roleID, discordgo.PermissionOverwriteTypeRole,
-				int64(discordgo.PermissionViewChannel|discordgo.PermissionSendMessages|discordgo.PermissionReadMessageHistory|discordgo.PermissionAttachFiles|discordgo.PermissionEmbedLinks|discordgo.PermissionManageMessages),
-				0)
-		}
-	}
 
 	if err := Tickets.Update(owner.ID, guildID, func(ip *types.InteractivePanels) error {
 		ip.Tickets.Open[ticket.ThreadID] = ticket

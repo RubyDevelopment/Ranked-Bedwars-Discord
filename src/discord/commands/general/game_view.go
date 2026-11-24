@@ -110,7 +110,7 @@ func GameViewOverviewEmbed(i *discordgo.InteractionCreate, game match.Game) *dis
 	// Basic info
 	description.WriteString(fmt.Sprintf("**Mode:** %s\n", game.Mode.Name))
 	description.WriteString(fmt.Sprintf("**State:** %s\n", game.State))
-	description.WriteString(fmt.Sprintf("**Map:** %s\n\n", game.Map))
+	description.WriteString(fmt.Sprintf("**Map:** %s\n\n", match.MapLabel(game, match.MapUndecided)))
 
 	// Timing
 	if !game.CreatedAt.IsZero() {
