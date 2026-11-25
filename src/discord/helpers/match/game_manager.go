@@ -542,9 +542,13 @@ func (m *GameManager) start(group *queue.QueueGroup, custom *CustomGame) (Game, 
 	ratings := m.deps.Elo.Ratings(group.GuildID, ids)
 
 	now := m.deps.Now()
+	mode := group.Mode
+	if custom == nil {
+		mode = m.deps.Flows(group.GuildID).ModeFor(mode, len(group.Parties) > 0)
+	}
 	g := Game{
-		GuildID: group.GuildID, SeasonID: season, Mode: group.Mode, Map: MapUndecided, State: GameWaiting,
-		Captain:        custom == nil && m.deps.Flows(group.GuildID).IsCaptain(group.Mode),
+		GuildID: group.GuildID, SeasonID: season, Mode: mode, Map: MapUndecided, State: GameWaiting,
+		Captain:        custom == nil && m.deps.Flows(group.GuildID).IsCaptain(mode),
 		Custom:         custom,
 		QueueChannelID: group.ChannelID, QueueCategoryID: group.CategoryID,
 		CreatedAt: now, StateAt: now, Channels: GameChannels{Voice: map[string]string{}},

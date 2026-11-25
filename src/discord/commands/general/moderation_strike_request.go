@@ -28,7 +28,7 @@ func init() {
 // ModerationStrikeRequestCommand requests a strike review for a player.
 var ModerationStrikeRequestCommand = &types.Command{
 	Name:          "strikerequest",
-	Requirements:  types.StrikeAlertRequirements,
+	Requirements:  types.StrikeRequestRequirements,
 	Description:   "Requests a strike review for a player who broke the rules.",
 	PrefixAliases: []string{"sr"},
 	Ephemeral:     true,
@@ -64,6 +64,13 @@ var ModerationStrikeRequestCommand = &types.Command{
 // ============================================================================
 
 func executeModerationStrikeRequestCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	// 0. Strike requests are only made in the channel the server assigned to them.
+	if allowed, err := helpers.RequirementSlotID(i.GuildID, "strikerequest", types.ReqChannel, types.StrikeRequestsKey); err != nil {
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorModerationStrikeRequestEmbed(i))
+	} else if allowed != "" && i.ChannelID != allowed {
+		return helpers.EditInteractionEmbed(s, i, helpers.SimpleErrorEmbed("You can only make strike requests in <#"+allowed+">."))
+	}
+
 	// 1. Validate Target User
 	target := helpers.OptionUser(s, i, "user")
 	if target == nil {

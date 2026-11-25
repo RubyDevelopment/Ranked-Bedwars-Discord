@@ -77,7 +77,17 @@ func executeGameViewCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 	}
 
-	return helpers.EditInteractionEmbed(s, i, GameViewOverviewEmbed(i, game))
+	emb := GameViewOverviewEmbed(i, game)
+	url := emb.URL
+	if url == "" { // no website to link to
+		return helpers.EditInteractionEmbed(s, i, emb)
+	}
+	// ?log= opens the match page on that log tab.
+	buttons := discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+		discordgo.Button{Label: "View Minecraft Logs", Style: discordgo.LinkButton, URL: url + "?log=game"},
+		discordgo.Button{Label: "View Discord Logs", Style: discordgo.LinkButton, URL: url + "?log=discord"},
+	}}
+	return helpers.EditInteractionComponents(s, i, emb, []discordgo.MessageComponent{buttons})
 }
 
 // ============================================================================

@@ -328,7 +328,7 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 				choice = "Approve"
 			}
 			say(fmt.Sprintf("You voted **%s** on the %s vote for <@%s>. Press the other button to change it.", choice, v.div.Label, v.targetID))
-		case v.eligible[uid] != "":
+		case v.admitIfVoter(i, uid):
 			say(fmt.Sprintf("You have not voted yet on the %s vote for <@%s>.", v.div.Label, v.targetID))
 		default:
 			say(fmt.Sprintf("You cannot vote on the %s vote for <@%s>: only %s members, specs and managers (and those of higher divisions) can.", v.div.Label, v.targetID, v.div.Label))
@@ -346,6 +346,7 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 		return true
 
 	case "yes", "no":
+		v.admitIfVoter(i, uid)
 		if v.eligible[uid] == "" {
 			say(fmt.Sprintf("Only %s members, specs and managers (and those of higher divisions) can vote here, and not on their own nomination.", v.div.Label))
 			return true
@@ -354,6 +355,30 @@ func handleVote(s *discordgo.Session, i *discordgo.InteractionCreate, customID s
 		update("", "")
 		v.save("", "")
 		return true
+	}
+	return false
+}
+
+// admitIfVoter reports whether uid may vote. The voter list is fixed when the vote starts, so someone who got a voting role after that
+// (or was missing from the member cache) is checked against their live roles on the interaction and added. Caller holds v.mu.
+func (v *vote) admitIfVoter(i *discordgo.InteractionCreate, uid string) bool {
+	if v.eligible[uid] != "" {
+		return true
+	}
+	if uid == v.targetID || i.Member == nil || i.Member.User == nil {
+		return false
+	}
+	for _, vd := range v.div.voters() {
+		c, err := Load(v.guildID, vd)
+		if err != nil {
+			continue
+		}
+		for _, roleID := range []string{c.Member, c.Spec, c.Manager} {
+			if helpers.MemberHasRole(i.Member, roleID) {
+				v.eligible[uid] = nameOf(i.Member)
+				return true
+			}
+		}
 	}
 	return false
 }

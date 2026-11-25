@@ -104,6 +104,9 @@ type Mode struct {
 	GUISlot                *int    `json:"gui_slot,omitempty"`
 	SettingsID             *uint   `json:"settings_id,omitempty"`
 	FormationID            string  `json:"formation_id,omitempty"` // the team formation it uses (guild flows.formations); empty = the default for its type
+	// PartyFormationID is the formation used instead of FormationID when the game has a party in it (e.g. random or balanced, so a party
+	// does not get to pick its own mates); empty or unknown = FormationID.
+	PartyFormationID string `json:"party_formation_id,omitempty"`
 
 	// Party holds this mode's party overrides; nil inherits the guild's PartiesConfig.
 	Party *ModePartyConfig `json:"party,omitempty"`

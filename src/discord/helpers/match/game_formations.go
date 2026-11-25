@@ -39,6 +39,20 @@ func (f FlowSettings) formationOf(m types.Mode) (Formation, bool) {
 	return Formation{}, false
 }
 
+// ModeFor is the mode a game is played with: when the game has a party and the mode names a party formation that still exists,
+// that formation replaces the mode's own. Every later lookup (IsCaptain, StandardFor, CaptainFor) then follows it.
+func (f FlowSettings) ModeFor(m types.Mode, hasParties bool) types.Mode {
+	if !hasParties {
+		return m
+	}
+	alt := m
+	alt.FormationID = m.PartyFormationID
+	if _, ok := f.formationOf(alt); ok {
+		return alt
+	}
+	return m
+}
+
 // IsCaptain reports whether games of the mode are drafted by captains.
 func (f FlowSettings) IsCaptain(m types.Mode) bool {
 	if x, ok := f.formationOf(m); ok {

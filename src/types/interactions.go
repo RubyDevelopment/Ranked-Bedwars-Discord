@@ -325,6 +325,11 @@ var FactionRequirements = []Requirement{{Type: ReqChannel, Key: FactionAlertsKey
 // StrikeAlertRequirements is the strike alerts channel, for the commands that show strikes.
 var StrikeAlertRequirements = []Requirement{{Type: ReqChannel, Key: StrikeAlertsKey, Optional: true}}
 
+// StrikeRequestsKey is the one channel strike requests may be made in (each opens its thread there); StrikeRequestRequirements is its slot.
+const StrikeRequestsKey = "strike_requests"
+
+var StrikeRequestRequirements = []Requirement{{Type: ReqChannel, Key: StrikeRequestsKey}}
+
 // PunishmentAlertRequirements is every punishment's alerts channel (mute, vc mute, queue ban, server ban, warn, kick, strike), for the
 // commands that show or manage punishments as a whole. The keys are the punishment commands' own.
 func PunishmentAlertRequirements() []Requirement {
