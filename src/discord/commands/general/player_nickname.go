@@ -46,6 +46,42 @@ var PlayerNicknameCommand = &types.Command{
 	Execute: executePlayerNicknameCommand,
 }
 
+// PlayerUnnickCommand removes your nickname (the same as running nickname with nothing).
+var PlayerUnnickCommand = &types.Command{
+	Name:          "unnick",
+	Requirements:  types.GeneralRequirements,
+	Description:   "Removes your nickname.",
+	PrefixAliases: []string{"unnick"}, // listed as the default prefix alias, like nick for nickname
+	Ephemeral:     true,
+	Cooldown:      3 * time.Second,
+	Data:          &discordgo.ApplicationCommand{},
+	Execute:       executePlayerUnnickCommand,
+}
+
+func init() { helpers.Register(PlayerUnnickCommand) }
+
+// executePlayerUnnickCommand removes the player's nickname; the nickname command calls it too when given none.
+func executePlayerUnnickCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	userID := helpers.InteractionUserID(i)
+	view, err := database.Must().Player.Get(i.GuildID, userID)
+	if err != nil {
+		if sdk.IsNotFound(err) {
+			return helpers.EditInteractionEmbed(s, i, NicknameRegistrationRequiredEmbed(i))
+		}
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorNicknameEmbed(i))
+	}
+	if view.Config.Nickname == nil || strings.TrimSpace(*view.Config.Nickname) == "" {
+		return helpers.EditInteractionEmbed(s, i, NicknameNoneActiveEmbed(i))
+	}
+	if _, err := database.Must().Player.SetNickname(userID, i.GuildID, sdk.UintToString(view.Player.ID), ""); err != nil {
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorNicknameEmbed(i))
+	}
+	if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID); err != nil {
+		return helpers.EditInteractionEmbed(s, i, UnexpectedErrorNicknameEmbed(i))
+	}
+	return helpers.EditInteractionEmbed(s, i, NicknameRemovedEmbed(i))
+}
+
 // ============================================================================
 // Command Execution
 // ============================================================================
@@ -53,6 +89,11 @@ var PlayerNicknameCommand = &types.Command{
 func executePlayerNicknameCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	newNickname := helpers.OptionString(i, "nickname")
 	userID := helpers.InteractionUserID(i)
+
+	// Handle nickname removal (empty string provided)
+	if newNickname == "" {
+		return executePlayerUnnickCommand(s, i)
+	}
 
 	// Fetch existing player record
 	view, err := database.Must().Player.Get(i.GuildID, userID)
@@ -65,20 +106,6 @@ func executePlayerNicknameCommand(s *discordgo.Session, i *discordgo.Interaction
 
 	config := view.Config
 	pid := sdk.UintToString(view.Player.ID)
-
-	// Handle nickname removal (empty string provided)
-	if newNickname == "" {
-		if config.Nickname == nil || strings.TrimSpace(*config.Nickname) == "" {
-			return helpers.EditInteractionEmbed(s, i, NicknameNoneActiveEmbed(i))
-		}
-		if _, err := database.Must().Player.SetNickname(userID, i.GuildID, pid, ""); err != nil {
-			return helpers.EditInteractionEmbed(s, i, UnexpectedErrorNicknameEmbed(i))
-		}
-		if _, err := helpers.SyncRegisteredPlayerProfile(s, i.GuildID, view.Player.ID, userID); err != nil {
-			return helpers.EditInteractionEmbed(s, i, UnexpectedErrorNicknameEmbed(i))
-		}
-		return helpers.EditInteractionEmbed(s, i, NicknameRemovedEmbed(i))
-	}
 
 	// Validate nickname format
 	if !helpers.IsValidMcUsername(newNickname) {
