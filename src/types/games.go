@@ -315,7 +315,6 @@ type DiscordLogMessage struct {
 type DraftConfig struct {
 	PickingType           string  // "one_per_person" (default) or "alternating"
 	TopEloChance          float64 // chance captains are the top-rated players rather than random from the top pool
-	OneCaptainPerParty    bool
 	AlternatingMinPlayers int
 	AutoAssignParties     bool // pull a picked player's party mates onto their team
 }

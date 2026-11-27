@@ -360,7 +360,7 @@ func (m *GameManager) beginDraft(lg *liveGame, cfg CaptainFlow) error {
 	g := m.snapshot(lg)
 	teams, perTeam := TeamLayout(g.Mode)
 	d, err := NewDraft(g.userIDs(), teams, perTeam, m.deps.Elo.Ratings(g.GuildID, g.userIDs()), g.Parties, DraftConfig{
-		PickingType: cfg.DefaultPickingType, TopEloChance: cfg.TopEloCaptainChance, OneCaptainPerParty: true,
+		PickingType: cfg.DefaultPickingType, TopEloChance: cfg.TopEloCaptainChance,
 		AlternatingMinPlayers: cfg.AlternatingMinPlayers, AutoAssignParties: true, // parties always stay on one team
 	}, m.deps.Rand)
 	if err != nil {

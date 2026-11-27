@@ -66,6 +66,7 @@ func init() {
 		d.ReturnToGame = Games.ReturnToGame
 		d.FlowMaxParty = func(guildID string, mode types.Mode) *int {
 			flows := Games.deps.Flows(guildID)
+			mode = flows.ModeFor(mode, true) // the limit applies to parties, so it comes from the formation their games use
 			if flows.IsCaptain(mode) {
 				return flows.CaptainFor(mode).MaxPartySize
 			}

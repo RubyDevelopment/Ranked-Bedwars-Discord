@@ -38,10 +38,10 @@ type Draft struct {
 	picks   int      // picks the captains have made (party mates and the last player placed for them do not count)
 }
 
-// NewDraft elects captains and returns the draft. Captains come from the top
-// 2*teams players by rating: the top `teams` of them with probability
-// TopEloChance, otherwise a random `teams` of them. With OneCaptainPerParty two
-// captains never share a party.
+// NewDraft elects captains and returns the draft. Each party puts forward one
+// captain (so two captains never share a party). The remaining captains come from
+// the best-rated solo players, twice as many as needed: the top ones with
+// probability TopEloChance, otherwise a random selection of them.
 func NewDraft(players []string, teams, perTeam int, ratings map[string]int, parties []partymgr.PartyGroup, cfg DraftConfig, r *rand.Rand) (*Draft, error) {
 	if teams < 2 || perTeam < 1 || len(players) != teams*perTeam {
 		return nil, ErrBadRoster
@@ -55,7 +55,7 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 	for _, id := range players {
 		roster[id] = true
 	}
-	hasGroups := false
+	var groups [][]string // each party's members in this game, the one who would captain it first
 	for _, pg := range parties {
 		var g []string
 		for _, id := range pg.Members {
@@ -64,7 +64,14 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 			}
 		}
 		if len(g) >= 2 {
-			hasGroups = true
+			// The leader captains; without them in the game, the best-rated member.
+			sort.SliceStable(g, func(i, j int) bool {
+				if (g[i] == pg.Leader) != (g[j] == pg.Leader) {
+					return g[i] == pg.Leader
+				}
+				return ratings[g[i]] > ratings[g[j]]
+			})
+			groups = append(groups, g)
 			for _, id := range g {
 				d.partyOf[id] = g
 			}
@@ -78,7 +85,21 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 		}
 		return byElo[i] < byElo[j]
 	})
-	top := slices.Clone(byElo[:min(teams*2, len(byElo))])
+	// Every party gets a captain, up to one per team. With more parties than teams the biggest go first, as they are the
+	// hardest to fit as a pick.
+	r.Shuffle(len(groups), func(i, j int) { groups[i], groups[j] = groups[j], groups[i] })
+	sort.SliceStable(groups, func(i, j int) bool { return len(groups[i]) > len(groups[j]) })
+	var captains []string
+	for _, g := range groups[:min(teams, len(groups))] {
+		captains = append(captains, g[0])
+	}
+	// The teams left over elect a captain from the players without a party.
+	need := teams - len(captains)
+	solos := slices.DeleteFunc(slices.Clone(byElo), func(id string) bool { return d.partyOf[id] != nil })
+	if len(solos) < need {
+		return nil, ErrBadRoster
+	}
+	top := solos[:min(need*2, len(solos))]
 	chance := cfg.TopEloChance
 	if chance > 1 { // tolerate a 0-100 percentage
 		chance /= 100
@@ -87,33 +108,7 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 	if r.Float64() >= chance {
 		r.Shuffle(len(top), func(i, j int) { top[i], top[j] = top[j], top[i] })
 	}
-	captains := slices.Clone(top[:teams])
-
-	if cfg.OneCaptainPerParty && hasGroups {
-		sharing := func(a, b string) bool { return slices.Contains(d.partyOf[a], b) }
-		for i := 0; i < len(captains); i++ {
-			clash := false
-			for j := 0; j < i; j++ {
-				clash = clash || sharing(captains[i], captains[j])
-			}
-			if !clash {
-				continue
-			}
-			for _, cand := range byElo { // best remaining player outside every captain's party
-				if slices.Contains(captains, cand) {
-					continue
-				}
-				ok := true
-				for k, c := range captains {
-					ok = ok && (k == i || !sharing(cand, c))
-				}
-				if ok {
-					captains[i] = cand
-					break
-				}
-			}
-		}
-	}
+	captains = append(captains, top[:need]...)
 	r.Shuffle(len(captains), func(i, j int) { captains[i], captains[j] = captains[j], captains[i] })
 
 	d.Teams = make([][]string, teams)
@@ -125,15 +120,11 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 			d.pool = append(d.pool, id)
 		}
 	}
-	captainInParty := false
-	for _, c := range captains {
-		captainInParty = captainInParty || len(d.partyOf[c]) > 0
-	}
 	d.Type = cfg.PickingType
 	if d.Type == "" {
 		d.Type = "one_per_person"
 	}
-	if hasGroups && captainInParty && len(players) >= cfg.AlternatingMinPlayers && cfg.AlternatingMinPlayers > 0 {
+	if len(groups) > 0 &&len(players) >= cfg.AlternatingMinPlayers && cfg.AlternatingMinPlayers > 0 {
 		d.Type = "alternating"
 	}
 	if d.auto {
@@ -141,9 +132,15 @@ func NewDraft(players []string, teams, perTeam int, ratings map[string]int, part
 			d.pull(t, d.Teams[t][0])
 		}
 	}
-	// The team that picks first (the weakest, by the ELO of its captain and the players who came with them) is always Team A, so
-	// the first captain shown is the first to pick.
-	sort.SliceStable(d.Teams, func(a, b int) bool { return d.teamElo(a) < d.teamElo(b) })
+	// The team that picks first is always Team A, so the first captain shown is the first to pick. A captain who brought
+	// party mates gives up the first pick to one who came alone; otherwise (no party, or both captains with one) the
+	// weakest team picks first, by the ELO of its captain and the players who came with them.
+	sort.SliceStable(d.Teams, func(a, b int) bool {
+		if x, y := len(d.Teams[a]) > 1, len(d.Teams[b]) > 1; x != y {
+			return y
+		}
+		return d.teamElo(a) < d.teamElo(b)
+	})
 	d.order = make([]int, teams)
 	for i := range d.order {
 		d.order[i] = i
@@ -263,15 +260,56 @@ func (d *Draft) Turn() int {
 	}
 }
 
-// fits reports whether team t has room for id together with every party mate still in the pool (a party is never split).
+// fits reports whether team t has room for id together with every party mate still in the pool, and whether every other
+// party in the pool still fits on some team afterwards (a party is never split).
+// ponytail: captains are not chosen with this in mind; that only matters for teams of 6+ with many parties.
 func (d *Draft) fits(t int, id string) bool {
-	n := 1
+	room := make([]int, len(d.Teams))
+	for i, team := range d.Teams {
+		room[i] = d.PerTeam - len(team)
+	}
+	var rest []int // sizes of the other parties still to be placed
+	seen := map[string]bool{}
+	room[t]-- // id
 	for _, mate := range d.partyOf[id] {
+		seen[mate] = true
 		if mate != id && slices.Contains(d.pool, mate) {
-			n++
+			room[t]--
 		}
 	}
-	return len(d.Teams[t])+n <= d.PerTeam
+	for _, p := range d.pool {
+		if seen[p] || d.partyOf[p] == nil {
+			continue
+		}
+		n := 0
+		for _, mate := range d.partyOf[p] {
+			seen[mate] = true
+			if slices.Contains(d.pool, mate) {
+				n++
+			}
+		}
+		rest = append(rest, n)
+	}
+	slices.SortFunc(rest, func(a, b int) int { return b - a }) // biggest first fails fastest
+	return room[t] >= 0 && packable(rest, room)
+}
+
+// packable reports whether groups of these sizes can all be seated whole in the free places of the teams.
+func packable(sizes, room []int) bool {
+	if len(sizes) == 0 {
+		return true
+	}
+	for t := range room {
+		if room[t] >= sizes[0] {
+			room[t] -= sizes[0]
+			ok := packable(sizes[1:], room)
+			room[t] += sizes[0]
+			if ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // randomFit is a random pool player team t can take whole with their party, falling back to any pool player when none can.
